@@ -11,15 +11,4 @@
       grid.innerHTML = items.map(window.propertyCard).join('');
     });
   });
-
-  const search = document.querySelector('[data-hero-search]');
-  if (search) search.addEventListener('submit', event => {
-    event.preventDefault();
-    const values = Object.fromEntries(new FormData(search));
-    const params = new URLSearchParams();
-    if (values.category) params.set('category', values.category);
-    if (values.minPrice) params.set('minPrice', values.minPrice);
-    if (values.maxPrice) params.set('maxPrice', values.maxPrice);
-    location.href = `buy.html?${params}`;
-  });
 })();
