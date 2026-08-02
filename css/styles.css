@@ -131,7 +131,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .location-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
 .location-list span { padding: 8px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font-size: .9rem; font-weight: 700; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 42px; }
-.hero-media { position: relative; align-self: center; overflow: hidden; height: min(27.5vw, 413px); min-height: 413px; background: #eef1f4; }
+.hero-media { position: relative; overflow: hidden; min-height: 620px; background: #eef1f4; }
 .hero-media img { height: 100%; object-fit: cover; object-position: center 24%; }
 .portrait-dark { display: none; }
 [data-theme="dark"] .portrait-light { display: none; }
@@ -276,7 +276,7 @@ textarea.control { min-height: 124px; padding-block: 14px; resize: vertical; }
   .hero-text { max-width: 620px; font-size: 1rem; margin-top: 26px; }
   .hero-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; margin-top: 28px; }
   .hero-actions .btn { padding-inline: 16px; }
-  .hero-media { position: relative; right: auto; bottom: auto; width: 100%; height: min(83vw, 427px); min-height: 287px; background: transparent; }
+  .hero-media { position: relative; right: auto; bottom: auto; width: 100%; height: min(125vw, 640px); min-height: 430px; background: transparent; }
   .hero-media img { object-position: center 20%; }
   .search-panel { margin: 0 16px 30px; width: auto; grid-template-columns: 1fr 1fr; }
   .search-panel .field:first-child, .search-panel .btn { grid-column: 1 / -1; }
@@ -304,7 +304,7 @@ textarea.control { min-height: 124px; padding-block: 14px; resize: vertical; }
   .menu-toggle { height: 42px; padding-inline: 8px; font-size: .82rem; }
   .hero-copy { padding-top: 44px; }
   .hero-actions { grid-template-columns: 1fr; }
-  .hero-media { height: 83vw; min-height: 293px; }
+  .hero-media { height: 125vw; min-height: 440px; }
   .search-panel { padding: 18px; gap: 12px; }
   .section-heading { font-size: 2.55rem; }
   .selection-grid { grid-template-columns: 1fr; }
