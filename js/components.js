@@ -39,7 +39,7 @@ class SiteFooter extends HTMLElement {
     this.innerHTML = `<footer class="site-footer"><div class="container">
       <div class="footer-grid"><div class="footer-brand"><a class="brand" href="index.html"><span class="brand-mark">IL</span><span class="brand-name">Ірина Ліннік</span></a><p>Персональний супровід у купівлі та продажу нерухомості в Ірпені, Бучі та Гостомелі.</p></div>
       <div><h2 class="footer-title">Послуги</h2><div class="footer-links"><a href="buy.html">Купівля нерухомості</a><a href="sell-your-apartment.html">Продаж нерухомості</a><a href="contacts.html">Консультація</a></div></div>
-      <div><h2 class="footer-title">Зв’язок</h2><div class="footer-links"><a href="tel:+380663727102">+380 (66) 372 71 02</a><a href="mailto:irinalinnik.lee@gmail.com">irinalinnik.lee@gmail.com</a><a href="https://www.tiktok.com/@irina_rieltor_novator" target="_blank" rel="noopener noreferrer">TikTok: @irina_rieltor_novator</a></div></div></div>
+      <div><h2 class="footer-title">Зв’язок</h2><div class="footer-links"><a href="tel:+380663727102">+380 (66) 372 71 02</a><a href="mailto:irinalinnik.lee@gmail.com">irinalinnik.lee@gmail.com</a><a href="https://t.me/irynalinnik_rieltor" target="_blank" rel="noopener noreferrer">Telegram: @irynalinnik_rieltor</a><a href="https://www.tiktok.com/@irina_rieltor_novator" target="_blank" rel="noopener noreferrer">TikTok: @irina_rieltor_novator</a></div></div></div>
       <div class="footer-bottom"><span>© ${new Date().getFullYear()} Ірина Ліннік</span><span>Сайт персонального рієлтора</span></div>
     </div></footer>`;
   }
