@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: http://rieltor.dpdns.org/sitemap.xml
