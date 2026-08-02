@@ -18,7 +18,7 @@ class SiteHeader extends HTMLElement {
     this.innerHTML = `<header class="site-header"><div class="container header-inner">
       <a class="brand" href="index.html" aria-label="Ірина Ліннік — головна"><span class="brand-mark">IL</span><span class="brand-name">Ірина Ліннік</span></a>
       <nav class="nav" id="main-nav" aria-label="Головна навігація">${links.map(([key, href, label]) => `<a href="${href}" ${page === key ? 'aria-current="page"' : ''}>${label}</a>`).join('')}</nav>
-      <div class="header-actions"><a class="phone" href="tel:+380670000000">+38 067 000 00 00</a>
+      <div class="header-actions"><a class="phone" href="tel:+380663727102">+380 (66) 372 71 02</a>
         <button class="theme-toggle" type="button" aria-label="Змінити тему"><span class="sun">${icon('sun')}</span><span class="moon">${icon('moon')}</span></button>
         <button class="menu-toggle" type="button" aria-controls="main-nav" aria-expanded="false">${icon('menu')}<span>Меню</span></button>
       </div></div></header>`;
@@ -39,7 +39,7 @@ class SiteFooter extends HTMLElement {
     this.innerHTML = `<footer class="site-footer"><div class="container">
       <div class="footer-grid"><div class="footer-brand"><a class="brand" href="index.html"><span class="brand-mark">IL</span><span class="brand-name">Ірина Ліннік</span></a><p>Персональний супровід у купівлі та продажу нерухомості в Ірпені, Бучі та Гостомелі.</p></div>
       <div><h2 class="footer-title">Послуги</h2><div class="footer-links"><a href="buy.html">Купівля нерухомості</a><a href="sell-your-apartment.html">Продаж нерухомості</a><a href="contacts.html">Консультація</a></div></div>
-      <div><h2 class="footer-title">Зв’язок</h2><div class="footer-links"><a href="tel:+380670000000">+38 067 000 00 00</a><a href="mailto:hello@linnik-realty.ua">hello@linnik-realty.ua</a><a href="contacts.html">Контакти та месенджери</a></div></div></div>
+      <div><h2 class="footer-title">Зв’язок</h2><div class="footer-links"><a href="tel:+380663727102">+380 (66) 372 71 02</a><a href="mailto:irinalinnik.lee@gmail.com">irinalinnik.lee@gmail.com</a><a href="https://www.tiktok.com/@irina_rieltor_novator" target="_blank" rel="noopener noreferrer">TikTok: @irina_rieltor_novator</a></div></div></div>
       <div class="footer-bottom"><span>© ${new Date().getFullYear()} Ірина Ліннік</span><span>Сайт персонального рієлтора</span></div>
     </div></footer>`;
   }
