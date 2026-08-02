@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Ірина Ліннік — персональний рієлтор в Ірпені, Бучі та передмісті Києва.">
+  <title>Ірина Ліннік — персональний рієлтор</title>
+  <script src="js/theme.js"></script><link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-page="home">
+  <site-header></site-header>
+  <main>
+    <section class="hero">
+      <div class="hero-main">
+        <div class="hero-copy"><h1 class="hero-title">Нерухомість,<br>у якій хочеться жити</h1><p class="hero-text">Допомагаю купити, продати та оцінити нерухомість в Ірпені, Бучі та передмісті Києва.</p>
+          <div class="hero-actions"><a class="btn" href="#objects">Підібрати нерухомість</a><a class="btn btn--outline" href="sell-your-apartment.html">Продати квартиру</a></div></div>
+        <div class="hero-media"><img class="portrait-light" src="images/iryna-linnik.png" alt="Рієлтор Ірина Ліннік"><img class="portrait-dark" src="images/iryna-linnik-dark.png" alt="Рієлтор Ірина Ліннік"></div>
+      </div>
+      <form class="search-panel" data-hero-search><div class="field"><label for="hero-type">Тип нерухомості</label><select class="control" id="hero-type" name="category"><option value="apartments">Квартири</option><option value="new-buildings">Новобудови</option><option value="houses">Будинки</option><option value="land">Земля</option><option value="commercial">Комерція</option></select></div>
+        <div class="field"><label for="hero-min">Ціна від, $</label><input class="control" id="hero-min" name="minPrice" type="number" min="0" placeholder="Від"></div><div class="field"><label for="hero-max">Ціна до, $</label><input class="control" id="hero-max" name="maxPrice" type="number" min="0" placeholder="До"></div><button class="btn" type="submit">Знайти</button></form>
+    </section>
+
+    <section class="section" id="objects"><div class="container"><div class="section-top"><h2 class="section-heading">Об’єкти, які варто побачити</h2><a class="text-link" href="apartments.html">Переглянути всі →</a></div>
+      <div class="category-tabs" aria-label="Категорії об’єктів"><button class="category-tab is-active" data-category-tab="all">УСІ</button><button class="category-tab" data-category-tab="apartments">КВАРТИРИ</button><button class="category-tab" data-category-tab="new-buildings">НОВОБУДОВИ</button><button class="category-tab" data-category-tab="houses">БУДИНКИ</button><button class="category-tab" data-category-tab="land">ЗЕМЛЯ</button><button class="category-tab" data-category-tab="commercial">КОМЕРЦІЯ</button></div>
+      <div class="property-grid" data-featured-grid></div><div class="service-strip"><div><h3>Допоможу знайти саме те, що підходить вам.</h3><p>Персональний підхід. Чесні поради. Результат.</p></div><a class="text-link" href="contacts.html">Дізнатися більше про співпрацю →</a></div></div></section>
+
+    <section class="sell-callout"><div class="container sell-callout__inner"><div><h2>Продам вашу квартиру</h2><p>Від оцінки до угоди — беру на себе підготовку, рекламу, покази та переговори.</p><a class="btn" href="sell-your-apartment.html">Отримати оцінку</a></div>
+      <div class="steps"><div class="step"><span class="step-number">01</span><div><h3>Оцінка</h3><p>Визначимо реальну ринкову вартість.</p></div></div><div class="step"><span class="step-number">02</span><div><h3>Підготовка</h3><p>Сформуємо сильну презентацію об’єкта.</p></div></div><div class="step"><span class="step-number">03</span><div><h3>Просування та угода</h3><p>Знайду покупця й супроводжу домовленості.</p></div></div></div></div></section>
+  </main>
+  <site-footer></site-footer>
+  <script src="js/data.js"></script><script src="js/components.js"></script><script src="js/home.js"></script>
+</body></html>
