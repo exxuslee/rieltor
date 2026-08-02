@@ -16,11 +16,10 @@
   if (search) search.addEventListener('submit', event => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(search));
-    const routes = { apartments: 'apartments.html', 'new-buildings': 'new-buildings.html', houses: 'houses.html', land: 'land.html', commercial: 'commercial.html' };
-    const target = routes[values.category] || 'apartments.html';
     const params = new URLSearchParams();
+    if (values.category) params.set('category', values.category);
     if (values.minPrice) params.set('minPrice', values.minPrice);
     if (values.maxPrice) params.set('maxPrice', values.maxPrice);
-    location.href = `${target}?${params}`;
+    location.href = `buy.html?${params}`;
   });
 })();

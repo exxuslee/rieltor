@@ -20,13 +20,9 @@
 ## Разделы сайта
 
 1. Главная.
-2. Квартиры.
-3. Новостройки.
-4. Дома.
-5. Земля.
-6. Коммерция.
-7. Продам вашу квартиру.
-8. Контакты.
+2. Покупка: единая страница квартир, новостроек, домов, земли, коммерции и других запросов.
+3. Продажа.
+4. Контакты.
 
 ## Этапы
 
@@ -43,11 +39,7 @@
 
 ```text
 index.html
-apartments.html
-new-buildings.html
-houses.html
-land.html
-commercial.html
+buy.html
 sell-your-apartment.html
 contacts.html
 property.html

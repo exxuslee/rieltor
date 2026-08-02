@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Персональний підбір нерухомості в Ірпені, Бучі та Гостомелі.">
+  <title>Купівля нерухомості — Ірина Ліннік</title>
+  <script src="js/theme.js"></script>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-page="buy">
+  <site-header></site-header>
+  <main>
+    <section class="buy-hero">
+      <div class="container buy-hero__layout">
+        <div class="buy-hero__copy">
+          <p class="eyebrow">Персональний підбір</p>
+          <h1>Знайду нерухомість під ваш запит</h1>
+          <p>Розкажіть, що і де шукаєте. Я уточню деталі, перевірю актуальні варіанти та зв’яжуся з вами.</p>
+        </div>
+        <form class="selection-form" data-local-form>
+          <div class="field">
+            <label for="buy-type">Що хочете купити?</label>
+            <select class="control" id="buy-type" name="category" required>
+              <option value="">Оберіть тип</option>
+              <option value="apartments">Квартиру</option>
+              <option value="new-buildings">Новобудову</option>
+              <option value="houses">Будинок</option>
+              <option value="commercial">Комерцію</option>
+              <option value="land">Землю</option>
+              <option value="other">Інше</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="buy-location">Де шукаєте?</label>
+            <select class="control" id="buy-location" name="location" required>
+              <option value="">Оберіть локацію</option>
+              <option>Ірпінь</option>
+              <option>Буча</option>
+              <option>Гостомель</option>
+              <option>Інша локація</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="buy-phone">Ваш телефон</label>
+            <input class="control" id="buy-phone" name="phone" type="tel" autocomplete="tel" placeholder="+38 ___ ___ __ __" required>
+          </div>
+          <button class="btn btn--full" type="submit">Замовити підбір</button>
+          <p class="form-note">Три поля — і я повернуся до вас з уточненнями.</p>
+          <div class="form-success" role="status">Дякую! Запит прийнято. Ірина зв’яжеться з вами, щойно буде підключено обробку заявок.</div>
+        </form>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="property-types-title">
+      <div class="container">
+        <div class="section-top section-top--intro">
+          <div><p class="eyebrow">Напрями пошуку</p><h2 class="section-heading" id="property-types-title">Що можна підібрати</h2></div>
+          <p class="section-lead">Це приклади напрямів, а не каталог із застарілими цінами. Кожну добірку формую під конкретний запит.</p>
+        </div>
+        <div class="selection-grid">
+          <article class="selection-card"><img src="images/properties/apartment-park.png" alt="Приклад квартири"><div><span>01</span><h3>Квартири</h3><p>Для життя, оренди або інвестиції.</p></div></article>
+          <article class="selection-card"><img src="images/properties/new-building.png" alt="Приклад новобудови"><div><span>02</span><h3>Новобудови</h3><p>Комплекси, планування та пропозиції забудовників.</p></div></article>
+          <article class="selection-card"><img src="images/properties/house-bucha.png" alt="Приклад приватного будинку"><div><span>03</span><h3>Будинки</h3><p>Будинки, дуплекси й таунхауси.</p></div></article>
+          <article class="selection-card"><img src="images/properties/commercial.png" alt="Приклад комерційного приміщення"><div><span>04</span><h3>Комерція</h3><p>Приміщення для бізнесу та інвестицій.</p></div></article>
+          <article class="selection-card"><img src="images/properties/land-bucha.png" alt="Приклад земельної ділянки"><div><span>05</span><h3>Земля</h3><p>Ділянки для будівництва й розвитку.</p></div></article>
+          <article class="selection-card selection-card--other"><div class="selection-card__symbol" aria-hidden="true">+</div><div><span>06</span><h3>Інше</h3><p>Нетиповий об’єкт або особливий запит.</p></div></article>
+        </div>
+      </div>
+    </section>
+  </main>
+  <site-footer></site-footer>
+  <script src="js/components.js"></script>
+  <script src="js/buy.js"></script>
+  <script src="js/forms.js"></script>
+</body>
+</html>

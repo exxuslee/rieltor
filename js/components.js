@@ -12,10 +12,8 @@ class SiteHeader extends HTMLElement {
   connectedCallback() {
     const page = document.body.dataset.page || '';
     const links = [
-      ['home', 'index.html', 'ГОЛОВНА'], ['apartments', 'apartments.html', 'КВАРТИРИ'],
-      ['new-buildings', 'new-buildings.html', 'НОВОБУДОВИ'], ['houses', 'houses.html', 'БУДИНКИ'],
-      ['land', 'land.html', 'ЗЕМЛЯ'], ['commercial', 'commercial.html', 'КОМЕРЦІЯ'],
-      ['sell', 'sell-your-apartment.html', 'ПРОДАМ ВАШУ КВАРТИРУ'], ['contacts', 'contacts.html', 'КОНТАКТИ']
+      ['home', 'index.html', 'ГОЛОВНА'], ['buy', 'buy.html', 'КУПІВЛЯ'],
+      ['sell', 'sell-your-apartment.html', 'ПРОДАЖ'], ['contacts', 'contacts.html', 'КОНТАКТИ']
     ];
     this.innerHTML = `<header class="site-header"><div class="container header-inner">
       <a class="brand" href="index.html" aria-label="Ірина Ліннік — головна"><span class="brand-mark">IL</span><span class="brand-name">Ірина Ліннік</span></a>
@@ -39,8 +37,8 @@ class SiteHeader extends HTMLElement {
 class SiteFooter extends HTMLElement {
   connectedCallback() {
     this.innerHTML = `<footer class="site-footer"><div class="container">
-      <div class="footer-grid"><div class="footer-brand"><a class="brand" href="index.html"><span class="brand-mark">IL</span><span class="brand-name">Ірина Ліннік</span></a><p>Персональний супровід у купівлі та продажу нерухомості в Ірпені, Бучі та передмісті Києва.</p></div>
-      <div><h2 class="footer-title">Нерухомість</h2><div class="footer-links"><a href="apartments.html">Квартири</a><a href="new-buildings.html">Новобудови</a><a href="houses.html">Будинки</a><a href="land.html">Земля</a><a href="commercial.html">Комерція</a></div></div>
+      <div class="footer-grid"><div class="footer-brand"><a class="brand" href="index.html"><span class="brand-mark">IL</span><span class="brand-name">Ірина Ліннік</span></a><p>Персональний супровід у купівлі та продажу нерухомості в Ірпені, Бучі та Гостомелі.</p></div>
+      <div><h2 class="footer-title">Послуги</h2><div class="footer-links"><a href="buy.html">Купівля нерухомості</a><a href="sell-your-apartment.html">Продаж нерухомості</a><a href="contacts.html">Консультація</a></div></div>
       <div><h2 class="footer-title">Зв’язок</h2><div class="footer-links"><a href="tel:+380670000000">+38 067 000 00 00</a><a href="mailto:hello@linnik-realty.ua">hello@linnik-realty.ua</a><a href="contacts.html">Контакти та месенджери</a></div></div></div>
       <div class="footer-bottom"><span>© ${new Date().getFullYear()} Ірина Ліннік</span><span>Сайт персонального рієлтора</span></div>
     </div></footer>`;
