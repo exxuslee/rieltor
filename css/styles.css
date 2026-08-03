@@ -161,7 +161,7 @@ textarea.control { min-height: 124px; padding-block: 14px; resize: vertical; }
 .category-tabs::-webkit-scrollbar { display: none; }
 .category-tab { flex: 0 0 auto; border: 0; border-bottom: 3px solid transparent; padding: 0 2px 15px; background: transparent; color: var(--muted); font-weight: 700; cursor: pointer; }
 .category-tab.is-active { color: var(--accent); border-color: var(--accent); }
-.property-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.property-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
 .property-card { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface-strong); transition: transform .2s ease, box-shadow .2s ease; }
 .property-card:hover { transform: translateY(-5px); box-shadow: var(--shadow); }
 .property-card__image { aspect-ratio: 4 / 3; overflow: hidden; background: var(--surface); }
