@@ -262,6 +262,10 @@ textarea.control { min-height: 124px; padding-block: 14px; resize: vertical; }
 .selection-card p { margin: 10px 0 0; color: var(--muted); }
 .selection-card--other { display: grid; grid-template-rows: auto 1fr; background: var(--accent-soft); }
 .selection-card__symbol { display: grid; place-items: center; color: var(--accent); font: 300 clamp(5rem, 10vw, 9rem)/1 var(--sans); }
+.catalog-section { border-top: 1px solid var(--border); }
+.catalog-filters { display: grid; grid-template-columns: 1.4fr repeat(3, minmax(140px, .7fr)); gap: 16px; align-items: end; margin-bottom: 34px; padding: 24px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.catalog-filters__actions { display: flex; gap: 10px; grid-column: 1 / -1; }
+.catalog-filters__actions .btn { min-width: 150px; }
 
 .sell-page { background: #0d1924; color: #fff; padding: 80px 0; }
 .sell-layout { display: grid; grid-template-columns: .9fr 1fr; gap: 80px; align-items: start; }
@@ -296,6 +300,23 @@ textarea.control { min-height: 124px; padding-block: 14px; resize: vertical; }
 .spec-list div { padding: 16px 0; border-bottom: 1px solid var(--border); }
 .spec-list dt { color: var(--muted); font-size: .82rem; }
 .spec-list dd { margin: 3px 0 0; font-weight: 700; }
+.breadcrumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-bottom: 28px; color: var(--muted); font-size: .88rem; }
+.breadcrumbs a:hover { color: var(--accent); }
+.listing-note { padding: 14px 16px; border-left: 3px solid var(--accent); background: var(--accent-soft); color: var(--muted); font-size: .9rem; }
+.about-layout { display: grid; grid-template-columns: minmax(300px, .65fr) minmax(0, 1fr); gap: clamp(42px, 8vw, 110px); align-items: start; }
+.about-portrait { overflow: hidden; border-radius: var(--radius); background: var(--surface); }
+.about-portrait img { aspect-ratio: 4 / 5; object-fit: cover; object-position: center top; }
+.prose { font-size: 1.08rem; line-height: 1.75; }
+.prose--narrow { max-width: 850px; }
+.prose h2 { margin: 0 0 18px; font: 400 clamp(2rem, 4vw, 3.4rem)/1.08 var(--serif); letter-spacing: var(--display-tracking); }
+.prose p + h2, .prose ul + h2 { margin-top: 46px; }
+.prose a:not(.btn):not(.text-link) { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.about-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 24px; margin-top: 34px; }
+.not-found { min-height: 65vh; display: grid; place-items: center; padding: 80px 0; text-align: center; }
+.not-found__code { margin: 0; color: var(--accent); font: 400 clamp(6rem, 18vw, 14rem)/.75 var(--serif); }
+.not-found h1 { margin: 34px 0 0; font: 400 clamp(2.7rem, 6vw, 5rem)/1 var(--serif); }
+.not-found > .container > p:not(.not-found__code) { color: var(--muted); }
+.not-found .hero-actions { justify-content: center; }
 
 .site-footer { padding: 58px 0 26px; background: var(--surface); border-top: 1px solid var(--border); }
 .footer-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 50px; }
@@ -350,6 +371,9 @@ textarea.control { min-height: 124px; padding-block: 14px; resize: vertical; }
   .tiktok-reviews__actions { width: 100%; justify-content: space-between; }
   .tiktok-carousel { grid-auto-columns: minmax(245px, 65%); }
   .sell-callout__inner, .sell-layout, .contact-grid, .property-detail__grid, .catalog-layout, .buy-hero__layout { grid-template-columns: 1fr; gap: 42px; }
+  .about-layout { grid-template-columns: 1fr; }
+  .about-portrait { max-width: 560px; }
+  .catalog-filters { grid-template-columns: 1fr 1fr; }
   .buy-hero { padding: 64px 0; }
   .buy-hero__copy h1 { font-size: clamp(3.2rem, 13vw, 4.8rem); }
   .section-top--intro .section-lead { margin-top: 20px; }
@@ -382,6 +406,9 @@ textarea.control { min-height: 124px; padding-block: 14px; resize: vertical; }
   .video-dialog__footer { align-items: flex-start; flex-direction: column; }
   .selection-grid { grid-template-columns: 1fr; }
   .selection-form { padding: 24px; }
+  .catalog-filters { grid-template-columns: 1fr; padding: 20px; }
+  .catalog-filters__actions { flex-direction: column; }
+  .catalog-filters__actions .btn { width: 100%; }
   .form-card, .contact-panel { padding: 24px; }
   .footer-bottom { flex-direction: column; }
 }

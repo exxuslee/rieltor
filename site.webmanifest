@@ -1,0 +1,12 @@
+{
+  "name": "Ірина Ліннік — персональний рієлтор",
+  "short_name": "Ірина Ліннік",
+  "lang": "uk",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f1e8",
+  "theme_color": "#f5f1e8",
+  "icons": [
+    { "src": "/images/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
