@@ -25,6 +25,16 @@ class SiteHeader extends HTMLElement {
     const theme = this.querySelector('.theme-toggle');
     const menu = this.querySelector('.menu-toggle');
     const nav = this.querySelector('.nav');
+    const header = this.querySelector('.site-header');
+    const updateHeaderSize = () => {
+      if (window.scrollY > 100) header.classList.add('is-compact');
+      if (window.scrollY < 10) header.classList.remove('is-compact');
+    };
+    const onScroll = () => {
+      updateHeaderSize();
+    };
+    updateHeaderSize();
+    window.addEventListener('scroll', onScroll, { passive: true });
     theme.addEventListener('click', () => window.toggleTheme());
     menu.addEventListener('click', () => {
       const open = nav.classList.toggle('is-open');
