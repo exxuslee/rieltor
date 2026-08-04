@@ -333,6 +333,9 @@ textarea.control { min-height: 124px; padding-block: 14px; resize: vertical; }
 .form-note { margin: 14px 0 0; color: #6d7882; font-size: .78rem; }
 .form-success { display: none; padding: 18px; margin-top: 18px; border-radius: var(--radius); background: #eaf7ef; color: #176a3b; }
 .form-success.is-visible { display: block; }
+.form-error { display: none; padding: 18px; margin-top: 18px; border-radius: var(--radius); background: #fff0ee; color: #982f28; }
+.form-error.is-visible { display: block; }
+.btn:disabled { cursor: wait; opacity: .72; transform: none; }
 
 .seller-guide { border-bottom: 1px solid var(--border); }
 .seller-guide__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--border); }

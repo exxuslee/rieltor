@@ -74,7 +74,7 @@
             <div class="step"><span class="step-number">04</span><div><h3>Переговори й угода</h3><p>Узгодження умов і супровід домовленостей до завершення продажу.</p></div></div>
           </div>
         </div>
-        <form class="form-card" id="seller-form" data-local-form>
+        <form class="form-card" id="seller-form" data-telegram-form data-form-type="valuation">
           <h2>Отримайте попередню оцінку</h2>
           <div class="form-grid">
             <div class="field"><label for="seller-name">Ваше ім’я</label><input class="control" id="seller-name" name="name" required autocomplete="name"></div>
@@ -85,7 +85,8 @@
           </div>
           <button class="btn btn--full" type="submit">Отримати оцінку</button>
           <p class="form-note">Натискаючи кнопку, ви погоджуєтеся з <a href="privacy.html">політикою конфіденційності</a>.</p>
-          <div class="form-success" role="status">Дякую! Заявку прийнято в демонстраційному режимі. Для реального звернення скористайтеся контактами рієлтора.</div>
+          <div class="form-success" role="status" tabindex="-1">Дякую! Заявку на оцінку надіслано. Ірина зв’яжеться з вами найближчим часом.</div>
+          <div class="form-error" role="alert" tabindex="-1">Не вдалося надіслати заявку. Спробуйте ще раз або зв’яжіться з Іриною за телефоном.</div>
         </form>
       </div>
     </section>
@@ -114,6 +115,6 @@
     </section>
   </main>
   <site-footer></site-footer>
-  <script src="js/components.js"></script><script src="js/forms.js?v=2"></script>
+  <script src="js/components.js"></script><script src="js/forms.js?v=3"></script>
 </body>
 </html>
