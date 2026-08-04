@@ -106,7 +106,7 @@ const propertyPage = item => {
     </section>
   </main>
   <site-footer></site-footer>
-  <script src="/js/components.js"></script>
+  <script src="/js/components.js?v=3"></script>
 </body>
 </html>
 `;

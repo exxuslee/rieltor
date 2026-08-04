@@ -203,7 +203,7 @@ textarea.control { min-height: 124px; padding-block: 14px; resize: vertical; }
 .tiktok-carousel { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(230px, 25%); gap: 18px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: inline mandatory; scrollbar-width: none; }
 .tiktok-carousel::-webkit-scrollbar { display: none; }
 .tiktok-card { position: relative; min-height: 430px; padding: 0; overflow: hidden; border: 0; border-radius: 14px; scroll-snap-align: start; background: #252936; color: #fff; text-align: left; cursor: pointer; isolation: isolate; }
-.tiktok-card video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .45s ease; pointer-events: none; }
+.tiktok-card__poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .45s ease; pointer-events: none; }
 .tiktok-card__shade { position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(6, 8, 12, .08) 20%, rgba(6, 8, 12, .86) 100%); }
 .tiktok-card__number { position: absolute; top: 18px; left: 18px; z-index: 2; color: rgba(255,255,255,.78); font-size: .72rem; font-weight: 800; letter-spacing: .12em; }
 .tiktok-card__play { position: absolute; top: 16px; right: 16px; z-index: 2; width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.6); border-radius: 999px; background: rgba(8,10,14,.28); backdrop-filter: blur(8px); }
@@ -212,7 +212,7 @@ textarea.control { min-height: 124px; padding-block: 14px; resize: vertical; }
 .tiktok-card__copy small { margin-bottom: 8px; color: #ff7b84; font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .tiktok-card__copy strong { font: 400 1.55rem/1.08 var(--serif); }
 .tiktok-card__copy > span { margin-top: 17px; font-size: .8rem; font-weight: 750; }
-.tiktok-card:hover video { transform: scale(1.045); }
+.tiktok-card:hover .tiktok-card__poster { transform: scale(1.045); }
 .tiktok-card:focus-visible { outline: 3px solid #ff7b84; outline-offset: 4px; }
 
 .video-dialog { width: min(100% - 32px, 570px); max-height: calc(100vh - 32px); padding: 0; overflow: visible; border: 0; border-radius: 18px; background: #11131a; color: #fff; box-shadow: 0 28px 90px rgba(0,0,0,.45); }

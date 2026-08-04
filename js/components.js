@@ -28,6 +28,15 @@ class SiteHeader extends HTMLElement {
     const menu = this.querySelector('.menu-toggle');
     const nav = this.querySelector('.nav');
     const header = this.querySelector('.site-header');
+    let previouslyFocused = null;
+    const focusableSelector = 'a[href], button:not([disabled])';
+    const closeMenu = ({ restoreFocus = false } = {}) => {
+      if (!nav.classList.contains('is-open')) return;
+      nav.classList.remove('is-open');
+      menu.setAttribute('aria-expanded', 'false');
+      document.body.classList.remove('menu-open');
+      if (restoreFocus) (previouslyFocused || menu).focus();
+    };
     const updateHeaderSize = () => {
       if (window.scrollY > 100) header.classList.add('is-compact');
       if (window.scrollY < 10) header.classList.remove('is-compact');
@@ -42,6 +51,41 @@ class SiteHeader extends HTMLElement {
       const open = nav.classList.toggle('is-open');
       menu.setAttribute('aria-expanded', String(open));
       document.body.classList.toggle('menu-open', open);
+      if (open) {
+        previouslyFocused = document.activeElement;
+        nav.querySelector('a')?.focus();
+      } else {
+        menu.focus();
+      }
+    });
+    nav.addEventListener('click', event => {
+      if (event.target.closest('a')) closeMenu();
+    });
+    document.addEventListener('keydown', event => {
+      if (!nav.classList.contains('is-open')) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMenu({ restoreFocus: true });
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(header.querySelectorAll(focusableSelector)).filter(element => element.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+    document.addEventListener('pointerdown', event => {
+      if (nav.classList.contains('is-open') && !header.contains(event.target)) closeMenu();
+    });
+    window.matchMedia('(min-width: 981px)').addEventListener('change', event => {
+      if (event.matches) closeMenu();
     });
   }
 }

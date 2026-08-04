@@ -31,3 +31,12 @@ python scripts/optimize-images.py
 ```
 
 Внешние шаги после публикации перечислены в `SEO-CHECKLIST.md`.
+
+## Проверка перед публикацией
+
+Локально и в GitHub Actions выполняются структурный smoke-тест, проверка локальных ссылок, синтаксиса JavaScript и SEO:
+
+```powershell
+node scripts/check-smoke.mjs
+node scripts/check-seo.mjs
+```

@@ -1,0 +1,22 @@
+name: Smoke and SEO
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Smoke check
+        run: node scripts/check-smoke.mjs
+      - name: SEO check
+        run: node scripts/check-seo.mjs
