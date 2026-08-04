@@ -15,7 +15,7 @@ class SiteHeader extends HTMLElement {
     const page = document.body.dataset.page || '';
     const links = [
       ['home', siteUrl('index.html'), 'ГОЛОВНА'], ['buy', siteUrl('buy.html'), 'КУПІВЛЯ'],
-      ['sell', siteUrl('sell-your-apartment.html'), 'ПРОДАЖ'], ['contacts', siteUrl('contacts.html'), 'КОНТАКТИ']
+      ['sell', siteUrl('sell-your-apartment.html'), 'ПРОДАЖ'], ['faq', siteUrl('faq.html'), 'FAQ'], ['contacts', siteUrl('contacts.html'), 'КОНТАКТИ']
     ];
     this.innerHTML = `<header class="site-header"><div class="container header-inner">
       <a class="brand" href="${siteUrl('index.html')}" aria-label="Ірина Ліннік — головна"><span class="brand-mark">IL</span><span class="brand-name">Ірина Ліннік</span></a>
