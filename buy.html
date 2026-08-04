@@ -1,91 +1,147 @@
 <!doctype html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Квартири, новобудови, будинки, земля та комерція в Ірпені, Бучі й Гостомелі. Персональний підбір від Ірини Ліннік.">
-  <title>Купити нерухомість в Ірпені та Бучі — Ірина Ліннік</title>
-  <link rel="canonical" href="https://rieltor.dpdns.org/buy.html">
-  <meta property="og:type" content="website"><meta property="og:locale" content="uk_UA"><meta property="og:title" content="Купити нерухомість в Ірпені та Бучі — Ірина Ліннік"><meta property="og:description" content="Квартири, новобудови, будинки, земля та комерція в Ірпені, Бучі й Гостомелі."><meta property="og:url" content="https://rieltor.dpdns.org/buy.html"><meta property="og:image" content="https://rieltor.dpdns.org/images/properties/apartment-park.webp">
-  <meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#f5f1e8"><link rel="icon" href="/images/favicon.svg" type="image/svg+xml"><link rel="manifest" href="/site.webmanifest">
-  <script src="js/theme.js"></script>
-  <link rel="stylesheet" href="css/styles.css">
+    <meta charset="utf-8">
+    <meta content="width=device-width,initial-scale=1" name="viewport">
+    <meta content="Квартири, новобудови, будинки, земля та комерція в Ірпені, Бучі й Гостомелі. Персональний підбір від Ірини Ліннік."
+          name="description">
+    <title>Купити нерухомість в Ірпені та Бучі — Ірина Ліннік</title>
+    <link href="https://rieltor.dpdns.org/buy.html" rel="canonical">
+    <meta content="website" property="og:type">
+    <meta content="uk_UA" property="og:locale">
+    <meta content="Купити нерухомість в Ірпені та Бучі — Ірина Ліннік" property="og:title">
+    <meta content="Квартири, новобудови, будинки, земля та комерція в Ірпені, Бучі й Гостомелі."
+          property="og:description">
+    <meta content="https://rieltor.dpdns.org/buy.html" property="og:url">
+    <meta content="https://rieltor.dpdns.org/images/properties/apartment-park.webp" property="og:image">
+    <meta content="summary_large_image" name="twitter:card">
+    <meta content="#f5f1e8" name="theme-color">
+    <link href="/images/favicon.svg" rel="icon" type="image/svg+xml">
+    <link href="/site.webmanifest" rel="manifest">
+    <script src="js/theme.js"></script>
+    <link href="css/styles.css" rel="stylesheet">
 </head>
 <body data-page="buy">
-  <site-header></site-header>
-  <main>
+<site-header></site-header>
+<main>
     <section class="buy-hero">
-      <div class="container buy-hero__layout">
-        <div class="buy-hero__copy">
-          <p class="eyebrow">Персональний підбір</p>
-          <h1>Знайду нерухомість під ваш запит</h1>
-          <p class="buy-hero__lead">Розкажіть, що і де шукаєте. Я уточню деталі, перевірю актуальні варіанти та зв’яжуся з вами.</p>
-          <div class="buyer-benefits" aria-label="Переваги для покупця">
-            <aside class="buyer-benefit buyer-benefit--commission" aria-label="Комісія для покупця">
-              <strong>Без комісії для покупця</strong>
-            </aside>
-            <aside class="buyer-benefit buyer-benefit--programs" aria-label="Державні програми придбання">
-              <p>Придбання житла за державними програмами:</p>
-              <ul><li>єОселя</li><li>Житловий сертифікат</li><li>Постанови № 280 та № 719</li></ul>
-            </aside>
-          </div>
+        <div class="container buy-hero__layout">
+            <div class="buy-hero__copy">
+                <p class="eyebrow">Персональний підбір</p>
+                <h1>Знайду нерухомість під ваш запит</h1>
+                <p class="buy-hero__lead">Розкажіть, що і де шукаєте. Я уточню деталі, перевірю актуальні варіанти та
+                    зв’яжуся з вами.</p>
+                <div aria-label="Переваги для покупця" class="buyer-benefits">
+                    <aside aria-label="Комісія для покупця" class="buyer-benefit buyer-benefit--commission">
+                        <strong>Без комісії для покупця</strong>
+                    </aside>
+                    <aside aria-label="Державні програми придбання" class="buyer-benefit buyer-benefit--programs">
+                        <p>Придбання житла за державними програмами:</p>
+                        <ul>
+                            <li>єОселя</li>
+                            <li>Житловий сертифікат</li>
+                            <li>Постанови № 280 та № 719</li>
+                        </ul>
+                    </aside>
+                </div>
+            </div>
+            <form class="selection-form" data-form-type="selection" data-telegram-form>
+                <div class="field">
+                    <label for="buy-type">Що хочете купити?</label>
+                    <select class="control" id="buy-type" name="category" required>
+                        <option value="">Оберіть тип</option>
+                        <option value="apartments">Квартиру</option>
+                        <option value="new-buildings">Новобудову</option>
+                        <option value="houses">Будинок</option>
+                        <option value="commercial">Комерцію</option>
+                        <option value="land">Землю</option>
+                        <option value="other">Інше</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="buy-location">Де шукаєте?</label>
+                    <select class="control" id="buy-location" name="location" required>
+                        <option value="">Оберіть локацію</option>
+                        <option>Ірпінь</option>
+                        <option>Буча</option>
+                        <option>Гостомель</option>
+                        <option>Інша локація</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="buy-phone">Ваш телефон</label>
+                    <input autocomplete="tel" class="control" id="buy-phone" name="phone" placeholder="+38 ___ ___ __ __"
+                           required type="tel">
+                </div>
+                <button class="btn btn--full" type="submit">Замовити підбір</button>
+                <p class="form-note">Три поля — і я повернуся до вас з уточненнями. <a href="privacy.html">Про
+                    конфіденційність</a>.</p>
+                <div class="form-success" role="status" tabindex="-1">Дякую! Запит на підбір надіслано. Ірина зв’яжеться
+                    з вами найближчим часом.
+                </div>
+                <div class="form-error" role="alert" tabindex="-1">Не вдалося надіслати запит. Спробуйте ще раз або
+                    зв’яжіться з Іриною за телефоном.
+                </div>
+            </form>
         </div>
-        <form class="selection-form" data-telegram-form data-form-type="selection">
-          <div class="field">
-            <label for="buy-type">Що хочете купити?</label>
-            <select class="control" id="buy-type" name="category" required>
-              <option value="">Оберіть тип</option>
-              <option value="apartments">Квартиру</option>
-              <option value="new-buildings">Новобудову</option>
-              <option value="houses">Будинок</option>
-              <option value="commercial">Комерцію</option>
-              <option value="land">Землю</option>
-              <option value="other">Інше</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="buy-location">Де шукаєте?</label>
-            <select class="control" id="buy-location" name="location" required>
-              <option value="">Оберіть локацію</option>
-              <option>Ірпінь</option>
-              <option>Буча</option>
-              <option>Гостомель</option>
-              <option>Інша локація</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="buy-phone">Ваш телефон</label>
-            <input class="control" id="buy-phone" name="phone" type="tel" autocomplete="tel" placeholder="+38 ___ ___ __ __" required>
-          </div>
-          <button class="btn btn--full" type="submit">Замовити підбір</button>
-          <p class="form-note">Три поля — і я повернуся до вас з уточненнями. <a href="privacy.html">Про конфіденційність</a>.</p>
-          <div class="form-success" role="status" tabindex="-1">Дякую! Запит на підбір надіслано. Ірина зв’яжеться з вами найближчим часом.</div>
-          <div class="form-error" role="alert" tabindex="-1">Не вдалося надіслати запит. Спробуйте ще раз або зв’яжіться з Іриною за телефоном.</div>
-        </form>
-      </div>
     </section>
 
-    <section class="section" aria-labelledby="property-types-title">
-      <div class="container">
-        <div class="section-top section-top--intro">
-          <div><p class="eyebrow">Напрями пошуку</p><h2 class="section-heading" id="property-types-title">Що можна підібрати</h2></div>
-          <p class="section-lead">Це приклади напрямів, а не каталог із застарілими цінами. Кожну добірку формую під конкретний запит.</p>
+    <section aria-labelledby="property-types-title" class="section">
+        <div class="container">
+            <div class="section-top section-top--intro">
+                <div><p class="eyebrow">Напрями пошуку</p>
+                    <h2 class="section-heading" id="property-types-title">Що можна підібрати</h2></div>
+                <p class="section-lead">Це приклади напрямів, а не каталог із застарілими цінами. Кожну добірку формую
+                    під конкретний запит.</p>
+            </div>
+            <div class="selection-grid">
+                <article class="selection-card"><img alt="Приклад квартири"
+                                                     height="512" loading="lazy" src="images/properties/apartment-park-768.webp" width="768">
+                    <div><span>01</span>
+                        <h3>Квартири</h3>
+                        <p>Для життя, оренди або інвестиції.</p></div>
+                </article>
+                <article class="selection-card"><img alt="Приклад новобудови"
+                                                     height="512" loading="lazy" src="images/properties/new-building-768.webp" width="768">
+                    <div><span>02</span>
+                        <h3>Новобудови</h3>
+                        <p>Комплекси, планування та пропозиції забудовників.</p></div>
+                </article>
+                <article class="selection-card"><img alt="Приклад приватного будинку"
+                                                     height="512" loading="lazy" src="images/properties/house-bucha-768.webp"
+                                                     width="768">
+                    <div><span>03</span>
+                        <h3>Будинки</h3>
+                        <p>Будинки, дуплекси й таунхауси.</p></div>
+                </article>
+                <article class="selection-card"><img alt="Приклад комерційного приміщення"
+                                                     height="512" loading="lazy" src="images/properties/commercial-768.webp"
+                                                     width="768">
+                    <div><span>04</span>
+                        <h3>Комерція</h3>
+                        <p>Приміщення для бізнесу та інвестицій.</p></div>
+                </article>
+                <article class="selection-card"><img alt="Приклад земельної ділянки"
+                                                     height="512" loading="lazy" src="images/properties/land-bucha-768.webp"
+                                                     width="768">
+                    <div><span>05</span>
+                        <h3>Земля</h3>
+                        <p>Ділянки для будівництва й розвитку.</p></div>
+                </article>
+                <article class="selection-card selection-card--other">
+                    <div aria-hidden="true" class="selection-card__symbol">+</div>
+                    <div><span>06</span>
+                        <h3>Інше</h3>
+                        <p>Нетиповий об’єкт або особливий запит.</p></div>
+                </article>
+            </div>
         </div>
-        <div class="selection-grid">
-          <article class="selection-card"><img src="images/properties/apartment-park-768.webp" alt="Приклад квартири" loading="lazy" width="768" height="512"><div><span>01</span><h3>Квартири</h3><p>Для життя, оренди або інвестиції.</p></div></article>
-          <article class="selection-card"><img src="images/properties/new-building-768.webp" alt="Приклад новобудови" loading="lazy" width="768" height="512"><div><span>02</span><h3>Новобудови</h3><p>Комплекси, планування та пропозиції забудовників.</p></div></article>
-          <article class="selection-card"><img src="images/properties/house-bucha-768.webp" alt="Приклад приватного будинку" loading="lazy" width="768" height="512"><div><span>03</span><h3>Будинки</h3><p>Будинки, дуплекси й таунхауси.</p></div></article>
-          <article class="selection-card"><img src="images/properties/commercial-768.webp" alt="Приклад комерційного приміщення" loading="lazy" width="768" height="512"><div><span>04</span><h3>Комерція</h3><p>Приміщення для бізнесу та інвестицій.</p></div></article>
-          <article class="selection-card"><img src="images/properties/land-bucha-768.webp" alt="Приклад земельної ділянки" loading="lazy" width="768" height="512"><div><span>05</span><h3>Земля</h3><p>Ділянки для будівництва й розвитку.</p></div></article>
-          <article class="selection-card selection-card--other"><div class="selection-card__symbol" aria-hidden="true">+</div><div><span>06</span><h3>Інше</h3><p>Нетиповий об’єкт або особливий запит.</p></div></article>
-        </div>
-      </div>
     </section>
 
-  </main>
-  <site-footer></site-footer>
-  <script src="js/components.js?v=3"></script>
-  <script src="js/buy.js"></script>
-  <script src="js/forms.js?v=3"></script>
+</main>
+<site-footer></site-footer>
+<script src="js/components.js?v=3"></script>
+<script src="js/buy.js"></script>
+<script src="js/forms.js?v=3"></script>
 </body>
 </html>

@@ -1,21 +1,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const domain = 'https://rieltor.dpdns.org';
-const context = { window: {} };
+const context = {window: {}};
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(root, 'js', 'data.js'), 'utf8'), context);
 const properties = context.window.PROPERTIES;
 
 const escapeHtml = value => String(value)
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-  .replaceAll("'", '&#039;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 
 const json = value => JSON.stringify(value).replaceAll('<', '\\u003c');
 const areaText = item => item.category === 'land' ? `${item.area / 100} соток` : `${item.area} м²`;
@@ -31,35 +31,35 @@ const card = item => `<article class="property-card"><a href="/properties/${item
   </div></a></article>`;
 
 const propertyPage = item => {
-  const pageDescription = `${item.title} — ${item.location}, площа ${areaText(item)}, ціна ${priceText(item)}. Перегляд і консультація рієлтора Ірини Ліннік.`;
-  const schema = {
-    '@context': 'https://schema.org',
-    '@graph': [
-      {
-        '@type': 'WebPage',
-        '@id': `${canonical(item)}#webpage`,
-        url: canonical(item),
-        name: `${item.title} — Ірина Ліннік`,
-        description: pageDescription,
-        inLanguage: 'uk-UA',
-        dateModified: new Date().toISOString().slice(0, 10),
-        isPartOf: { '@id': `${domain}/#website` },
-        primaryImageOfPage: `${domain}/${imagePath(item)}`,
-        breadcrumb: { '@id': `${canonical(item)}#breadcrumb` }
-      },
-      {
-        '@type': 'BreadcrumbList',
-        '@id': `${canonical(item)}#breadcrumb`,
-        itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'Головна', item: `${domain}/` },
-          { '@type': 'ListItem', position: 2, name: 'Купівля', item: `${domain}/buy.html` },
-          { '@type': 'ListItem', position: 3, name: item.title, item: canonical(item) }
+    const pageDescription = `${item.title} — ${item.location}, площа ${areaText(item)}, ціна ${priceText(item)}. Перегляд і консультація рієлтора Ірини Ліннік.`;
+    const schema = {
+        '@context': 'https://schema.org',
+        '@graph': [
+            {
+                '@type': 'WebPage',
+                '@id': `${canonical(item)}#webpage`,
+                url: canonical(item),
+                name: `${item.title} — Ірина Ліннік`,
+                description: pageDescription,
+                inLanguage: 'uk-UA',
+                dateModified: new Date().toISOString().slice(0, 10),
+                isPartOf: {'@id': `${domain}/#website`},
+                primaryImageOfPage: `${domain}/${imagePath(item)}`,
+                breadcrumb: {'@id': `${canonical(item)}#breadcrumb`}
+            },
+            {
+                '@type': 'BreadcrumbList',
+                '@id': `${canonical(item)}#breadcrumb`,
+                itemListElement: [
+                    {'@type': 'ListItem', position: 1, name: 'Головна', item: `${domain}/`},
+                    {'@type': 'ListItem', position: 2, name: 'Купівля', item: `${domain}/buy.html`},
+                    {'@type': 'ListItem', position: 3, name: item.title, item: canonical(item)}
+                ]
+            }
         ]
-      }
-    ]
-  };
+    };
 
-  return `<!doctype html>
+    return `<!doctype html>
 <html lang="uk">
 <head>
   <meta charset="utf-8">
@@ -113,17 +113,17 @@ const propertyPage = item => {
 };
 
 const propertyDirectory = path.join(root, 'properties');
-fs.mkdirSync(propertyDirectory, { recursive: true });
+fs.mkdirSync(propertyDirectory, {recursive: true});
 for (const item of properties) {
-  fs.writeFileSync(path.join(propertyDirectory, `${item.id}.html`), propertyPage(item));
+    fs.writeFileSync(path.join(propertyDirectory, `${item.id}.html`), propertyPage(item));
 }
 
 const buyPath = path.join(root, 'buy.html');
 const buy = fs.readFileSync(buyPath, 'utf8');
 const cards = properties.map(card).join('\n');
 const updatedBuy = buy.replace(
-  /<!-- GENERATED_PROPERTY_CARDS_START -->[\s\S]*?<!-- GENERATED_PROPERTY_CARDS_END -->/,
-  `<!-- GENERATED_PROPERTY_CARDS_START -->\n${cards}\n<!-- GENERATED_PROPERTY_CARDS_END -->`
+    /<!-- GENERATED_PROPERTY_CARDS_START -->[\s\S]*?<!-- GENERATED_PROPERTY_CARDS_END -->/,
+    `<!-- GENERATED_PROPERTY_CARDS_START -->\n${cards}\n<!-- GENERATED_PROPERTY_CARDS_END -->`
 );
 fs.writeFileSync(buyPath, updatedBuy);
 

@@ -2,7 +2,7 @@ name: Smoke and SEO
 
 on:
   push:
-    branches: [master, main]
+    branches: [ master, main ]
   pull_request:
 
 permissions:

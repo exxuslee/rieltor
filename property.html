@@ -1,23 +1,28 @@
 <!doctype html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="robots" content="noindex,follow">
-  <title>Перехід до об’єкта — Ірина Ліннік</title>
-  <meta name="description" content="Перехід до актуальної сторінки об’єкта нерухомості.">
-  <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
-  <script src="/js/theme.js"></script>
-  <link rel="stylesheet" href="/css/styles.css">
+    <meta charset="utf-8">
+    <meta content="width=device-width,initial-scale=1" name="viewport">
+    <meta content="noindex,follow" name="robots">
+    <title>Перехід до об’єкта — Ірина Ліннік</title>
+    <meta content="Перехід до актуальної сторінки об’єкта нерухомості." name="description">
+    <link href="/images/favicon.svg" rel="icon" type="image/svg+xml">
+    <script src="/js/theme.js"></script>
+    <link href="/css/styles.css" rel="stylesheet">
 </head>
 <body>
-  <site-header></site-header>
-  <main><section class="page-hero"><div class="container"><h1>Відкриваємо сторінку об’єкта</h1><p>Якщо перехід не відбувся, поверніться до <a href="/buy.html">каталогу нерухомості</a>.</p></div></section></main>
-  <site-footer></site-footer>
-  <script>
+<site-header></site-header>
+<main>
+    <section class="page-hero">
+        <div class="container"><h1>Відкриваємо сторінку об’єкта</h1>
+            <p>Якщо перехід не відбувся, поверніться до <a href="/buy.html">каталогу нерухомості</a>.</p></div>
+    </section>
+</main>
+<site-footer></site-footer>
+<script>
     const id = new URLSearchParams(location.search).get('id');
     if (/^[a-z0-9-]+$/.test(id || '')) location.replace(`/properties/${id}.html`);
-  </script>
-  <script src="/js/components.js?v=3"></script>
+</script>
+<script src="/js/components.js?v=3"></script>
 </body>
 </html>
