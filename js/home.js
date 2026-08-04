@@ -22,13 +22,13 @@
   });
 
   const tiktokReviews = [
-    { title: 'Відеоогляд нерухомості', label: 'Огляд 01', video: 'tiktok/IMG_5933.MOV', poster: 'images/properties/apartment-park-768.webp' },
-    { title: 'Відеоогляд нерухомості', label: 'Огляд 02', video: 'tiktok/IMG_5934.MP4', poster: 'images/properties/apartment-new-768.webp' },
-    { title: 'Відеоогляд нерухомості', label: 'Огляд 03', video: 'tiktok/IMG_5935.MP4', poster: 'images/properties/new-building-768.webp' },
-    { title: 'Відеоогляд нерухомості', label: 'Огляд 04', video: 'tiktok/IMG_5936.MP4', poster: 'images/properties/house-bucha-768.webp' },
-    { title: 'Відеоогляд нерухомості', label: 'Огляд 05', video: 'tiktok/IMG_5937.MP4', poster: 'images/properties/land-bucha-768.webp' },
-    { title: 'Відеоогляд нерухомості', label: 'Огляд 06', video: 'tiktok/IMG_5938.MP4', poster: 'images/properties/commercial-768.webp' },
-    { title: 'Відеоогляд нерухомості', label: 'Огляд 07', video: 'tiktok/IMG_5939.MP4', poster: 'images/properties/apartment-park-768.webp' }
+    { title: 'Відеоогляд нерухомості', label: 'Огляд 01', video: 'tiktok/IMG_5933.MOV', poster: 'images/tiktok/img_5933-preview.webp' },
+    { title: 'Відеоогляд нерухомості', label: 'Огляд 02', video: 'tiktok/IMG_5934.MP4', poster: 'images/tiktok/img_5934-preview.webp' },
+    { title: 'Відеоогляд нерухомості', label: 'Огляд 03', video: 'tiktok/IMG_5935.MP4', poster: 'images/tiktok/img_5935-preview.webp' },
+    { title: 'Відеоогляд нерухомості', label: 'Огляд 04', video: 'tiktok/IMG_5936.MP4', poster: 'images/tiktok/img_5936-preview.webp' },
+    { title: 'Відеоогляд нерухомості', label: 'Огляд 05', video: 'tiktok/IMG_5937.MP4', poster: 'images/tiktok/img_5937-preview.webp' },
+    { title: 'Відеоогляд нерухомості', label: 'Огляд 06', video: 'tiktok/IMG_5938.MP4', poster: 'images/tiktok/img_5938-preview.webp' },
+    { title: 'Відеоогляд нерухомості', label: 'Огляд 07', video: 'tiktok/IMG_5939.MP4', poster: 'images/tiktok/img_5939-preview.webp' }
   ];
   const carousel = document.querySelector('[data-tiktok-carousel]');
   const previousButton = document.querySelector('[data-tiktok-prev]');
@@ -41,7 +41,7 @@
   if (carousel && previousButton && nextButton) {
     carousel.innerHTML = tiktokReviews.map((review, index) => `
       <button class="tiktok-card" type="button" data-video-index="${index}" aria-label="${review.label}: відкрити відеоогляд">
-        <img class="tiktok-card__poster" src="${review.poster}" alt="" loading="lazy" width="768" height="512">
+        <img class="tiktok-card__poster" src="${review.poster}" alt="" loading="lazy" width="540" height="960">
         <span class="tiktok-card__shade"></span>
         <span class="tiktok-card__number">0${index + 1}</span>
         <span class="tiktok-card__play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 7.4v9.2L17 12 9 7.4Z"/></svg></span>

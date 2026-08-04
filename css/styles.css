@@ -379,6 +379,13 @@ textarea.control { min-height: 124px; padding-block: 14px; resize: vertical; }
 .profile-facts dt { color: var(--muted); font-size: .86rem; font-weight: 750; }
 .profile-facts dd { margin: 0; font-weight: 650; }
 .about-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 24px; margin-top: 34px; }
+.agency-affiliation { display: grid; gap: 12px; width: min(100%, 470px); margin: 26px 0; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--muted); font-size: .86rem; font-weight: 700; text-decoration: none !important; transition: border-color .2s ease, transform .2s ease; }
+.agency-affiliation:hover { border-color: var(--accent); transform: translateY(-2px); }
+.agency-affiliation:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.agency-logo { display: block; overflow: hidden; padding: 13px 16px; border-radius: calc(var(--radius) - 6px); background: #767676; }
+.agency-logo img { display: block; width: 100%; height: auto; }
+.agency-affiliation--contact { margin: 0; }
+.contact-item .agency-affiliation--contact > span:first-child { font-size: .95rem; }
 .not-found { min-height: 65vh; display: grid; place-items: center; padding: 80px 0; text-align: center; }
 .not-found__code { margin: 0; color: var(--accent); font: 400 clamp(6rem, 18vw, 14rem)/.75 var(--serif); }
 .not-found h1 { margin: 34px 0 0; font: 400 clamp(2.7rem, 6vw, 5rem)/1 var(--serif); }
