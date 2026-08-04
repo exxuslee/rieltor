@@ -18,14 +18,14 @@ const requiredTypes = new Map([
 for (const file of htmlFiles) {
     const relative = path.relative(root, file).replaceAll('\\', '/');
     const html = fs.readFileSync(file, 'utf8');
-    const indexable = !/<meta\s+name="robots"\s+content="[^"]*noindex/i.test(html);
+    const indexable = !/<meta\b(?=[^>]*\bname="robots")(?=[^>]*\bcontent="[^"]*noindex)[^>]*>/i.test(html);
     if (!/<html\s+lang="uk"/i.test(html)) errors.push(`${relative}: missing Ukrainian document language`);
     for (const [label, pattern] of [
         ['title', /<title>[^<]+<\/title>/i],
-        ['description', /<meta\s+name="description"\s+content="[^"]+"/i],
+        ['description', /<meta\b(?=[^>]*\bname="description")(?=[^>]*\bcontent="[^"]+")[^>]*>/i],
         ['h1', /<h1[\s>]/i]
     ]) if (!pattern.test(html)) errors.push(`${relative}: missing ${label}`);
-    if (indexable && !/<link\s+rel="canonical"\s+href="https:\/\/rieltor\.dpdns\.org\/[^"]*"/i.test(html)) errors.push(`${relative}: missing HTTPS canonical`);
+    if (indexable && !/<link\b(?=[^>]*\brel="canonical")(?=[^>]*\bhref="https:\/\/rieltor\.dpdns\.org\/[^"]*")[^>]*>/i.test(html)) errors.push(`${relative}: missing HTTPS canonical`);
 
     const schemaTypes = new Set();
     for (const match of html.matchAll(/<script\s+type="application\/ld\+json">([\s\S]*?)<\/script>/gi)) {
@@ -52,7 +52,7 @@ for (const file of htmlFiles) {
 
 for (const file of ['index.html', 'about.html', 'contacts.html', 'sell-your-apartment.html', 'faq.html']) {
     const html = fs.readFileSync(path.join(root, file), 'utf8');
-    if (!/<link\s+rel="alternate"\s+type="text\/plain"\s+href="\/llms\.txt"/i.test(html)) errors.push(`${file}: missing llms.txt discovery link`);
+    if (!/<link\b(?=[^>]*\brel="alternate")(?=[^>]*\btype="text\/plain")(?=[^>]*\bhref="\/llms\.txt")[^>]*>/i.test(html)) errors.push(`${file}: missing llms.txt discovery link`);
 }
 
 const llms = fs.readFileSync(path.join(root, 'llms.txt'), 'utf8');
