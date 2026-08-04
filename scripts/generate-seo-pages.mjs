@@ -41,7 +41,9 @@ const propertyPage = item => {
         url: canonical(item),
         name: `${item.title} — Ірина Ліннік`,
         description: pageDescription,
-        inLanguage: 'uk',
+        inLanguage: 'uk-UA',
+        dateModified: new Date().toISOString().slice(0, 10),
+        isPartOf: { '@id': `${domain}/#website` },
         primaryImageOfPage: `${domain}/${imagePath(item)}`,
         breadcrumb: { '@id': `${canonical(item)}#breadcrumb` }
       },
@@ -64,7 +66,9 @@ const propertyPage = item => {
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>${escapeHtml(item.title)} — Ірина Ліннік</title>
   <meta name="description" content="${escapeHtml(pageDescription)}">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
   <link rel="canonical" href="${canonical(item)}">
+  <link rel="alternate" type="text/plain" href="/llms.txt" title="AI-readable site summary">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="uk_UA">
   <meta property="og:title" content="${escapeHtml(item.title)} — Ірина Ліннік">
@@ -124,7 +128,7 @@ const updatedBuy = buy.replace(
 fs.writeFileSync(buyPath, updatedBuy);
 
 const today = new Date().toISOString().slice(0, 10);
-const staticUrls = ['/', '/buy.html', '/sell-your-apartment.html', '/contacts.html', '/about.html', '/privacy.html'];
+const staticUrls = ['/', '/buy.html', '/sell-your-apartment.html', '/faq.html', '/contacts.html', '/about.html', '/privacy.html'];
 const urls = [...staticUrls, ...properties.map(item => `/properties/${item.id}.html`)];
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

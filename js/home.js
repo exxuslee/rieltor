@@ -4,9 +4,7 @@
     'apartment-central-park',
     'apartment-new-turnkey',
     'rc-olymp',
-    'house-terrace-bucha',
-    'land-pines-bucha',
-    'commercial-center'
+    'house-terrace-bucha'
   ];
   const featuredProperties = featuredIds
     .map(id => window.PROPERTIES.find(item => item.id === id))
@@ -18,7 +16,7 @@
       document.querySelectorAll('[data-category-tab]').forEach(tab => tab.classList.remove('is-active'));
       button.classList.add('is-active');
       const value = button.dataset.categoryTab;
-      const items = value === 'all' ? featuredProperties : window.PROPERTIES.filter(item => item.category === value).slice(0, 6);
+      const items = value === 'all' ? featuredProperties : window.PROPERTIES.filter(item => item.category === value).slice(0, 4);
       grid.innerHTML = items.map(window.propertyCard).join('');
     });
   });
