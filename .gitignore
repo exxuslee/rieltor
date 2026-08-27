@@ -29,3 +29,8 @@ pnpm-debug.log*
 build/
 out/
 tiktok-tokens.json
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/media/
+data/telegram/

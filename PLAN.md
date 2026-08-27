@@ -39,3 +39,15 @@ node scripts/check-seo.mjs
 - Подтвердить актуальность, цены и права на публикацию всех объектов и медиа.
 - Проверить формы с реальным обработчиком, rate limit и антиспамом.
 - Выполнить внешние проверки из `SEO-CHECKLIST.md` после публикации.
+
+## Telegram → TikTok
+
+- Backend организован по слоям `domain`, `application`, `infrastructure`, `web`.
+- Секреты, TikTok access/refresh tokens и журнал обработанных Telegram updates хранятся в локальной SQLite-базе
+  `data/rieltor.db` (файл исключён из Git).
+- Telegram Bot API принимает фото только от пользователя `530667295`, сохраняет изображение под случайным именем и
+  инициирует TikTok Photo Direct Post. Повторная обработка одного Telegram update блокируется базой.
+- Старый `tiktok-tokens.json` автоматически переносится в SQLite при первом запуске.
+- Папка TDLib-сессии из `autoposter` хранится локально в `data/telegram/` и не публикуется в Git.
+- Для Photo API необходимо добавить Content Posting API, подтвердить домен `https://api.rieltor.dpdns.org` в TikTok
+  Developer Portal и развернуть папку `data` рядом с JAR.
