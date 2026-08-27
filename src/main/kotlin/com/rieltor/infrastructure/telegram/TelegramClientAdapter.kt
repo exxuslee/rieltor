@@ -18,11 +18,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Telegram user client backed by the copied TDLib session. No Bot API is used. */
 class TelegramClientAdapter(
@@ -44,6 +46,7 @@ class TelegramClientAdapter(
     )
     private var factory: SimpleTelegramClientFactory? = null
     private var client: SimpleTelegramClient? = null
+    private val startupMonitoringLogged = AtomicBoolean(false)
 
     fun start() {
         Files.createDirectories(sessionDirectory.resolve("data"))
@@ -75,7 +78,15 @@ class TelegramClientAdapter(
 
     private fun onAuthorizationState(update: TdApi.UpdateAuthorizationState) {
         when (update.authorizationState) {
-            is TdApi.AuthorizationStateReady -> logger.info("Telegram TDLib session is authorized and ready")
+            is TdApi.AuthorizationStateReady -> {
+                logger.info("Telegram TDLib session is authorized and ready")
+                if (startupMonitoringLogged.compareAndSet(false, true)) {
+                    scope.launch {
+                        delay(STARTUP_MONITORING_LOG_DELAY_MILLIS)
+                        logMonitoredTopics()
+                    }
+                }
+            }
             is TdApi.AuthorizationStateWaitOtherDeviceConfirmation -> logger.warn(
                 "Telegram session needs confirmation in an already authorized Telegram app. " +
                     "Use the short-lived QR/login link printed by TDLight; do not share it."
@@ -106,6 +117,61 @@ class TelegramClientAdapter(
     private fun isMonitored(message: TdApi.Message): Boolean {
         if (message.chatId !in monitoredChatIds) return false
         return monitoredTopicIds.isEmpty() || message.messageThreadId in monitoredTopicIds
+    }
+
+    private fun logMonitoredTopics() {
+        val telegramClient = client ?: return
+        monitoredChatIds.forEach { chatId ->
+            runCatching {
+                telegramClient.send(
+                    TdApi.GetForumTopics(chatId, "", 0, 0, 0, FORUM_TOPIC_LOG_LIMIT)
+                ).get(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            }.onSuccess { forumTopics ->
+                val topics = forumTopics.topics
+                    .filter { monitoredTopicIds.isEmpty() || it.info.messageThreadId in monitoredTopicIds }
+                logger.info(
+                    "Telegram monitoring check: chatId={}, configuredTopicIds={}, foundTopics={}, totalTopics={}",
+                    chatId,
+                    monitoredTopicIds.takeIf { it.isNotEmpty() } ?: "all",
+                    topics.size,
+                    forumTopics.totalCount,
+                )
+                topics.forEach { topic ->
+                    val lastMessage = topic.lastMessage
+                    logger.info(
+                        "Telegram monitored topic: chatId={}, topicId={}, name='{}', lastMessageId={}, lastMessage={}",
+                        chatId,
+                        topic.info.messageThreadId,
+                        topic.info.name,
+                        lastMessage?.id,
+                        lastMessage?.let(::messageSummary) ?: "no messages",
+                    )
+                    logger.info("---------")
+                }
+                if (monitoredTopicIds.isNotEmpty()) {
+                    val foundTopicIds = topics.map { it.info.messageThreadId }.toSet()
+                    val missingTopicIds = monitoredTopicIds - foundTopicIds
+                    if (missingTopicIds.isNotEmpty()) {
+                        logger.warn("Configured Telegram topic IDs were not found in chat {}: {}", chatId, missingTopicIds)
+                    }
+                }
+                if (forumTopics.totalCount > forumTopics.topics.size) {
+                    logger.warn(
+                        "Telegram chat {} has more than {} topics; startup log shows only the newest topics",
+                        chatId,
+                        FORUM_TOPIC_LOG_LIMIT,
+                    )
+                }
+            }.onFailure { error ->
+                logger.warn("Could not read Telegram forum topics for monitored chat {}", chatId, error)
+            }
+        }
+    }
+
+    private fun messageSummary(message: TdApi.Message): String = when (val content = message.content) {
+        is TdApi.MessageText -> content.text.text.take(LOG_MESSAGE_TEXT_LIMIT).replace('\n', ' ')
+        is TdApi.MessagePhoto -> "photo: ${content.caption.text.take(LOG_MESSAGE_TEXT_LIMIT)}".replace('\n', ' ')
+        else -> content.javaClass.simpleName.removePrefix("Message")
     }
 
     private suspend fun processPhotoMessages(messages: List<TdApi.Message>) {
@@ -183,5 +249,9 @@ class TelegramClientAdapter(
     companion object {
         private const val ALBUM_SETTLE_DELAY_MILLIS = 2_000L
         private const val TELEGRAM_MAX_ALBUM_SIZE = 10
+        private const val FORUM_TOPIC_LOG_LIMIT = 100
+        private const val REQUEST_TIMEOUT_SECONDS = 30L
+        private const val LOG_MESSAGE_TEXT_LIMIT = 160
+        private const val STARTUP_MONITORING_LOG_DELAY_MILLIS = 500L
     }
 }
