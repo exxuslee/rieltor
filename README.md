@@ -40,11 +40,11 @@ python -m http.server 4173
 .\gradlew.bat importLocalSecrets -PlegacyAutoposterDir="D:/Android/PRO/autoposter"
 ```
 
-Для безопасного обновления отдельного секрета (например, после перевыпуска Telegram Bot token):
+Для безопасного обновления отдельного секрета, например Telegram API hash:
 
 ```powershell
 $env:SECRET_VALUE = "новое_значение"
-.\gradlew.bat setLocalSecret -PsecretName=TELEGRAM_BOT_TOKEN
+.\gradlew.bat setLocalSecret -PsecretName=TELEGRAM_API_HASH
 Remove-Item Env:SECRET_VALUE
 ```
 
@@ -54,12 +54,19 @@ Remove-Item Env:SECRET_VALUE
 $env:TIKTOK_CLIENT_KEY = "ваш_client_key"
 $env:TIKTOK_CLIENT_SECRET = "ваш_client_secret"
 $env:TIKTOK_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/tiktok/callback"
-$env:TELEGRAM_BOT_TOKEN = "ваш_bot_token"
 .\gradlew.bat run
 ```
 
-Сервер стартует на `http://localhost:8383`. Фото от Telegram-пользователя `530667295` принимаются ботом и передаются
-через TikTok Photo Direct Post. Caption сообщения используется как title/description. Другие отправители игнорируются.
+Сервер стартует на `http://localhost:8383`. Пользовательский Telegram-клиент TDLight открывает перенесённую сессию из
+`data/telegram/tdlib-session-id530667295`. Фото, отправленные пользователем `530667295` в «Избранное», передаются через
+TikTok Photo Direct Post; caption используется как title/description. Другие отправители и чаты игнорируются. Старый
+`autoposter` нельзя запускать одновременно с этим backend: два процесса не должны открывать одну TDLib-сессию.
+
+Для сборки JAR под Linux-сервер из Windows укажите native-классификатор:
+
+```powershell
+.\gradlew.bat shadowJar -PtdlightNativeClassifier=linux_amd64_gnu_ssl3
+```
 
 TikTok получает фотографию по `https://api.rieltor.dpdns.org/media/...`, поэтому в настройках Content Posting API нужно
 подтвердить владение доменом `https://api.rieltor.dpdns.org`. Для неаудированного TikTok-клиента публикации ограничены

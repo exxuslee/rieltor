@@ -6,7 +6,6 @@ kotlinx-serialization-json = "1.11.0"
 dotenv-kotlin = "6.4.1"
 foojay-resolver = "0.9.0"
 sqlite-jdbc = "3.50.3.0"
-telegrambots = "9.2.0"
 
 [libraries]
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
@@ -26,8 +25,6 @@ logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "lo
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization-json" }
 dotenv-kotlin = { module = "io.github.cdimascio:dotenv-kotlin", version.ref = "dotenv-kotlin" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
-telegrambots-longpolling = { module = "org.telegram:telegrambots-longpolling", version.ref = "telegrambots" }
-telegrambots-client = { module = "org.telegram:telegrambots-client", version.ref = "telegrambots" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 
 [plugins]

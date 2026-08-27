@@ -7,7 +7,7 @@ import com.rieltor.infrastructure.database.LegacyTokenMigration
 import com.rieltor.infrastructure.database.SqliteDatabase
 import com.rieltor.infrastructure.database.SqliteRepositories
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
-import com.rieltor.infrastructure.telegram.TelegramBotAdapter
+import com.rieltor.infrastructure.telegram.TelegramClientAdapter
 import com.rieltor.infrastructure.tiktok.OAuthStateStore
 import com.rieltor.infrastructure.tiktok.TikTokAuthException
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
@@ -69,8 +69,10 @@ fun Application.module(dotenv: Dotenv = loadDotenv()) {
         mediaStorage = mediaStorage,
         publisher = publisher,
     )
-    val telegram = TelegramBotAdapter(
-        botToken = settings.telegramBotToken,
+    val telegram = TelegramClientAdapter(
+        apiId = settings.telegramApiId,
+        apiHash = settings.telegramApiHash,
+        sessionDirectory = settings.telegramSessionDirectory,
         allowedSenderId = settings.allowedTelegramSenderId,
         repostService = repostService,
     )

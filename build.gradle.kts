@@ -8,12 +8,21 @@ plugins {
 group = "com.rieltor"
 version = "0.1.0"
 
+val defaultTdlightNative = if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+    "windows_amd64"
+} else {
+    "linux_amd64_gnu_ssl3"
+}
+val tdlightNativeClassifier = providers.gradleProperty("tdlightNativeClassifier")
+    .orElse(defaultTdlightNative)
+
 application {
     mainClass.set("com.rieltor.web.ApplicationKt")
 }
 
 repositories {
     mavenCentral()
+    maven { url = uri("https://mvn.mchv.eu/repository/mchv/") }
 }
 
 dependencies {
@@ -33,8 +42,11 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.dotenv.kotlin)
     implementation(libs.sqlite.jdbc)
-    implementation(libs.telegrambots.longpolling)
-    implementation(libs.telegrambots.client)
+    implementation(platform("it.tdlight:tdlight-java-bom:3.4.0+td.1.8.26"))
+    implementation("it.tdlight:tdlight-java")
+    implementation("it.tdlight:tdlight-natives") {
+        artifact { classifier = tdlightNativeClassifier.get() }
+    }
 
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.ktor.client.mock)

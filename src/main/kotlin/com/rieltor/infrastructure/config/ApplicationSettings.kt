@@ -9,7 +9,6 @@ object SecretNames {
     const val TIKTOK_CLIENT_KEY = "TIKTOK_CLIENT_KEY"
     const val TIKTOK_CLIENT_SECRET = "TIKTOK_CLIENT_SECRET"
     const val TIKTOK_REDIRECT_URI = "TIKTOK_REDIRECT_URI"
-    const val TELEGRAM_BOT_TOKEN = "TELEGRAM_BOT_TOKEN"
     const val TELEGRAM_API_ID = "TELEGRAM_API_ID"
     const val TELEGRAM_API_HASH = "TELEGRAM_API_HASH"
     const val TELEGRAM_USER_ID = "TELEGRAM_USER_ID"
@@ -19,7 +18,6 @@ object SecretNames {
         TIKTOK_CLIENT_KEY,
         TIKTOK_CLIENT_SECRET,
         TIKTOK_REDIRECT_URI,
-        TELEGRAM_BOT_TOKEN,
         TELEGRAM_API_ID,
         TELEGRAM_API_HASH,
         TELEGRAM_USER_ID,
@@ -33,7 +31,9 @@ data class ApplicationSettings(
     val mediaDirectory: Path,
     val publicBaseUrl: String,
     val allowedTelegramSenderId: Long,
-    val telegramBotToken: String,
+    val telegramApiId: Int,
+    val telegramApiHash: String,
+    val telegramSessionDirectory: Path,
     val tikTokClientKey: String,
     val tikTokClientSecret: String,
     val tikTokRedirectUri: String,
@@ -48,8 +48,10 @@ data class ApplicationSettings(
                 databasePath = Path.of(environmentOrDotenv("APP_DB_PATH", dotenv) ?: "data/rieltor.db"),
                 mediaDirectory = Path.of(environmentOrDotenv("MEDIA_DIRECTORY", dotenv) ?: "data/media"),
                 publicBaseUrl = secrets.get(SecretNames.PUBLIC_BASE_URL)?.trimEnd('/') ?: inferredBaseUrl,
-                allowedTelegramSenderId = 530667295L,
-                telegramBotToken = secrets.require(SecretNames.TELEGRAM_BOT_TOKEN),
+                allowedTelegramSenderId = secrets.require(SecretNames.TELEGRAM_USER_ID).toLong(),
+                telegramApiId = secrets.require(SecretNames.TELEGRAM_API_ID).toInt(),
+                telegramApiHash = secrets.require(SecretNames.TELEGRAM_API_HASH),
+                telegramSessionDirectory = Path.of( "data/telegram/tdlib-session-id${secrets.require(SecretNames.TELEGRAM_USER_ID)}"),
                 tikTokClientKey = secrets.require(SecretNames.TIKTOK_CLIENT_KEY),
                 tikTokClientSecret = secrets.require(SecretNames.TIKTOK_CLIENT_SECRET),
                 tikTokRedirectUri = redirectUri,

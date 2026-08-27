@@ -18,23 +18,19 @@ fun main(args: Array<String>) {
     val repository = SqliteRepositories(SqliteDatabase(targetDatabase))
     bootstrapSecrets(repository, Dotenv.configure().ignoreIfMissing().load())
 
-    val mainSource = Files.readString(source.resolve("src/main/kotlin/Main.kt"))
-    val telegramSource = Files.readString(source.resolve("src/main/kotlin/clients/TelegramBot.kt"))
     val mtProtoSource = Files.readString(source.resolve("src/main/kotlin/clients/MtProtoBot.kt"))
-    val botToken = extract(mainSource, "botToken") ?: extract(telegramSource, "token")
     val apiId = extract(mtProtoSource, "apiId")
     val apiHash = extract(mtProtoSource, "apiHash")
     val apiUserId = extract(mtProtoSource, "apiUserId")
 
     listOfNotNull(
-        botToken?.let { SecretNames.TELEGRAM_BOT_TOKEN to it },
         apiId?.let { SecretNames.TELEGRAM_API_ID to it },
         apiHash?.let { SecretNames.TELEGRAM_API_HASH to it },
         apiUserId?.let { SecretNames.TELEGRAM_USER_ID to it },
     ).forEach { (name, value) -> repository.putIfAbsent(name, value) }
 
-    check(repository.get(SecretNames.TELEGRAM_BOT_TOKEN) != null) {
-        "Telegram bot token was not found in the legacy project."
+    check(repository.get(SecretNames.TELEGRAM_API_ID) != null && repository.get(SecretNames.TELEGRAM_API_HASH) != null) {
+        "Telegram API credentials were not found in the legacy project."
     }
     println("Local secrets were imported into SQLite; values were not printed.")
 }

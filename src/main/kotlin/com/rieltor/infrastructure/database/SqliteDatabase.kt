@@ -14,6 +14,7 @@ class SqliteDatabase(private val path: Path) {
             connection.createStatement().use { statement ->
                 statement.execute("PRAGMA journal_mode=WAL")
                 statement.execute("PRAGMA busy_timeout=5000")
+                statement.execute("PRAGMA secure_delete=ON")
                 statement.execute(
                     """
                     CREATE TABLE IF NOT EXISTS app_secrets (
@@ -46,6 +47,16 @@ class SqliteDatabase(private val path: Path) {
                     )
                     """.trimIndent()
                 )
+                val schemaVersion = statement.executeQuery("PRAGMA user_version").use { result ->
+                    if (result.next()) result.getInt(1) else 0
+                }
+                if (schemaVersion < 1) {
+                    // Remove the retired Bot API credential and overwrite its SQLite cell.
+                    statement.executeUpdate("DELETE FROM app_secrets WHERE name = 'TELEGRAM_BOT_TOKEN'")
+                    statement.execute("PRAGMA user_version=1")
+                    statement.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                    statement.execute("VACUUM")
+                }
             }
         }
         restrictFilePermissions()
