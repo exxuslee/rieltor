@@ -23,3 +23,9 @@ test-results/
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+
+# Gradle / Kotlin backend
+.gradle/
+build/
+out/
+tiktok-tokens.json
