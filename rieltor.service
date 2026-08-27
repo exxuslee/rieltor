@@ -1,0 +1,17 @@
+[Unit]
+Description=Rieltor Service
+After=network.target
+
+[Service]
+Type=simple
+User=exxus
+Group=exxus
+WorkingDirectory=/home/exxus/rieltorSite
+ExecStart=/usr/bin/java -jar /home/exxus/rieltorSite/rieltorSite-all.jar
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/exxus/rieltorSite/app.log
+StandardError=append:/home/exxus/rieltorSite/error.log
+
+[Install]
+WantedBy=multi-user.target

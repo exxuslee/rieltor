@@ -5,6 +5,7 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
+import io.ktor.server.plugins.autohead.AutoHeadResponse
 import io.ktor.server.plugins.calllogging.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.statuspages.*
@@ -21,6 +22,7 @@ fun main() {
 
 fun Application.module() {
     install(CallLogging) { level = Level.INFO }
+    install(AutoHeadResponse)
     install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
     install(StatusPages) {
         exception<TikTokAuthException> { call, cause ->
@@ -61,6 +63,7 @@ fun Route.tikTokAuthRoutes() {
     get("/auth/tiktok/login") {
         val state = OAuthStateStore.issue()
         val authorizeUrl = TikTokAuthService.buildAuthorizeUrl(state)
+        call.application.log.info("Starting TikTok OAuth flow. state={}, authorizeUrl={}", state, authorizeUrl)
         call.respondRedirect(authorizeUrl)
     }
 
@@ -70,6 +73,12 @@ fun Route.tikTokAuthRoutes() {
         val state = call.request.queryParameters["state"]
         val error = call.request.queryParameters["error"]
         val errorDescription = call.request.queryParameters["error_description"]
+        val scopes = call.request.queryParameters["scopes"]
+
+        call.application.log.info(
+            "TikTok callback received. hasCode={}, hasState={}, scopes={}, error={}, error_description={}, full_query={}",
+            code != null, state != null, scopes, error, errorDescription, call.request.queryParameters.formUrlEncode()
+        )
 
         if (error != null) {
             call.respondText(
@@ -80,6 +89,7 @@ fun Route.tikTokAuthRoutes() {
         }
 
         if (code == null || state == null) {
+            call.application.log.warn("Callback missing code or state. code null={}, state null={}", code == null, state == null)
             call.respondText(
                 text = "Missing 'code' or 'state' parameter.",
                 status = HttpStatusCode.BadRequest
@@ -88,6 +98,7 @@ fun Route.tikTokAuthRoutes() {
         }
 
         if (!OAuthStateStore.consume(state)) {
+            call.application.log.warn("State consumption failed for state={} (already used, unknown, or expired)", state)
             call.respondText(
                 text = "Invalid or expired state. Please restart the login flow at /auth/tiktok/login.",
                 status = HttpStatusCode.Unauthorized
@@ -95,6 +106,7 @@ fun Route.tikTokAuthRoutes() {
             return@get
         }
 
+        call.application.log.info("State consumed OK, exchanging code for tokens.")
         val tokens = TikTokAuthService.exchangeCodeForTokens(code)
         TokenStore.save(tokens)
 

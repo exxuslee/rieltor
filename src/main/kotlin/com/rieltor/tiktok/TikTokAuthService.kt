@@ -5,20 +5,31 @@ import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.forms.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
+import org.slf4j.LoggerFactory
 import java.time.Instant
 
 class TikTokAuthException(message: String) : Exception(message)
 
 object TikTokAuthService {
 
+    private val logger = LoggerFactory.getLogger(TikTokAuthService::class.java)
+
+    private val jsonParser = Json { ignoreUnknownKeys = true }
+
     private val httpClient = HttpClient(CIO) {
         install(ContentNegotiation) {
-            json(Json { ignoreUnknownKeys = true })
+            json(jsonParser)
         }
     }
+
+    /** Masks all but the first/last few characters of a secret value for safe logging. */
+    private fun mask(value: String, keep: Int = 4): String =
+        if (value.length <= keep * 2) "*".repeat(value.length)
+        else "${value.take(keep)}...${value.takeLast(keep)} (len=${value.length})"
 
     /** Builds the URL the user's browser should be redirected to. */
     fun buildAuthorizeUrl(state: String): String {
@@ -34,7 +45,12 @@ object TikTokAuthService {
 
     /** Exchanges an authorization `code` (from the callback) for tokens. */
     suspend fun exchangeCodeForTokens(code: String): StoredTokens {
-        val response: TikTokTokenResponse = httpClient.submitForm(
+        logger.info(
+            "Exchanging authorization code for tokens. code={}, redirect_uri={}, client_key={}",
+            mask(code), TikTokConfig.redirectUri, mask(TikTokConfig.clientKey)
+        )
+
+        val httpResponse: HttpResponse = httpClient.submitForm(
             url = TikTokConfig.TOKEN_URL,
             formParameters = Parameters.build {
                 append("client_key", TikTokConfig.clientKey)
@@ -43,14 +59,20 @@ object TikTokAuthService {
                 append("grant_type", "authorization_code")
                 append("redirect_uri", TikTokConfig.redirectUri)
             }
-        ).body()
+        )
 
+        val rawBody = httpResponse.bodyAsText()
+        logger.info("TikTok token endpoint responded. status={}, body={}", httpResponse.status, rawBody)
+
+        val response = jsonParser.decodeFromString<TikTokTokenResponse>(rawBody)
         return response.toStoredTokensOrThrow()
     }
 
     /** Refreshes an access token using a stored refresh token. */
     suspend fun refreshTokens(refreshToken: String): StoredTokens {
-        val response: TikTokTokenResponse = httpClient.submitForm(
+        logger.info("Refreshing access token. refresh_token={}", mask(refreshToken))
+
+        val httpResponse: HttpResponse = httpClient.submitForm(
             url = TikTokConfig.TOKEN_URL,
             formParameters = Parameters.build {
                 append("client_key", TikTokConfig.clientKey)
@@ -58,8 +80,12 @@ object TikTokAuthService {
                 append("grant_type", "refresh_token")
                 append("refresh_token", refreshToken)
             }
-        ).body()
+        )
 
+        val rawBody = httpResponse.bodyAsText()
+        logger.info("TikTok token endpoint responded (refresh). status={}, body={}", httpResponse.status, rawBody)
+
+        val response = jsonParser.decodeFromString<TikTokTokenResponse>(rawBody)
         return response.toStoredTokensOrThrow()
     }
 
@@ -69,9 +95,11 @@ object TikTokAuthService {
             ?: throw TikTokAuthException("No tokens stored for openId=$openId. Re-authorize first.")
 
         if (!TokenStore.isAccessTokenExpired(tokens)) {
+            logger.info("Using cached access token for openId={}", openId)
             return tokens.accessToken
         }
 
+        logger.info("Cached access token expired for openId={}, refreshing", openId)
         val refreshed = refreshTokens(tokens.refreshToken)
         TokenStore.save(refreshed)
         return refreshed.accessToken
@@ -79,8 +107,16 @@ object TikTokAuthService {
 
     private fun TikTokTokenResponse.toStoredTokensOrThrow(): StoredTokens {
         if (error != null || accessToken == null || refreshToken == null || openId == null) {
+            logger.warn(
+                "TikTok token request failed. error={}, error_description={}, scope={}, token_type={}",
+                error, errorDescription, scope, tokenType
+            )
             throw TikTokAuthException("TikTok token request failed: $error - $errorDescription")
         }
+        logger.info(
+            "TikTok token request succeeded. openId={}, scope={}, expiresIn={}, refreshExpiresIn={}",
+            openId, scope, expiresIn, refreshExpiresIn
+        )
         val now = Instant.now().epochSecond
         return StoredTokens(
             openId = openId,
