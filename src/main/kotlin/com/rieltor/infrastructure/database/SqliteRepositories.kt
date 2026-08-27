@@ -102,36 +102,21 @@ class SqliteRepositories(private val database: SqliteDatabase) :
     }
 
     override fun tryStart(telegramUpdateId: Long): Boolean = database.connection().use { connection ->
-        connection.autoCommit = false
-        try {
-            val currentStatus = connection.prepareStatement(
-                "SELECT status FROM post_jobs WHERE telegram_update_id = ?"
-            ).use { statement ->
-                statement.setLong(1, telegramUpdateId)
-                statement.executeQuery().use { result -> if (result.next()) result.getString(1) else null }
-            }
-            val accepted = when (currentStatus) {
-                null -> {
-                    connection.prepareStatement(
-                        "INSERT INTO post_jobs(telegram_update_id, status, updated_at) VALUES (?, 'PROCESSING', ?)"
-                    ).use { statement ->
-                        statement.setLong(1, telegramUpdateId)
-                        statement.setLong(2, now())
-                        statement.executeUpdate()
-                    }
-                    true
-                }
-                "FAILED" -> {
-                    updateJob(connection, telegramUpdateId, "PROCESSING", null, null)
-                    true
-                }
-                else -> false
-            }
-            connection.commit()
-            accepted
-        } catch (error: Throwable) {
-            connection.rollback()
-            throw error
+        connection.prepareStatement(
+            """
+            INSERT INTO post_jobs(telegram_update_id, status, publish_id, error, updated_at)
+            VALUES (?, 'PROCESSING', NULL, NULL, ?)
+            ON CONFLICT(telegram_update_id) DO UPDATE SET
+                status = 'PROCESSING',
+                publish_id = NULL,
+                error = NULL,
+                updated_at = excluded.updated_at
+            WHERE post_jobs.status = 'FAILED'
+            """.trimIndent()
+        ).use { statement ->
+            statement.setLong(1, telegramUpdateId)
+            statement.setLong(2, now())
+            statement.executeUpdate() == 1
         }
     }
 

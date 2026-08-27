@@ -64,7 +64,7 @@ fun Application.module(dotenv: Dotenv = loadDotenv()) {
     val mediaStorage = LocalPublicMediaStorage(settings.mediaDirectory, settings.publicBaseUrl)
     val publisher = TikTokPhotoPublisher(httpClient, auth, json)
     val repostService = PhotoRepostService(
-        allowedSenderId = settings.allowedTelegramSenderId,
+        allowedSourceChatIds = settings.monitoredTelegramChatIds,
         jobs = repositories,
         mediaStorage = mediaStorage,
         publisher = publisher,
@@ -73,7 +73,8 @@ fun Application.module(dotenv: Dotenv = loadDotenv()) {
         apiId = settings.telegramApiId,
         apiHash = settings.telegramApiHash,
         sessionDirectory = settings.telegramSessionDirectory,
-        allowedSenderId = settings.allowedTelegramSenderId,
+        monitoredChatIds = settings.monitoredTelegramChatIds,
+        monitoredTopicIds = settings.monitoredTelegramTopicIds,
         repostService = repostService,
     )
 

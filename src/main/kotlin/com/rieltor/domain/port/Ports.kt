@@ -28,5 +28,5 @@ interface PublicMediaStorage {
 }
 
 interface PhotoPublisher {
-    suspend fun publish(photoUrl: String, caption: String?): PublishReceipt
+    suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt
 }

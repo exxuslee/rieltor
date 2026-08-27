@@ -30,7 +30,8 @@ data class ApplicationSettings(
     val databasePath: Path,
     val mediaDirectory: Path,
     val publicBaseUrl: String,
-    val allowedTelegramSenderId: Long,
+    val monitoredTelegramChatIds: Set<Long> = emptySet(),
+    val monitoredTelegramTopicIds: Set<Long> = emptySet(),
     val telegramApiId: Int,
     val telegramApiHash: String,
     val telegramSessionDirectory: Path,
@@ -43,15 +44,25 @@ data class ApplicationSettings(
             val redirectUri = secrets.require(SecretNames.TIKTOK_REDIRECT_URI)
             val redirect = URI(redirectUri)
             val inferredBaseUrl = "${redirect.scheme}://${redirect.authority}"
+            val telegramUserId = (
+                environmentOrDotenv(SecretNames.TELEGRAM_USER_ID, dotenv)
+                    ?: secrets.require(SecretNames.TELEGRAM_USER_ID)
+                ).toLongOrNull()
+                ?: error("Invalid ${SecretNames.TELEGRAM_USER_ID}: expected a numeric Telegram user ID")
             return ApplicationSettings(
                 port = environmentOrDotenv("PORT", dotenv)?.toIntOrNull() ?: 8383,
                 databasePath = Path.of(environmentOrDotenv("APP_DB_PATH", dotenv) ?: "data/rieltor.db"),
                 mediaDirectory = Path.of(environmentOrDotenv("MEDIA_DIRECTORY", dotenv) ?: "data/media"),
                 publicBaseUrl = secrets.get(SecretNames.PUBLIC_BASE_URL)?.trimEnd('/') ?: inferredBaseUrl,
-                allowedTelegramSenderId = secrets.require(SecretNames.TELEGRAM_USER_ID).toLong(),
+                monitoredTelegramChatIds = parseTelegramIds(
+                    environmentOrDotenv("TELEGRAM_MONITORED_CHANNEL_IDS", dotenv)
+                ),
+                monitoredTelegramTopicIds = parseTelegramIds(
+                    environmentOrDotenv("TELEGRAM_MONITORED_TOPIC_IDS", dotenv)
+                ),
                 telegramApiId = secrets.require(SecretNames.TELEGRAM_API_ID).toInt(),
                 telegramApiHash = secrets.require(SecretNames.TELEGRAM_API_HASH),
-                telegramSessionDirectory = Path.of( "data/telegram/tdlib-session-id${secrets.require(SecretNames.TELEGRAM_USER_ID)}"),
+                telegramSessionDirectory = Path.of("data/telegram/tdlib-session-id$telegramUserId"),
                 tikTokClientKey = secrets.require(SecretNames.TIKTOK_CLIENT_KEY),
                 tikTokClientSecret = secrets.require(SecretNames.TIKTOK_CLIENT_SECRET),
                 tikTokRedirectUri = redirectUri,
@@ -74,3 +85,12 @@ private fun SecretRepository.require(name: String): String =
 
 private fun environmentOrDotenv(name: String, dotenv: Dotenv): String? =
     (System.getenv(name) ?: dotenv.get(name))?.takeIf { it.isNotBlank() }
+
+private fun parseTelegramIds(value: String?): Set<Long> =
+    value
+        ?.split(',')
+        ?.map(String::trim)
+        ?.filter(String::isNotEmpty)
+        ?.map { id -> id.toLongOrNull() ?: error("Invalid Telegram ID '$id' in .env") }
+        ?.toSet()
+        ?: emptySet()

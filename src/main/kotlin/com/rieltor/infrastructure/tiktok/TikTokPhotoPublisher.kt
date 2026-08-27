@@ -23,12 +23,19 @@ class TikTokPhotoPublisher(
     private val auth: TikTokAuthService,
     private val json: Json,
 ) : PhotoPublisher {
-    override suspend fun publish(photoUrl: String, caption: String?): PublishReceipt {
+    override suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt {
+        require(photoUrls.isNotEmpty()) { "At least one photo URL is required." }
+        require(photoUrls.size <= MAX_PHOTO_COUNT) { "TikTok accepts at most $MAX_PHOTO_COUNT photos per post." }
         val accessToken = auth.validAccessToken()
         val creator = queryCreator(accessToken)
+        // TikTok blocks unaudited clients from publishing anything except a private post.
+        // Never fall back to a more public option: it is rejected by the API and could expose a listing unexpectedly.
         val privacy = creator.privacyLevelOptions.firstOrNull { it == "SELF_ONLY" }
-            ?: creator.privacyLevelOptions.firstOrNull()
-            ?: throw TikTokAuthException("TikTok returned no allowed privacy levels for this creator.")
+            ?: throw TikTokAuthException(
+                "TikTok did not allow SELF_ONLY privacy for this account. " +
+                    "Available options: ${creator.privacyLevelOptions.joinToString().ifBlank { "none" }}. " +
+                    "For an unaudited app, enable private posting for the authorized TikTok account or complete TikTok audit."
+            )
 
         val normalizedCaption = caption.orEmpty().trim()
         val title = normalizedCaption.lineSequence().firstOrNull().orEmpty().take(90)
@@ -47,7 +54,9 @@ class TikTokPhotoPublisher(
             put("source_info", buildJsonObject {
                 put("source", "PULL_FROM_URL")
                 put("photo_cover_index", 0)
-                put("photo_images", buildJsonArray { add(kotlinx.serialization.json.JsonPrimitive(photoUrl)) })
+                put("photo_images", buildJsonArray {
+                    photoUrls.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) }
+                })
             })
         }
         val response = httpClient.post(PHOTO_POST_URL) {
@@ -82,5 +91,6 @@ class TikTokPhotoPublisher(
             "https://open.tiktokapis.com/v2/post/publish/creator_info/query/"
         private const val PHOTO_POST_URL =
             "https://open.tiktokapis.com/v2/post/publish/content/init/"
+        private const val MAX_PHOTO_COUNT = 35
     }
 }

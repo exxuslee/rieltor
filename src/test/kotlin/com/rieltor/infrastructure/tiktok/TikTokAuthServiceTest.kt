@@ -47,7 +47,6 @@ class TikTokAuthServiceTest {
                 databasePath = Path.of("unused.db"),
                 mediaDirectory = Path.of("media"),
                 publicBaseUrl = "https://api.example",
-                allowedTelegramSenderId = 530667295,
                 telegramApiId = 12345,
                 telegramApiHash = "telegram-api-hash",
                 telegramSessionDirectory = Path.of("telegram-session"),

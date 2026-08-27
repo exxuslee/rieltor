@@ -14,9 +14,12 @@ data class StoredTokens(
 
 data class TelegramPhotoMessage(
     val updateId: Long,
-    val senderId: Long,
     val chatId: Long,
     val caption: String?,
+    val photos: List<TelegramPhoto>,
+)
+
+data class TelegramPhoto(
     val fileName: String,
     val content: InputStream,
 )
@@ -34,6 +37,6 @@ data class PublishReceipt(
 
 sealed interface RepostResult {
     data class Published(val receipt: PublishReceipt) : RepostResult
-    data object IgnoredSender : RepostResult
+    data object IgnoredSource : RepostResult
     data object Duplicate : RepostResult
 }

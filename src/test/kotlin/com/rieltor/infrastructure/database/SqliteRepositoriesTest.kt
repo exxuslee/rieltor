@@ -2,6 +2,9 @@ package com.rieltor.infrastructure.database
 
 import com.rieltor.domain.model.StoredTokens
 import java.nio.file.Files
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -27,5 +30,34 @@ class SqliteRepositoriesTest {
         assertTrue(repository.tryStart(7))
         repository.markPublished(7, "publish-id")
         assertFalse(repository.tryStart(7))
+    }
+
+    @Test
+    fun `only one concurrent worker starts the same job`() {
+        val directory = Files.createTempDirectory("rieltor-db-concurrency-test")
+        val repository = SqliteRepositories(SqliteDatabase(directory.resolve("test.db")))
+        val workerCount = 8
+        val ready = CountDownLatch(workerCount)
+        val start = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(workerCount)
+
+        try {
+            val attempts = List(workerCount) {
+                executor.submit<Boolean> {
+                    ready.countDown()
+                    start.await()
+                    repository.tryStart(42)
+                }
+            }
+
+            assertTrue(ready.await(5, TimeUnit.SECONDS))
+            start.countDown()
+
+            val accepted = attempts.map { it.get(10, TimeUnit.SECONDS) }
+            assertEquals(1, accepted.count { it })
+        } finally {
+            start.countDown()
+            executor.shutdownNow()
+        }
     }
 }

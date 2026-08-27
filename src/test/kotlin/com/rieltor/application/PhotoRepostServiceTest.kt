@@ -3,6 +3,7 @@ package com.rieltor.application
 import com.rieltor.domain.model.PublishReceipt
 import com.rieltor.domain.model.RepostResult
 import com.rieltor.domain.model.StoredMedia
+import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.model.TelegramPhotoMessage
 import com.rieltor.domain.port.PhotoPublisher
 import com.rieltor.domain.port.PostJobRepository
@@ -16,42 +17,90 @@ import kotlin.test.assertIs
 
 class PhotoRepostServiceTest {
     @Test
-    fun `publishes photo from allowed sender once`() = runBlocking {
+    fun `publishes photo from monitored chat once`() = runBlocking {
         val jobs = FakeJobs()
         val publisher = FakePublisher()
         val service = PhotoRepostService(
-            allowedSenderId = 530667295L,
             jobs = jobs,
             mediaStorage = FakeStorage(),
             publisher = publisher,
+            allowedSourceChatIds = setOf(MONITORED_CHAT_ID),
         )
-        val message = message(updateId = 42, senderId = 530667295L)
+        val message = message(updateId = 42)
 
         assertIs<RepostResult.Published>(service.handle(message))
         assertEquals(1, publisher.calls)
         assertEquals("publish-42", jobs.publishedId)
 
-        assertEquals(RepostResult.Duplicate, service.handle(message(updateId = 42, senderId = 530667295L)))
+        assertEquals(RepostResult.Duplicate, service.handle(message(updateId = 42)))
         assertEquals(1, publisher.calls)
     }
 
     @Test
-    fun `ignores all other senders`() = runBlocking {
+    fun `publishes all photos as one post`() = runBlocking {
         val publisher = FakePublisher()
-        val service = PhotoRepostService(530667295L, FakeJobs(), FakeStorage(), publisher)
+        val service = PhotoRepostService(
+            jobs = FakeJobs(),
+            mediaStorage = FakeStorage(),
+            publisher = publisher,
+            allowedSourceChatIds = setOf(MONITORED_CHAT_ID),
+        )
+        val message = TelegramPhotoMessage(
+            updateId = 43,
+            chatId = MONITORED_CHAT_ID,
+            caption = "Альбом квартири",
+            photos = listOf(
+                TelegramPhoto("first.jpg", ByteArrayInputStream(byteArrayOf(1))),
+                TelegramPhoto("second.jpg", ByteArrayInputStream(byteArrayOf(2))),
+                TelegramPhoto("third.jpg", ByteArrayInputStream(byteArrayOf(3))),
+            ),
+        )
 
-        assertEquals(RepostResult.IgnoredSender, service.handle(message(1, 123L)))
+        assertIs<RepostResult.Published>(service.handle(message))
+        assertEquals(1, publisher.calls)
+        assertEquals(3, publisher.publishedUrls.single().size)
+    }
+
+    @Test
+    fun `ignores all other chats`() = runBlocking {
+        val publisher = FakePublisher()
+        val service = PhotoRepostService(
+            jobs = FakeJobs(),
+            mediaStorage = FakeStorage(),
+            publisher = publisher,
+            allowedSourceChatIds = setOf(MONITORED_CHAT_ID),
+        )
+
+        assertEquals(RepostResult.IgnoredSource, service.handle(message(1, 123L)))
         assertEquals(0, publisher.calls)
     }
 
-    private fun message(updateId: Long, senderId: Long) = TelegramPhotoMessage(
+    @Test
+    fun `publishes photo from configured monitored chat`() = runBlocking {
+        val publisher = FakePublisher()
+        val service = PhotoRepostService(
+            jobs = FakeJobs(),
+            mediaStorage = FakeStorage(),
+            publisher = publisher,
+            allowedSourceChatIds = setOf(-1002681732909L),
+        )
+
+        val result = service.handle(message(2))
+
+        assertIs<RepostResult.Published>(result)
+        assertEquals(1, publisher.calls)
+    }
+
+    private fun message(updateId: Long, chatId: Long = MONITORED_CHAT_ID) = TelegramPhotoMessage(
         updateId = updateId,
-        senderId = senderId,
-        chatId = senderId,
+        chatId = chatId,
         caption = "Квартира в Ірпені",
-        fileName = "photo.jpg",
-        content = ByteArrayInputStream(byteArrayOf(1, 2, 3)),
+        photos = listOf(TelegramPhoto("photo.jpg", ByteArrayInputStream(byteArrayOf(1, 2, 3)))),
     )
+
+    private companion object {
+        const val MONITORED_CHAT_ID = -1002681732909L
+    }
 
     private class FakeStorage : PublicMediaStorage {
         override fun store(fileName: String, content: InputStream) =
@@ -60,8 +109,10 @@ class PhotoRepostServiceTest {
 
     private class FakePublisher : PhotoPublisher {
         var calls = 0
-        override suspend fun publish(photoUrl: String, caption: String?): PublishReceipt {
+        val publishedUrls = mutableListOf<List<String>>()
+        override suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt {
             calls++
+            publishedUrls += photoUrls
             return PublishReceipt("publish-42", "Ірина", "SELF_ONLY")
         }
     }
