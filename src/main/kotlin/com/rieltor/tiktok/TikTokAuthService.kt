@@ -1,12 +1,12 @@
 package com.rieltor.tiktok
 
 import io.ktor.client.*
-import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.client.request.forms.*
+import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.http.content.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
@@ -50,9 +50,8 @@ object TikTokAuthService {
             mask(code), TikTokConfig.redirectUri, mask(TikTokConfig.clientKey)
         )
 
-        val httpResponse: HttpResponse = httpClient.submitForm(
-            url = TikTokConfig.TOKEN_URL,
-            formParameters = Parameters.build {
+        val httpResponse = postTokenRequest(
+            Parameters.build {
                 append("client_key", TikTokConfig.clientKey)
                 append("client_secret", TikTokConfig.clientSecret)
                 append("code", code)
@@ -72,9 +71,8 @@ object TikTokAuthService {
     suspend fun refreshTokens(refreshToken: String): StoredTokens {
         logger.info("Refreshing access token. refresh_token={}", mask(refreshToken))
 
-        val httpResponse: HttpResponse = httpClient.submitForm(
-            url = TikTokConfig.TOKEN_URL,
-            formParameters = Parameters.build {
+        val httpResponse = postTokenRequest(
+            Parameters.build {
                 append("client_key", TikTokConfig.clientKey)
                 append("client_secret", TikTokConfig.clientSecret)
                 append("grant_type", "refresh_token")
@@ -88,6 +86,16 @@ object TikTokAuthService {
         val response = jsonParser.decodeFromString<TikTokTokenResponse>(rawBody)
         return response.toStoredTokensOrThrow()
     }
+
+    /**
+     * TikTok requires a bare application/x-www-form-urlencoded Content-Type.
+     * FormDataContent adds a UTF-8 charset parameter, which the token endpoint rejects.
+     */
+    private suspend fun postTokenRequest(parameters: Parameters): HttpResponse =
+        httpClient.post(TikTokConfig.TOKEN_URL) {
+            header(HttpHeaders.CacheControl, "no-cache")
+            setBody(TextContent(parameters.formUrlEncode(), ContentType.Application.FormUrlEncoded))
+        }
 
     /** Returns a valid access token for the given account, refreshing if needed. */
     suspend fun getValidAccessToken(openId: String): String {
