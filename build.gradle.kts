@@ -1,7 +1,7 @@
 plugins {
-    kotlin("jvm") version "2.3.21"
-    kotlin("plugin.serialization") version "2.3.21"
-    id("io.ktor.plugin") version "3.5.2"
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ktor)
     application
 }
 
@@ -16,29 +16,25 @@ repositories {
     mavenCentral()
 }
 
-val ktorVersion = "3.5.2"
-
 dependencies {
-    // Server
-    implementation("io.ktor:ktor-server-core:$ktorVersion")
-    implementation("io.ktor:ktor-server-cio:$ktorVersion")
-    implementation("io.ktor:ktor-server-content-negotiation:$ktorVersion")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
-    implementation("io.ktor:ktor-server-call-logging:$ktorVersion")
-    implementation("io.ktor:ktor-server-status-pages:$ktorVersion")
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.cio)
+    implementation(libs.ktor.server.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.server.call.logging)
+    implementation(libs.ktor.server.status.pages)
 
-    // Client (for calling TikTok's OAuth + Content Posting API)
-    implementation("io.ktor:ktor-client-core:$ktorVersion")
-    implementation("io.ktor:ktor-client-cio:$ktorVersion")
-    implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
-    implementation("io.ktor:ktor-client-encoding:$ktorVersion")
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.client.encoding)
 
-    implementation("ch.qos.logback:logback-classic:1.5.18")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-    implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
+    implementation(libs.logback.classic)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.dotenv.kotlin)
 
-    testImplementation("io.ktor:ktor-server-test-host:$ktorVersion")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.3.21")
+    testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.kotlin.test.junit)
 }
 
 kotlin {
