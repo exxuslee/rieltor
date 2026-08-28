@@ -12,6 +12,7 @@ class PhotoRepostService(
     private val mediaStorage: PublicMediaStorage,
     private val publisher: PhotoPublisher,
     private val allowedSources: Set<TelegramMonitoredTopic> = emptySet(),
+    private val messageFilter: TikTokMessageFilter = TikTokMessageFilter(),
 ) {
     suspend fun handle(message: TelegramPhotoMessage): RepostResult {
         if (allowedSources.none { source -> source.matches(message.chatId, message.messageThreadId) }) {
@@ -31,7 +32,7 @@ class PhotoRepostService(
             } finally {
                 message.closePhotos()
             }
-            val receipt = publisher.publish(media.map { it.publicUrl }, message.caption)
+            val receipt = publisher.publish(media.map { it.publicUrl }, messageFilter.filter(message.caption))
             jobs.markPublished(message.updateId, receipt.publishId)
             RepostResult.Published(receipt)
         } catch (error: Throwable) {

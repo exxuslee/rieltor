@@ -52,7 +52,8 @@ $env:TIKTOK_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/tiktok/callback"
 
 Сервер стартует на `http://localhost:8383`. Пользовательский Telegram-клиент TDLight открывает сессию из
 `tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR. Фото из настроенных Telegram-чатов передаются через TikTok Photo Direct
-Post; caption используется как title/description. Остальные чаты игнорируются. Старый `autoposter` нельзя запускать
+Post; caption перед публикацией очищается от внутренних контактов, комиссий, процентов оформления и Google Drive-ссылок,
+после чего приводится к единой структуре с публичным контактом Ірини и хештегами. Остальные чаты игнорируются. Старый `autoposter` нельзя запускать
 одновременно с этим backend: два процесса не должны открывать одну TDLib-сессию.
 
 ### Мониторинг форумных чатов Telegram

@@ -61,6 +61,14 @@ class PhotoRepostServiceTest {
         assertIs<RepostResult.Published>(service.handle(message))
         assertEquals(1, publisher.calls)
         assertEquals(3, publisher.publishedUrls.single().size)
+        assertEquals(
+            """🏠 Альбом квартири
+
+📞 066-372-71-02 Ірина
+
+#нерухомість #продажнерухомості #квартира #ІринаЛіннік""",
+            publisher.publishedCaptions.single(),
+        )
     }
 
     @Test
@@ -134,9 +142,11 @@ class PhotoRepostServiceTest {
     private class FakePublisher : PhotoPublisher {
         var calls = 0
         val publishedUrls = mutableListOf<List<String>>()
+        val publishedCaptions = mutableListOf<String?>()
         override suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt {
             calls++
             publishedUrls += photoUrls
+            publishedCaptions += caption
             return PublishReceipt("publish-42", "Ірина", "SELF_ONLY")
         }
     }
