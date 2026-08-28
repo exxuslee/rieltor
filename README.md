@@ -32,22 +32,12 @@ python -m http.server 4173
 
 ## Первичная настройка backend
 
-Секреты и токены хранятся в `data/rieltor.db`. При первом запуске отсутствующие значения импортируются из переменных
-окружения или `.env`. Исключение — `TELEGRAM_USER_ID`: значение из окружения или `.env` читается при каждом запуске,
-имеет приоритет над SQLite и выбирает папку `data/telegram/tdlib-session-id<TELEGRAM_USER_ID>`. Для локального переноса
-Telegram credentials из старого проекта выполните:
+Telegram-настройки и токены авторизации TikTok хранятся в `data/rieltor.db`. При первом запуске отсутствующие
+Telegram-настройки импортируются из переменных окружения или `.env`. `TELEGRAM_USER_ID` читается при каждом запуске,
+имеет приоритет над SQLite и выбирает папку `data/telegram/tdlib-session-id<TELEGRAM_USER_ID>`.
 
-```powershell
-.\gradlew.bat importLocalSecrets -PlegacyAutoposterDir="D:/Android/PRO/autoposter"
-```
-
-Для безопасного обновления отдельного секрета, например Telegram API hash:
-
-```powershell
-$env:SECRET_VALUE = "новое_значение"
-.\gradlew.bat setLocalSecret -PsecretName=TELEGRAM_API_HASH
-Remove-Item Env:SECRET_VALUE
-```
+`TIKTOK_CLIENT_KEY` и `TIKTOK_CLIENT_SECRET` в SQLite не сохраняются и при каждом запуске обязательно читаются из
+переменных окружения или локального `.env`.
 
 Запуск:
 

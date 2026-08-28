@@ -50,10 +50,16 @@ class SqliteDatabase(private val path: Path) {
                 val schemaVersion = statement.executeQuery("PRAGMA user_version").use { result ->
                     if (result.next()) result.getInt(1) else 0
                 }
-                if (schemaVersion < 1) {
-                    // Remove the retired Bot API credential and overwrite its SQLite cell.
-                    statement.executeUpdate("DELETE FROM app_secrets WHERE name = 'TELEGRAM_BOT_TOKEN'")
-                    statement.execute("PRAGMA user_version=1")
+                if (schemaVersion < 2) {
+                    if (schemaVersion < 1) {
+                        // Remove the retired Bot API credential and overwrite its SQLite cell.
+                        statement.executeUpdate("DELETE FROM app_secrets WHERE name = 'TELEGRAM_BOT_TOKEN'")
+                    }
+                    // TikTok application credentials are environment-only.
+                    statement.executeUpdate(
+                        "DELETE FROM app_secrets WHERE name IN ('TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET')"
+                    )
+                    statement.execute("PRAGMA user_version=2")
                     statement.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                     statement.execute("VACUUM")
                 }

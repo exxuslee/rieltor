@@ -8,9 +8,28 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SqliteRepositoriesTest {
+    @Test
+    fun `migration removes tiktok application credentials from sqlite`() {
+        val directory = Files.createTempDirectory("rieltor-db-migration-test")
+        val databasePath = directory.resolve("test.db")
+        val oldDatabase = SqliteDatabase(databasePath)
+        val oldRepository = SqliteRepositories(oldDatabase)
+        oldRepository.putIfAbsent("TIKTOK_CLIENT_KEY", "stored-key")
+        oldRepository.putIfAbsent("TIKTOK_CLIENT_SECRET", "stored-secret")
+        oldDatabase.connection().use { connection ->
+            connection.createStatement().use { it.execute("PRAGMA user_version=1") }
+        }
+
+        val migratedRepository = SqliteRepositories(SqliteDatabase(databasePath))
+
+        assertNull(migratedRepository.get("TIKTOK_CLIENT_KEY"))
+        assertNull(migratedRepository.get("TIKTOK_CLIENT_SECRET"))
+    }
+
     @Test
     fun `stores secrets tokens and idempotent jobs`() {
         val directory = Files.createTempDirectory("rieltor-db-test")

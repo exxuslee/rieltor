@@ -148,10 +148,8 @@ class TikTokPhotoPublisher(
     }
 
     companion object {
-        private const val CREATOR_INFO_URL =
-            "https://open.tiktokapis.com/v2/post/publish/creator_info/query/"
-        private const val PHOTO_POST_URL =
-            "https://open.tiktokapis.com/v2/post/publish/content/init/"
+        private const val CREATOR_INFO_URL = "https://open.tiktokapis.com/v2/post/publish/creator_info/query/"
+        private const val PHOTO_POST_URL = "https://open.tiktokapis.com/v2/post/publish/content/init/"
         private const val MAX_PHOTO_COUNT = 35
         private const val CREATOR_INFO_MAX_ATTEMPTS = 3
         private const val DEFAULT_MIN_PUBLISH_INTERVAL_MILLIS = 11_000L

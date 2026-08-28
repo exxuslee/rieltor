@@ -14,9 +14,7 @@ object SecretNames {
     const val TELEGRAM_USER_ID = "TELEGRAM_USER_ID"
     const val PUBLIC_BASE_URL = "PUBLIC_BASE_URL"
 
-    val bootstrapNames = listOf(
-        TIKTOK_CLIENT_KEY,
-        TIKTOK_CLIENT_SECRET,
+    val sqliteNames = listOf(
         TIKTOK_REDIRECT_URI,
         TELEGRAM_API_ID,
         TELEGRAM_API_HASH,
@@ -63,8 +61,8 @@ data class ApplicationSettings(
                 telegramApiId = secrets.require(SecretNames.TELEGRAM_API_ID).toInt(),
                 telegramApiHash = secrets.require(SecretNames.TELEGRAM_API_HASH),
                 telegramSessionDirectory = Path.of("data/telegram/tdlib-session-id$telegramUserId"),
-                tikTokClientKey = secrets.require(SecretNames.TIKTOK_CLIENT_KEY),
-                tikTokClientSecret = secrets.require(SecretNames.TIKTOK_CLIENT_SECRET),
+                tikTokClientKey = requireEnvironmentOrDotenv(SecretNames.TIKTOK_CLIENT_KEY, dotenv),
+                tikTokClientSecret = requireEnvironmentOrDotenv(SecretNames.TIKTOK_CLIENT_SECRET, dotenv),
                 tikTokRedirectUri = redirectUri,
             )
         }
@@ -72,7 +70,7 @@ data class ApplicationSettings(
 }
 
 fun bootstrapSecrets(repository: SecretRepository, dotenv: Dotenv) {
-    SecretNames.bootstrapNames.forEach { name ->
+    SecretNames.sqliteNames.forEach { name ->
         environmentOrDotenv(name, dotenv)?.let { repository.putIfAbsent(name, it) }
     }
 }
@@ -85,6 +83,10 @@ private fun SecretRepository.require(name: String): String =
 
 private fun environmentOrDotenv(name: String, dotenv: Dotenv): String? =
     (System.getenv(name) ?: dotenv.get(name))?.takeIf { it.isNotBlank() }
+
+private fun requireEnvironmentOrDotenv(name: String, dotenv: Dotenv): String =
+    environmentOrDotenv(name, dotenv)
+        ?: error("Missing '$name' in the process environment or .env file.")
 
 private fun parseTelegramIds(value: String?): Set<Long> =
     value

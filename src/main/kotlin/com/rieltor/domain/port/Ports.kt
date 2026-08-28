@@ -7,7 +7,6 @@ import java.io.InputStream
 
 interface SecretRepository {
     fun get(name: String): String?
-    fun put(name: String, value: String)
     fun putIfAbsent(name: String, value: String)
 }
 

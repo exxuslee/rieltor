@@ -32,23 +32,6 @@ class SqliteRepositories(private val database: SqliteDatabase) :
         }
     }
 
-    override fun put(name: String, value: String) {
-        require(value.isNotBlank()) { "Secret value must not be blank" }
-        database.connection().use { connection ->
-            connection.prepareStatement(
-                """
-                INSERT INTO app_secrets(name, value, updated_at) VALUES (?, ?, ?)
-                ON CONFLICT(name) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-                """.trimIndent()
-            ).use { statement ->
-                statement.setString(1, name)
-                statement.setString(2, value)
-                statement.setLong(3, now())
-                statement.executeUpdate()
-            }
-        }
-    }
-
     override fun save(tokens: StoredTokens) {
         database.connection().use { connection ->
             connection.prepareStatement(

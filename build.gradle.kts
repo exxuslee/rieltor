@@ -56,28 +56,3 @@ dependencies {
 kotlin {
     jvmToolchain(21)
 }
-
-tasks.register<JavaExec>("importLocalSecrets") {
-    group = "application"
-    description = "Imports legacy autoposter credentials into the ignored local SQLite database"
-    dependsOn(tasks.named("classes"))
-    classpath = sourceSets.main.get().runtimeClasspath
-    mainClass.set("com.rieltor.tools.ImportLocalSecretsKt")
-    val legacyDir = providers.gradleProperty("legacyAutoposterDir")
-        .orElse("D:/Android/PRO/autoposter")
-    val targetDb = providers.gradleProperty("targetDatabase")
-        .orElse("data/rieltor.db")
-    args(legacyDir.get(), targetDb.get())
-}
-
-tasks.register<JavaExec>("setLocalSecret") {
-    group = "application"
-    description = "Updates one supported SQLite secret from the SECRET_VALUE environment variable"
-    dependsOn(tasks.named("classes"))
-    classpath = sourceSets.main.get().runtimeClasspath
-    mainClass.set("com.rieltor.tools.SetLocalSecretKt")
-    val secretName = providers.gradleProperty("secretName")
-    val targetDb = providers.gradleProperty("targetDatabase")
-        .orElse("data/rieltor.db")
-    args(secretName.get(), targetDb.get())
-}
