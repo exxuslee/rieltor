@@ -42,7 +42,7 @@ fun main() {
 
 fun Application.module(dotenv: Dotenv) {
     val json = Json { ignoreUnknownKeys = true }
-    val databasePath = Path.of(System.getenv("APP_DB_PATH") ?: dotenv.get("APP_DB_PATH") ?: "data/rieltor.db")
+    val databasePath = Path.of(System.getenv("APP_DB_PATH") ?: dotenv.get("APP_DB_PATH") ?: "rieltor.db")
     val repositories = SqliteRepositories(SqliteDatabase(databasePath))
     bootstrapSecrets(repositories, dotenv)
     LegacyTokenMigration.migrateIfNeeded(repositories)
@@ -62,7 +62,7 @@ fun Application.module(dotenv: Dotenv) {
     val mediaCleanupJob = MediaCleanupJob(settings.mediaDirectory)
     val publisher = TikTokPhotoPublisher(httpClient, auth, json)
     val repostService = PhotoRepostService(
-        allowedSourceChatIds = settings.monitoredTelegramChatIds,
+        allowedSources = settings.monitoredTelegramTopics,
         jobs = repositories,
         mediaStorage = mediaStorage,
         publisher = publisher,
@@ -71,8 +71,7 @@ fun Application.module(dotenv: Dotenv) {
         apiId = settings.telegramApiId,
         apiHash = settings.telegramApiHash,
         sessionDirectory = settings.telegramSessionDirectory,
-        monitoredChatIds = settings.monitoredTelegramChatIds,
-        monitoredTopicIds = settings.monitoredTelegramTopicIds,
+        monitoredTopics = settings.monitoredTelegramTopics,
         repostService = repostService,
     )
 

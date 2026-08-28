@@ -44,13 +44,13 @@ node scripts/check-seo.mjs
 
 - Backend организован по слоям `domain`, `application`, `infrastructure`, `web`.
 - Telegram-настройки, TikTok access/refresh tokens и журнал обработанных Telegram updates хранятся в локальной
-  SQLite-базе `data/rieltor.db` (файл исключён из Git). `TIKTOK_CLIENT_KEY` и `TIKTOK_CLIENT_SECRET` всегда читаются
+  SQLite-базе `rieltor.db` рядом с JAR (файл исключён из Git). `TIKTOK_CLIENT_KEY` и `TIKTOK_CLIENT_SECRET` всегда читаются
   из окружения или `.env` и в SQLite не сохраняются.
 - Пользовательский Telegram-клиент TDLight использует локальную сессию, принимает фото пользователя `530667295` только
   из личного чата «Избранное», сохраняет изображение под случайным именем и инициирует TikTok Photo Direct Post.
   Повторная обработка одного сообщения блокируется базой.
 - Старый `tiktok-tokens.json` автоматически переносится в SQLite при первом запуске.
-- Папка TDLib-сессии из `autoposter` используется из `data/telegram/` и не публикуется в Git.
-- Фоновая очистка запускается при старте backend и затем каждый час, удаляя из `data/media` изображения старше 24 часов.
+- Папка TDLib-сессии `tdlib-session-id<TELEGRAM_USER_ID>` находится рядом с JAR и не публикуется в Git.
+- Фоновая очистка запускается при старте backend и затем каждый час, удаляя из `media` изображения старше 24 часов.
 - Для Photo API необходимо добавить Content Posting API, подтвердить домен `https://api.rieltor.dpdns.org` в TikTok
-  Developer Portal и развернуть папку `data` рядом с JAR.
+  Developer Portal и развернуть runtime-файлы рядом с JAR.

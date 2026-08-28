@@ -12,7 +12,9 @@ rieltorSite/
 │   ├── css/, js/, images/
 │   └── scripts/           # Проверки и генерация SEO-страниц
 ├── src/main/kotlin/       # Слои domain/application/infrastructure/web
-├── data/                  # Локальная SQLite, медиа и Telegram-сессия (не в Git)
+├── rieltor.db             # Локальная SQLite рядом с JAR (не в Git)
+├── media/                 # Временные публичные изображения (не в Git)
+├── tdlib-session-id*/     # Telegram-сессия (не в Git)
 ├── src/main/resources/    # logback.xml
 ├── build.gradle.kts
 ├── settings.gradle.kts
@@ -32,9 +34,9 @@ python -m http.server 4173
 
 ## Первичная настройка backend
 
-Telegram-настройки и токены авторизации TikTok хранятся в `data/rieltor.db`. При первом запуске отсутствующие
+Telegram-настройки и токены авторизации TikTok хранятся в `rieltor.db`. При первом запуске отсутствующие
 Telegram-настройки импортируются из переменных окружения или `.env`. `TELEGRAM_USER_ID` читается при каждом запуске,
-имеет приоритет над SQLite и выбирает папку `data/telegram/tdlib-session-id<TELEGRAM_USER_ID>`.
+имеет приоритет над SQLite и выбирает папку `tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR.
 
 `TIKTOK_CLIENT_KEY` и `TIKTOK_CLIENT_SECRET` в SQLite не сохраняются и при каждом запуске обязательно читаются из
 переменных окружения или локального `.env`.
@@ -49,16 +51,16 @@ $env:TIKTOK_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/tiktok/callback"
 ```
 
 Сервер стартует на `http://localhost:8383`. Пользовательский Telegram-клиент TDLight открывает сессию из
-`data/telegram/tdlib-session-id<TELEGRAM_USER_ID>`. Фото из настроенных Telegram-чатов передаются через TikTok Photo Direct
+`tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR. Фото из настроенных Telegram-чатов передаются через TikTok Photo Direct
 Post; caption используется как title/description. Остальные чаты игнорируются. Старый `autoposter` нельзя запускать
 одновременно с этим backend: два процесса не должны открывать одну TDLib-сессию.
 
 ### Мониторинг форумных чатов Telegram
 
-Укажите ID родительских чатов в `TELEGRAM_MONITORED_CHANNEL_IDS`, а ID корневых сообщений нужных форумных тем — в
-`TELEGRAM_MONITORED_TOPIC_IDS`; несколько значений разделяются запятыми. Сообщения с фотографиями из перечисленных тем
-передаются в TikTok. Если список тем пуст, обрабатываются все темы перечисленных чатов. Изменения `.env` применяются
-после перезапуска backend.
+Родительский форум укажите в `TELEGRAM_MONITORED_CHAT_ID`, например `-1002681732909`. ID его тем храните отдельно в
+`TELEGRAM_MONITORED_MESSAGE_THREAD_IDS` через запятую, например `5242880,4194304`. Если список тем пуст, обрабатывается
+весь чат. Фото из перечисленных источников передаются в TikTok. Изменения `.env` применяются после перезапуска backend.
+Старый составной формат `TELEGRAM_MONITORED_TOPICS` пока поддерживается для обратной совместимости.
 
 Для сборки JAR под Linux-сервер из Windows укажите native-классификатор:
 
@@ -87,8 +89,8 @@ Copy-Item `
   -Force
 ``
 
-Команду нужно выполнять от того же пользователя, которому доступны `data/rieltor.db` и папка сессии
-`data/telegram/tdlib-session-id<TELEGRAM_USER_ID>`. Для работы в фоне используйте уже настроенный сервис `rieltor.service`,
+Команду нужно выполнять от того же пользователя, которому доступны `rieltor.db` и папка сессии
+`tdlib-session-id<TELEGRAM_USER_ID>`. Для работы в фоне используйте уже настроенный сервис `rieltor.service`,
 а после замены JAR перезапускайте его командой `sudo systemctl restart rieltor.service`.
 
 TikTok получает фотографию по `https://api.rieltor.dpdns.org/media/...`, поэтому в настройках Content Posting API нужно

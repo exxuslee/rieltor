@@ -5,6 +5,7 @@ import com.rieltor.domain.model.RepostResult
 import com.rieltor.domain.model.StoredMedia
 import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.model.TelegramPhotoMessage
+import com.rieltor.domain.model.TelegramMonitoredTopic
 import com.rieltor.domain.port.PhotoPublisher
 import com.rieltor.domain.port.PostJobRepository
 import com.rieltor.domain.port.PublicMediaStorage
@@ -24,7 +25,7 @@ class PhotoRepostServiceTest {
             jobs = jobs,
             mediaStorage = FakeStorage(),
             publisher = publisher,
-            allowedSourceChatIds = setOf(MONITORED_CHAT_ID),
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
         val message = message(updateId = 42)
 
@@ -43,11 +44,12 @@ class PhotoRepostServiceTest {
             jobs = FakeJobs(),
             mediaStorage = FakeStorage(),
             publisher = publisher,
-            allowedSourceChatIds = setOf(MONITORED_CHAT_ID),
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
         val message = TelegramPhotoMessage(
             updateId = 43,
             chatId = MONITORED_CHAT_ID,
+            messageThreadId = MONITORED_THREAD_ID,
             caption = "Альбом квартири",
             photos = listOf(
                 TelegramPhoto("first.jpg", ByteArrayInputStream(byteArrayOf(1))),
@@ -68,7 +70,7 @@ class PhotoRepostServiceTest {
             jobs = FakeJobs(),
             mediaStorage = FakeStorage(),
             publisher = publisher,
-            allowedSourceChatIds = setOf(MONITORED_CHAT_ID),
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
 
         assertEquals(RepostResult.IgnoredSource, service.handle(message(1, 123L)))
@@ -82,7 +84,7 @@ class PhotoRepostServiceTest {
             jobs = FakeJobs(),
             mediaStorage = FakeStorage(),
             publisher = publisher,
-            allowedSourceChatIds = setOf(-1002681732909L),
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
 
         val result = service.handle(message(2))
@@ -91,15 +93,37 @@ class PhotoRepostServiceTest {
         assertEquals(1, publisher.calls)
     }
 
-    private fun message(updateId: Long, chatId: Long = MONITORED_CHAT_ID) = TelegramPhotoMessage(
+    @Test
+    fun `ignores photo from unmonitored forum topic in monitored chat`() = runBlocking {
+        val publisher = FakePublisher()
+        val service = PhotoRepostService(
+            jobs = FakeJobs(),
+            mediaStorage = FakeStorage(),
+            publisher = publisher,
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
+        )
+
+        val result = service.handle(message(updateId = 3, messageThreadId = 999999L))
+
+        assertEquals(RepostResult.IgnoredSource, result)
+        assertEquals(0, publisher.calls)
+    }
+
+    private fun message(
+        updateId: Long,
+        chatId: Long = MONITORED_CHAT_ID,
+        messageThreadId: Long = MONITORED_THREAD_ID,
+    ) = TelegramPhotoMessage(
         updateId = updateId,
         chatId = chatId,
+        messageThreadId = messageThreadId,
         caption = "Квартира в Ірпені",
         photos = listOf(TelegramPhoto("photo.jpg", ByteArrayInputStream(byteArrayOf(1, 2, 3)))),
     )
 
     private companion object {
         const val MONITORED_CHAT_ID = -1002681732909L
+        const val MONITORED_THREAD_ID = 5242880L
     }
 
     private class FakeStorage : PublicMediaStorage {

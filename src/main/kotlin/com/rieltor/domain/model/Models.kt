@@ -15,9 +15,20 @@ data class StoredTokens(
 data class TelegramPhotoMessage(
     val updateId: Long,
     val chatId: Long,
+    val messageThreadId: Long,
     val caption: String?,
     val photos: List<TelegramPhoto>,
 )
+
+/** Null messageThreadId means that every message in the chat is monitored. */
+data class TelegramMonitoredTopic(
+    val chatId: Long,
+    val messageThreadId: Long? = null,
+) {
+    fun matches(chatId: Long, messageThreadId: Long): Boolean =
+        this.chatId == chatId &&
+            (this.messageThreadId == null || this.messageThreadId == messageThreadId)
+}
 
 data class TelegramPhoto(
     val fileName: String,

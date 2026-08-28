@@ -1,6 +1,7 @@
 package com.rieltor.infrastructure.config
 
 import com.rieltor.domain.port.SecretRepository
+import com.rieltor.domain.model.TelegramMonitoredTopic
 import io.github.cdimascio.dotenv.Dotenv
 import java.net.URI
 import java.nio.file.Path
@@ -28,8 +29,7 @@ data class ApplicationSettings(
     val databasePath: Path,
     val mediaDirectory: Path,
     val publicBaseUrl: String,
-    val monitoredTelegramChatIds: Set<Long> = emptySet(),
-    val monitoredTelegramTopicIds: Set<Long> = emptySet(),
+    val monitoredTelegramTopics: Set<TelegramMonitoredTopic> = emptySet(),
     val telegramApiId: Int,
     val telegramApiHash: String,
     val telegramSessionDirectory: Path,
@@ -49,18 +49,20 @@ data class ApplicationSettings(
                 ?: error("Invalid ${SecretNames.TELEGRAM_USER_ID}: expected a numeric Telegram user ID")
             return ApplicationSettings(
                 port = environmentOrDotenv("PORT", dotenv)?.toIntOrNull() ?: 8383,
-                databasePath = Path.of(environmentOrDotenv("APP_DB_PATH", dotenv) ?: "data/rieltor.db"),
-                mediaDirectory = Path.of(environmentOrDotenv("MEDIA_DIRECTORY", dotenv) ?: "data/media"),
+                databasePath = Path.of(environmentOrDotenv("APP_DB_PATH", dotenv) ?: "rieltor.db"),
+                mediaDirectory = Path.of(environmentOrDotenv("MEDIA_DIRECTORY", dotenv) ?: "media"),
                 publicBaseUrl = secrets.get(SecretNames.PUBLIC_BASE_URL)?.trimEnd('/') ?: inferredBaseUrl,
-                monitoredTelegramChatIds = parseTelegramIds(
-                    environmentOrDotenv("TELEGRAM_MONITORED_CHANNEL_IDS", dotenv)
-                ),
-                monitoredTelegramTopicIds = parseTelegramIds(
-                    environmentOrDotenv("TELEGRAM_MONITORED_TOPIC_IDS", dotenv)
+                monitoredTelegramTopics = parseTelegramMonitoredTopics(
+                    chatIdValue = environmentOrDotenv("TELEGRAM_MONITORED_CHAT_ID", dotenv),
+                    messageThreadIdsValue = environmentOrDotenv(
+                        "TELEGRAM_MONITORED_MESSAGE_THREAD_IDS",
+                        dotenv,
+                    ),
+                    legacyValue = environmentOrDotenv("TELEGRAM_MONITORED_TOPICS", dotenv),
                 ),
                 telegramApiId = secrets.require(SecretNames.TELEGRAM_API_ID).toInt(),
                 telegramApiHash = secrets.require(SecretNames.TELEGRAM_API_HASH),
-                telegramSessionDirectory = Path.of("data/telegram/tdlib-session-id$telegramUserId"),
+                telegramSessionDirectory = Path.of("tdlib-session-id$telegramUserId"),
                 tikTokClientKey = requireEnvironmentOrDotenv(SecretNames.TIKTOK_CLIENT_KEY, dotenv),
                 tikTokClientSecret = requireEnvironmentOrDotenv(SecretNames.TIKTOK_CLIENT_SECRET, dotenv),
                 tikTokRedirectUri = redirectUri,
@@ -88,11 +90,47 @@ private fun requireEnvironmentOrDotenv(name: String, dotenv: Dotenv): String =
     environmentOrDotenv(name, dotenv)
         ?: error("Missing '$name' in the process environment or .env file.")
 
-private fun parseTelegramIds(value: String?): Set<Long> =
-    value
+private fun parseTelegramMonitoredTopics(
+    chatIdValue: String?,
+    messageThreadIdsValue: String?,
+    legacyValue: String?,
+): Set<TelegramMonitoredTopic> {
+    if (chatIdValue != null || messageThreadIdsValue != null) {
+        val chatId = chatIdValue?.toLongOrNull()
+            ?: error("TELEGRAM_MONITORED_CHAT_ID must contain a numeric Telegram chat ID")
+        val messageThreadIds = messageThreadIdsValue
+            ?.split(',')
+            ?.map(String::trim)
+            ?.filter(String::isNotEmpty)
+            ?.map { value ->
+                value.toLongOrNull()
+                    ?: error("Invalid messageThreadId '$value' in TELEGRAM_MONITORED_MESSAGE_THREAD_IDS")
+            }
+            ?.toSet()
+            .orEmpty()
+        return if (messageThreadIds.isEmpty()) {
+            setOf(TelegramMonitoredTopic(chatId))
+        } else {
+            messageThreadIds.mapTo(linkedSetOf()) { messageThreadId ->
+                TelegramMonitoredTopic(chatId, messageThreadId)
+            }
+        }
+    }
+
+    return legacyValue
         ?.split(',')
         ?.map(String::trim)
         ?.filter(String::isNotEmpty)
-        ?.map { id -> id.toLongOrNull() ?: error("Invalid Telegram ID '$id' in .env") }
+        ?.map { value ->
+            val parts = value.split('_', limit = 2)
+            val chatId = parts[0].toLongOrNull()
+                ?: error("Invalid Telegram chat ID '${parts[0]}' in TELEGRAM_MONITORED_TOPICS")
+            val messageThreadId = parts.getOrNull(1)?.toLongOrNull()
+            require(parts.size == 1 || messageThreadId != null) {
+                "Invalid TELEGRAM_MONITORED_TOPICS value '$value': expected <chatId> or <chatId>_<messageThreadId>"
+            }
+            TelegramMonitoredTopic(chatId, messageThreadId)
+        }
         ?.toSet()
         ?: emptySet()
+}

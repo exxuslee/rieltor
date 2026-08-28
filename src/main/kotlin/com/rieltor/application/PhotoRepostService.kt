@@ -1,6 +1,7 @@
 package com.rieltor.application
 
 import com.rieltor.domain.model.RepostResult
+import com.rieltor.domain.model.TelegramMonitoredTopic
 import com.rieltor.domain.model.TelegramPhotoMessage
 import com.rieltor.domain.port.PhotoPublisher
 import com.rieltor.domain.port.PostJobRepository
@@ -10,10 +11,10 @@ class PhotoRepostService(
     private val jobs: PostJobRepository,
     private val mediaStorage: PublicMediaStorage,
     private val publisher: PhotoPublisher,
-    private val allowedSourceChatIds: Set<Long> = emptySet(),
+    private val allowedSources: Set<TelegramMonitoredTopic> = emptySet(),
 ) {
     suspend fun handle(message: TelegramPhotoMessage): RepostResult {
-        if (message.chatId !in allowedSourceChatIds) {
+        if (allowedSources.none { source -> source.matches(message.chatId, message.messageThreadId) }) {
             message.closePhotos()
             return RepostResult.IgnoredSource
         }
