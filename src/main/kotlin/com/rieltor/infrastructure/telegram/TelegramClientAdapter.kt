@@ -21,6 +21,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
@@ -191,9 +192,7 @@ class TelegramClientAdapter(
                     val largestPhoto = photoContent.photo.sizes.maxByOrNull { size ->
                         size.photo.expectedSize.takeIf { it > 0 } ?: (size.width.toLong() * size.height.toLong())
                     } ?: error("Telegram photo has no downloadable sizes")
-                    val downloaded = telegramClient.send(
-                        TdApi.DownloadFile(largestPhoto.photo.id, 1, 0, 0, true)
-                    ).get(2, TimeUnit.MINUTES)
+                    val downloaded = downloadPhoto(telegramClient, largestPhoto.photo.id)
                     val localPath = downloaded.local?.path
                         ?.takeIf { it.isNotBlank() }
                         ?.let(Path::of)
@@ -236,6 +235,24 @@ class TelegramClientAdapter(
         }
     }
 
+    private suspend fun downloadPhoto(telegramClient: SimpleTelegramClient, fileId: Int): TdApi.File {
+        var lastError: Throwable? = null
+        repeat(DOWNLOAD_MAX_ATTEMPTS) { attempt ->
+            try {
+                return telegramClient.send(TdApi.DownloadFile(fileId, 1, 0, 0, true))
+                    .get(DOWNLOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            } catch (error: java.util.concurrent.TimeoutException) {
+                lastError = error
+                if (attempt + 1 < DOWNLOAD_MAX_ATTEMPTS) delay(DOWNLOAD_RETRY_DELAY_MILLIS * (attempt + 1))
+            }
+        }
+        throw IOException(
+            "Telegram photo download timed out after $DOWNLOAD_MAX_ATTEMPTS attempts: " +
+                (lastError?.message ?: "timeout"),
+            lastError,
+        )
+    }
+
     override fun close() {
         albumCollector.close()
         scope.cancel()
@@ -253,5 +270,8 @@ class TelegramClientAdapter(
         private const val REQUEST_TIMEOUT_SECONDS = 30L
         private const val LOG_MESSAGE_TEXT_LIMIT = 160
         private const val STARTUP_MONITORING_LOG_DELAY_MILLIS = 500L
+        private const val DOWNLOAD_TIMEOUT_SECONDS = 120L
+        private const val DOWNLOAD_MAX_ATTEMPTS = 3
+        private const val DOWNLOAD_RETRY_DELAY_MILLIS = 1_000L
     }
 }

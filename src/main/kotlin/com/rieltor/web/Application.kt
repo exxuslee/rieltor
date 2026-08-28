@@ -15,6 +15,7 @@ import com.rieltor.infrastructure.tiktok.TikTokPhotoPublisher
 import io.github.cdimascio.dotenv.Dotenv
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -58,6 +59,11 @@ fun Application.module(dotenv: Dotenv = loadDotenv()) {
 
     val httpClient = HttpClient(CIO) {
         install(ClientContentNegotiation) { json(json) }
+        install(HttpTimeout) {
+            connectTimeoutMillis = 15_000
+            requestTimeoutMillis = 45_000
+            socketTimeoutMillis = 45_000
+        }
     }
     val auth = TikTokAuthService(httpClient, settings, repositories, json)
     val states = OAuthStateStore()
@@ -78,6 +84,7 @@ fun Application.module(dotenv: Dotenv = loadDotenv()) {
         repostService = repostService,
     )
 
+    installScannerProtection()
     install(CallLogging) { level = Level.INFO }
     install(AutoHeadResponse)
     install(ServerContentNegotiation) { json(json) }

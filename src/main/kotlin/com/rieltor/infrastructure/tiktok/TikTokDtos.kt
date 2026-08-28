@@ -31,7 +31,7 @@ data class CreatorInfoResponse(
 
 @Serializable
 data class CreatorInfo(
-    @SerialName("creator_nickname") val nickname: String,
+    @SerialName("creator_nickname") val nickname: String = "",
     @SerialName("privacy_level_options") val privacyLevelOptions: List<String> = emptyList(),
 )
 

@@ -21,7 +21,7 @@ import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-class TikTokAuthException(message: String) : Exception(message)
+open class TikTokAuthException(message: String) : Exception(message)
 
 class TikTokAuthService(
     private val httpClient: HttpClient,
