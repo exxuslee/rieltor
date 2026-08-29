@@ -69,8 +69,6 @@ class GoogleDrivePhotoSourceTest {
             )
         }
         val settings = ApplicationSettings(
-            port = 8383,
-            databasePath = java.nio.file.Path.of("unused.db"),
             mediaDirectory = java.nio.file.Path.of("media"),
             publicBaseUrl = "https://api.example",
             telegramApiId = 1,

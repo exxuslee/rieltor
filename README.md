@@ -34,9 +34,11 @@ python -m http.server 4173
 
 ## Первичная настройка backend
 
-Telegram-настройки и токены авторизации TikTok/Google Drive хранятся в `rieltor.db`. При первом запуске отсутствующие
-Telegram-настройки импортируются из переменных окружения или `.env`. `TELEGRAM_USER_ID` читается при каждом запуске,
-имеет приоритет над SQLite и выбирает папку `tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR.
+Telegram API-настройки и токены авторизации TikTok/Google Drive хранятся в `rieltor.db`. При первом запуске отсутствующие
+Telegram API-настройки импортируются из переменных окружения или `.env`. `TELEGRAM_USER_ID` в SQLite не сохраняется:
+он обязательно читается при каждом запуске из окружения/`.env` и выбирает папку
+`tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR. При обновлении старая строка `TELEGRAM_USER_ID` автоматически удаляется
+из `app_secrets`.
 
 `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET` в SQLite не сохраняются и при
 каждом запуске обязательно читаются из переменных окружения или локального `.env`.
@@ -50,7 +52,7 @@ $env:TIKTOK_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/tiktok/callback"
 $env:GOOGLE_CLIENT_ID = "ваш_client_id.apps.googleusercontent.com"
 $env:GOOGLE_CLIENT_SECRET = "ваш_client_secret"
 $env:GOOGLE_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/google/callback"
-$env:GOOGLE_ACCOUNT_HINT = "рабочий-google-аккаунт@example.com"
+$env:TELEGRAM_USER_ID = "ваш_telegram_user_id"
 .\gradlew.bat run
 ```
 
@@ -75,6 +77,8 @@ redirect URIs добавьте `https://api.rieltor.dpdns.org/auth/google/callba
 добавьте рабочий Google-аккаунт в Test users. После запуска backend откройте единую страницу подключений
 `https://rieltor.dpdns.org/connect.html`, войдите под аккаунтом с доступом к папкам и подтвердите read-only доступ.
 Refresh token сохранится в локальной SQLite-базе и будет обновлять доступ без повторного входа.
+OAuth-форма сразу подсказывает публичный аккаунт `irinalinnik.lee@gmail.com`; отдельная переменная
+`GOOGLE_ACCOUNT_HINT` не используется.
 
 ### Мониторинг форумных чатов Telegram
 

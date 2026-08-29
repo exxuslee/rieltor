@@ -28,9 +28,7 @@ class GoogleDriveAuthService(
         parameters.append("include_granted_scopes", "true")
         parameters.append("prompt", "consent")
         parameters.append("state", state)
-        settings.googleAccountHint?.takeIf(String::isNotBlank)?.let {
-            parameters.append("login_hint", it)
-        }
+        parameters.append("login_hint", GOOGLE_ACCOUNT_HINT)
     }.buildString()
 
     suspend fun exchangeCodeForTokens(code: String): StoredGoogleDriveTokens {
@@ -102,6 +100,7 @@ class GoogleDriveAuthService(
         const val AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
         const val TOKEN_URL = "https://oauth2.googleapis.com/token"
         const val DRIVE_READONLY_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
+        const val GOOGLE_ACCOUNT_HINT = "irinalinnik.lee@gmail.com"
         const val EXPIRY_SAFETY_SECONDS = 60L
     }
 }

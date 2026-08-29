@@ -11,7 +11,17 @@ import kotlin.test.assertNull
 
 class ApplicationSettingsTest {
     @Test
-    fun `bootstrap does not persist tiktok application credentials`() {
+    fun `server port is loaded once from dotenv`() {
+        val directory = Files.createTempDirectory("rieltor-port-test")
+        Files.writeString(directory.resolve(".env"), "PORT=9484")
+
+        val port = serverPort(Dotenv.configure().directory(directory.toString()).load())
+
+        assertEquals(9484, port)
+    }
+
+    @Test
+    fun `bootstrap persists neither oauth credentials nor telegram user id`() {
         val directory = Files.createTempDirectory("rieltor-bootstrap-test")
         Files.writeString(
             directory.resolve(".env"),
@@ -20,6 +30,7 @@ class ApplicationSettingsTest {
             TIKTOK_CLIENT_SECRET=client-secret
             GOOGLE_CLIENT_ID=google-client-id
             GOOGLE_CLIENT_SECRET=google-client-secret
+            TELEGRAM_USER_ID=530666333
             """.trimIndent()
         )
         val secrets = FakeSecrets(mutableMapOf())
@@ -30,10 +41,11 @@ class ApplicationSettingsTest {
         assertNull(secrets.get(SecretNames.TIKTOK_CLIENT_SECRET))
         assertNull(secrets.get(SecretNames.GOOGLE_CLIENT_ID))
         assertNull(secrets.get(SecretNames.GOOGLE_CLIENT_SECRET))
+        assertNull(secrets.get(SecretNames.TELEGRAM_USER_ID))
     }
 
     @Test
-    fun `telegram user id from dotenv overrides stored value`() {
+    fun `telegram user id is read from dotenv`() {
         val directory = Files.createTempDirectory("rieltor-settings-test")
         Files.writeString(
             directory.resolve(".env"),
@@ -52,7 +64,6 @@ class ApplicationSettingsTest {
                 SecretNames.GOOGLE_REDIRECT_URI to "https://api.example/auth/google/callback",
                 SecretNames.TELEGRAM_API_ID to "12345",
                 SecretNames.TELEGRAM_API_HASH to "api-hash",
-                SecretNames.TELEGRAM_USER_ID to "530666333",
             )
         )
 
@@ -79,6 +90,7 @@ class ApplicationSettingsTest {
             TIKTOK_CLIENT_SECRET=client-secret
             GOOGLE_CLIENT_ID=google-client-id
             GOOGLE_CLIENT_SECRET=google-client-secret
+            TELEGRAM_USER_ID=530666333
             TELEGRAM_MONITORED_TOPICS=-1002681732909,-1001234567890_50180
             """.trimIndent()
         )
@@ -88,7 +100,6 @@ class ApplicationSettingsTest {
                 SecretNames.GOOGLE_REDIRECT_URI to "https://api.example/auth/google/callback",
                 SecretNames.TELEGRAM_API_ID to "12345",
                 SecretNames.TELEGRAM_API_HASH to "api-hash",
-                SecretNames.TELEGRAM_USER_ID to "530666333",
             )
         )
 
@@ -116,6 +127,7 @@ class ApplicationSettingsTest {
             TIKTOK_CLIENT_SECRET=client-secret
             GOOGLE_CLIENT_ID=google-client-id
             GOOGLE_CLIENT_SECRET=google-client-secret
+            TELEGRAM_USER_ID=530666333
             TELEGRAM_MONITORED_CHAT_ID=-1002681732909
             TELEGRAM_MONITORED_MESSAGE_THREAD_IDS=5242880,4194304
             """.trimIndent()
@@ -126,7 +138,6 @@ class ApplicationSettingsTest {
                 SecretNames.GOOGLE_REDIRECT_URI to "https://api.example/auth/google/callback",
                 SecretNames.TELEGRAM_API_ID to "12345",
                 SecretNames.TELEGRAM_API_HASH to "api-hash",
-                SecretNames.TELEGRAM_USER_ID to "530666333",
             )
         )
 

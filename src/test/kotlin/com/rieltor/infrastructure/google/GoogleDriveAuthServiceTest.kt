@@ -28,7 +28,7 @@ class GoogleDriveAuthServiceTest {
         assertEquals("https://www.googleapis.com/auth/drive.readonly", url.parameters["scope"])
         assertEquals("offline", url.parameters["access_type"])
         assertEquals("consent", url.parameters["prompt"])
-        assertEquals("agent@example.com", url.parameters["login_hint"])
+        assertEquals("irinalinnik.lee@gmail.com", url.parameters["login_hint"])
         assertEquals("state-123", url.parameters["state"])
     }
 
@@ -73,8 +73,6 @@ class GoogleDriveAuthServiceTest {
     private fun service(client: HttpClient, repository: GoogleDriveTokenRepository) = GoogleDriveAuthService(
         client,
         ApplicationSettings(
-            port = 8383,
-            databasePath = java.nio.file.Path.of("unused.db"),
             mediaDirectory = java.nio.file.Path.of("media"),
             publicBaseUrl = "https://api.example",
             telegramApiId = 1,
@@ -86,7 +84,6 @@ class GoogleDriveAuthServiceTest {
             googleClientId = "google-client-id",
             googleClientSecret = "google-client-secret",
             googleRedirectUri = "https://api.example/auth/google/callback",
-            googleAccountHint = "agent@example.com",
         ),
         repository,
         Json { ignoreUnknownKeys = true },

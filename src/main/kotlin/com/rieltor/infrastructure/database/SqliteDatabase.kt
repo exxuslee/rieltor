@@ -102,7 +102,7 @@ class SqliteDatabase(private val path: Path) {
                 val schemaVersion = statement.executeQuery("PRAGMA user_version").use { result ->
                     if (result.next()) result.getInt(1) else 0
                 }
-                if (schemaVersion < 4) {
+                if (schemaVersion < 5) {
                     if (schemaVersion < 1) {
                         // Remove the retired Bot API credential and overwrite its SQLite cell.
                         statement.executeUpdate("DELETE FROM app_secrets WHERE name = 'TELEGRAM_BOT_TOKEN'")
@@ -118,7 +118,9 @@ class SqliteDatabase(private val path: Path) {
                             """.trimIndent()
                         )
                     }
-                    statement.execute("PRAGMA user_version=4")
+                    // Deployment identity is environment-only and must not become stale in SQLite.
+                    statement.executeUpdate("DELETE FROM app_secrets WHERE name = 'TELEGRAM_USER_ID'")
+                    statement.execute("PRAGMA user_version=5")
                     statement.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                     statement.execute("VACUUM")
                 }

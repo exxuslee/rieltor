@@ -15,11 +15,10 @@ import io.ktor.http.Parameters
 import io.ktor.http.URLBuilder
 import io.ktor.http.content.TextContent
 import io.ktor.http.formUrlEncode
+import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.time.Instant
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 open class TikTokAuthException(message: String) : Exception(message)
 
@@ -76,9 +75,23 @@ class TikTokAuthService(
         }
         val raw = response.bodyAsText()
         logger.info("TikTok token endpoint responded. status={}", response.status)
-        val payload = json.decodeFromString<TikTokTokenResponse>(raw)
-        if (payload.error != null || payload.accessToken == null || payload.refreshToken == null || payload.openId == null) {
-            throw TikTokAuthException("TikTok token request failed: ${payload.error} - ${payload.errorDescription}")
+        val payload = runCatching { json.decodeFromString<TikTokTokenResponse>(raw) }
+            .getOrElse {
+                throw TikTokAuthException(
+                    "TikTok token endpoint returned an unreadable response (HTTP ${response.status.value})."
+                )
+            }
+        if (
+            !response.status.isSuccess() ||
+            payload.error != null ||
+            payload.accessToken == null ||
+            payload.refreshToken == null ||
+            payload.openId == null
+        ) {
+            throw TikTokAuthException(
+                "TikTok token request failed: ${payload.error ?: response.status.value} - " +
+                    (payload.errorDescription ?: "unknown error")
+            )
         }
         val now = Instant.now().epochSecond
         return StoredTokens(
@@ -96,18 +109,5 @@ class TikTokAuthService(
     companion object {
         private const val AUTHORIZE_URL = "https://www.tiktok.com/v2/auth/authorize/"
         private const val TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
-    }
-}
-
-class OAuthStateStore {
-    private val states = ConcurrentHashMap<String, Long>()
-
-    fun issue(): String = UUID.randomUUID().toString().also {
-        states[it] = Instant.now().epochSecond
-    }
-
-    fun consume(state: String): Boolean {
-        val issuedAt = states.remove(state) ?: return false
-        return Instant.now().epochSecond - issuedAt <= 10 * 60
     }
 }

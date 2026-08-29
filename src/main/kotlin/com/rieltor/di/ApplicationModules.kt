@@ -14,6 +14,7 @@ import com.rieltor.domain.usecase.TelegramListingIdentityExtractorUseCase
 import com.rieltor.domain.usecase.TikTokMessageFilterUseCase
 import com.rieltor.infrastructure.config.ApplicationSettings
 import com.rieltor.infrastructure.config.bootstrapSecrets
+import com.rieltor.infrastructure.config.databasePath
 import com.rieltor.infrastructure.database.LegacyTokenMigration
 import com.rieltor.infrastructure.database.SqliteDatabase
 import com.rieltor.infrastructure.database.SqliteRepositories
@@ -21,8 +22,8 @@ import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.google.GoogleDrivePhotoSource
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import com.rieltor.infrastructure.media.MediaCleanupJob
+import com.rieltor.infrastructure.oauth.OAuthStateStore
 import com.rieltor.infrastructure.telegram.TelegramClientAdapter
-import com.rieltor.infrastructure.tiktok.OAuthStateStore
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
 import com.rieltor.infrastructure.tiktok.TikTokPhotoPublisher
 import io.github.cdimascio.dotenv.Dotenv
@@ -35,7 +36,6 @@ import kotlinx.serialization.json.Json
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
-import java.nio.file.Path
 
 val tikTokOAuthState = named("tiktok-oauth-state")
 val googleOAuthState = named("google-oauth-state")
@@ -59,10 +59,7 @@ private fun configurationModule(dotenv: Dotenv) = module {
 }
 
 private val persistenceModule = module {
-    single {
-        val dotenv = get<Dotenv>()
-        SqliteDatabase(Path.of(System.getenv("APP_DB_PATH") ?: dotenv.get("APP_DB_PATH") ?: "rieltor.db"))
-    }
+    single { SqliteDatabase(databasePath(get())) }
     single { SqliteRepositories(get()) }
     single<SecretRepository> { get<SqliteRepositories>() }
     single<TikTokTokenRepository> { get<SqliteRepositories>() }

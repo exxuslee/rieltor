@@ -23,14 +23,11 @@ object SecretNames {
         GOOGLE_REDIRECT_URI,
         TELEGRAM_API_ID,
         TELEGRAM_API_HASH,
-        TELEGRAM_USER_ID,
         PUBLIC_BASE_URL,
     )
 }
 
 data class ApplicationSettings(
-    val port: Int,
-    val databasePath: Path,
     val mediaDirectory: Path,
     val publicBaseUrl: String,
     val monitoredTelegramTopics: Set<TelegramMonitoredTopic> = emptySet(),
@@ -43,21 +40,16 @@ data class ApplicationSettings(
     val googleClientId: String = "",
     val googleClientSecret: String = "",
     val googleRedirectUri: String = "",
-    val googleAccountHint: String? = null,
 ) {
     companion object {
         fun load(secrets: SecretRepository, dotenv: Dotenv): ApplicationSettings {
             val redirectUri = secrets.require(SecretNames.TIKTOK_REDIRECT_URI)
             val redirect = URI(redirectUri)
             val inferredBaseUrl = "${redirect.scheme}://${redirect.authority}"
-            val telegramUserId = (
-                environmentOrDotenv(SecretNames.TELEGRAM_USER_ID, dotenv)
-                    ?: secrets.require(SecretNames.TELEGRAM_USER_ID)
-                ).toLongOrNull()
+            val telegramUserId = requireEnvironmentOrDotenv(SecretNames.TELEGRAM_USER_ID, dotenv)
+                .toLongOrNull()
                 ?: error("Invalid ${SecretNames.TELEGRAM_USER_ID}: expected a numeric Telegram user ID")
             return ApplicationSettings(
-                port = environmentOrDotenv("PORT", dotenv)?.toIntOrNull() ?: 8383,
-                databasePath = Path.of(environmentOrDotenv("APP_DB_PATH", dotenv) ?: "rieltor.db"),
                 mediaDirectory = Path.of(environmentOrDotenv("MEDIA_DIRECTORY", dotenv) ?: "media"),
                 publicBaseUrl = secrets.get(SecretNames.PUBLIC_BASE_URL)?.trimEnd('/') ?: inferredBaseUrl,
                 monitoredTelegramTopics = parseTelegramMonitoredTopics(
@@ -77,10 +69,18 @@ data class ApplicationSettings(
                 googleClientId = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_ID, dotenv),
                 googleClientSecret = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_SECRET, dotenv),
                 googleRedirectUri = secrets.require(SecretNames.GOOGLE_REDIRECT_URI),
-                googleAccountHint = environmentOrDotenv("GOOGLE_ACCOUNT_HINT", dotenv),
             )
         }
     }
+}
+
+fun databasePath(dotenv: Dotenv): Path =
+    Path.of(environmentOrDotenv("APP_DB_PATH", dotenv) ?: "rieltor.db")
+
+fun serverPort(dotenv: Dotenv): Int {
+    val configured = environmentOrDotenv("PORT", dotenv) ?: return DEFAULT_SERVER_PORT
+    return configured.toIntOrNull()?.takeIf { it in 1..65535 }
+        ?: error("Invalid PORT: expected a number from 1 to 65535")
 }
 
 fun bootstrapSecrets(repository: SecretRepository, dotenv: Dotenv) {
@@ -146,3 +146,5 @@ private fun parseTelegramMonitoredTopics(
         ?.toSet()
         ?: emptySet()
 }
+
+private const val DEFAULT_SERVER_PORT = 8383

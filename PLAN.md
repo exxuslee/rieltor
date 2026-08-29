@@ -44,9 +44,9 @@ node scripts/check-seo.mjs
 
 - Backend организован по слоям `domain`, `application`, `infrastructure`, `web`; сборка зависимостей вынесена в
   Koin-модули `configuration`, `persistence`, `network`, `useCase` и `integration`.
-- Telegram-настройки, TikTok access/refresh tokens и журнал обработанных Telegram updates хранятся в локальной
-  SQLite-базе `rieltor.db` рядом с JAR (файл исключён из Git). `TIKTOK_CLIENT_KEY` и `TIKTOK_CLIENT_SECRET` всегда читаются
-  из окружения или `.env` и в SQLite не сохраняются.
+- Telegram API-настройки, TikTok access/refresh tokens и журнал обработанных Telegram updates хранятся в локальной
+  SQLite-базе `rieltor.db` рядом с JAR (файл исключён из Git). `TELEGRAM_USER_ID`, `TIKTOK_CLIENT_KEY` и
+  `TIKTOK_CLIENT_SECRET` всегда читаются из окружения или `.env` и в SQLite не сохраняются.
 - Пользовательский Telegram-клиент TDLight использует локальную сессию, принимает фото пользователя `530667295` только
   из личного чата «Избранное», сохраняет изображение под случайным именем и инициирует TikTok Photo Direct Post.
   Повторная обработка одного сообщения блокируется базой.

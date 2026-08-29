@@ -15,6 +15,7 @@ import kotlinx.serialization.json.Json
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class TikTokAuthServiceTest {
     @Test
@@ -39,27 +40,47 @@ class TikTokAuthServiceTest {
             )
         }
         val repository = InMemoryTokens()
-        val service = TikTokAuthService(
-            HttpClient(engine),
-            ApplicationSettings(
-                port = 8383,
-                databasePath = Path.of("unused.db"),
-                mediaDirectory = Path.of("media"),
-                publicBaseUrl = "https://api.example",
-                telegramApiId = 12345,
-                telegramApiHash = "telegram-api-hash",
-                telegramSessionDirectory = Path.of("telegram-session"),
-                tikTokClientKey = "client-key",
-                tikTokClientSecret = "client-secret",
-                tikTokRedirectUri = "https://api.example/auth/tiktok/callback",
-            ),
-            repository,
-            Json { ignoreUnknownKeys = true },
-        )
+        val service = service(engine, repository)
 
         service.exchangeCodeForTokens("authorization-code")
         assertEquals("open", repository.latest()?.openId)
     }
+
+    @Test
+    fun `unreadable token response becomes auth exception`() = runBlocking {
+        val engine = MockEngine {
+            respond(
+                content = "upstream unavailable",
+                status = HttpStatusCode.BadGateway,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Text.Plain.toString()),
+            )
+        }
+
+        val error = assertFailsWith<TikTokAuthException> {
+            service(engine, InMemoryTokens()).exchangeCodeForTokens("authorization-code")
+        }
+
+        assertEquals(
+            "TikTok token endpoint returned an unreadable response (HTTP 502).",
+            error.message,
+        )
+    }
+
+    private fun service(engine: MockEngine, repository: TikTokTokenRepository) = TikTokAuthService(
+        HttpClient(engine),
+        ApplicationSettings(
+            mediaDirectory = Path.of("media"),
+            publicBaseUrl = "https://api.example",
+            telegramApiId = 12345,
+            telegramApiHash = "telegram-api-hash",
+            telegramSessionDirectory = Path.of("telegram-session"),
+            tikTokClientKey = "client-key",
+            tikTokClientSecret = "client-secret",
+            tikTokRedirectUri = "https://api.example/auth/tiktok/callback",
+        ),
+        repository,
+        Json { ignoreUnknownKeys = true },
+    )
 
     private class InMemoryTokens : TikTokTokenRepository {
         private var tokens: StoredTokens? = null

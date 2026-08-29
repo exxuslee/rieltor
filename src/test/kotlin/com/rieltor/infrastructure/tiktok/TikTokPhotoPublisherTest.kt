@@ -195,8 +195,6 @@ class TikTokPhotoPublisherTest {
     }
 
     private fun settings() = ApplicationSettings(
-        port = 8383,
-        databasePath = Path.of("unused.db"),
         mediaDirectory = Path.of("media"),
         publicBaseUrl = "https://api.example",
         telegramApiId = 12345,

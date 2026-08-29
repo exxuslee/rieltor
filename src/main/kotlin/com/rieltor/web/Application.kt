@@ -3,12 +3,13 @@ package com.rieltor.web
 import com.rieltor.di.applicationModules
 import com.rieltor.di.googleOAuthState
 import com.rieltor.di.tikTokOAuthState
+import com.rieltor.infrastructure.config.serverPort
 import com.rieltor.infrastructure.google.GoogleDriveAuthException
 import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import com.rieltor.infrastructure.media.MediaCleanupJob
+import com.rieltor.infrastructure.oauth.OAuthStateStore
 import com.rieltor.infrastructure.telegram.TelegramClientAdapter
-import com.rieltor.infrastructure.tiktok.OAuthStateStore
 import com.rieltor.infrastructure.tiktok.TikTokAuthException
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
 import io.github.cdimascio.dotenv.Dotenv
@@ -33,8 +34,7 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation as ServerCon
 
 fun main() {
     val dotenv = Dotenv.configure().ignoreIfMissing().load()
-    val port = (System.getenv("PORT") ?: dotenv.get("PORT"))?.toIntOrNull() ?: 8383
-    embeddedServer(ServerCIO, port = port, host = "0.0.0.0") { module(dotenv) }
+    embeddedServer(ServerCIO, port = serverPort(dotenv), host = "0.0.0.0") { module(dotenv) }
         .start(wait = true)
 }
 

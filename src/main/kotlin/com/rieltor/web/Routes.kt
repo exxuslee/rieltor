@@ -2,7 +2,7 @@ package com.rieltor.web
 
 import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
-import com.rieltor.infrastructure.tiktok.OAuthStateStore
+import com.rieltor.infrastructure.oauth.OAuthStateStore
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
 import io.ktor.http.*
 import io.ktor.server.response.*

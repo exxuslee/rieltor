@@ -18,7 +18,7 @@ import kotlin.test.assertIs
 
 class SqliteRepositoriesTest {
     @Test
-    fun `migration removes oauth application credentials from sqlite`() {
+    fun `migration removes environment-only settings from sqlite`() {
         val directory = Files.createTempDirectory("rieltor-db-migration-test")
         val databasePath = directory.resolve("test.db")
         val oldDatabase = SqliteDatabase(databasePath)
@@ -27,6 +27,7 @@ class SqliteRepositoriesTest {
         oldRepository.putIfAbsent("TIKTOK_CLIENT_SECRET", "stored-secret")
         oldRepository.putIfAbsent("GOOGLE_CLIENT_ID", "stored-google-id")
         oldRepository.putIfAbsent("GOOGLE_CLIENT_SECRET", "stored-google-secret")
+        oldRepository.putIfAbsent("TELEGRAM_USER_ID", "530666333")
         oldDatabase.connection().use { connection ->
             connection.createStatement().use { it.execute("PRAGMA user_version=1") }
         }
@@ -37,6 +38,32 @@ class SqliteRepositoriesTest {
         assertNull(migratedRepository.get("TIKTOK_CLIENT_SECRET"))
         assertNull(migratedRepository.get("GOOGLE_CLIENT_ID"))
         assertNull(migratedRepository.get("GOOGLE_CLIENT_SECRET"))
+        assertNull(migratedRepository.get("TELEGRAM_USER_ID"))
+    }
+
+    @Test
+    fun `migration from schema four removes telegram user id`() {
+        val directory = Files.createTempDirectory("rieltor-db-v4-migration-test")
+        val databasePath = directory.resolve("test.db")
+        val oldDatabase = SqliteDatabase(databasePath)
+        val oldRepository = SqliteRepositories(oldDatabase)
+        oldRepository.putIfAbsent("TELEGRAM_USER_ID", "530666333")
+        oldDatabase.connection().use { connection ->
+            connection.createStatement().use { it.execute("PRAGMA user_version=4") }
+        }
+
+        val migratedDatabase = SqliteDatabase(databasePath)
+        val migratedRepository = SqliteRepositories(migratedDatabase)
+
+        assertNull(migratedRepository.get("TELEGRAM_USER_ID"))
+        migratedDatabase.connection().use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("PRAGMA user_version").use { result ->
+                    assertTrue(result.next())
+                    assertEquals(5, result.getInt(1))
+                }
+            }
+        }
     }
 
     @Test
