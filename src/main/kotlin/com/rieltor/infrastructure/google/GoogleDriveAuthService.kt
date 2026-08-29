@@ -28,7 +28,9 @@ class GoogleDriveAuthService(
         parameters.append("include_granted_scopes", "true")
         parameters.append("prompt", "consent")
         parameters.append("state", state)
-        parameters.append("login_hint", "your-google-account@example.com")
+        settings.googleAccountHint?.takeIf(String::isNotBlank)?.let {
+            parameters.append("login_hint", it)
+        }
     }.buildString()
 
     suspend fun exchangeCodeForTokens(code: String): StoredGoogleDriveTokens {
