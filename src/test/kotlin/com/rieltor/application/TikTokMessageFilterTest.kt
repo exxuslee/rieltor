@@ -93,4 +93,17 @@ class TikTokMessageFilterTest {
         assertFalse(result.contains("Novator", ignoreCase = true))
         assertContains(result, "📞 066-372-71-02 Ірина")
     }
+
+    @Test
+    fun `removes any parenthesized note immediately after a price`() {
+        val source = """
+            Квартира в Ірпені
+            Ціна 22 000${'$'} ( 2000/2)
+        """.trimIndent()
+
+        val result = requireNotNull(filter.filter(source))
+
+        assertContains(result, "Ціна 22 000${'$'}")
+        assertFalse(result.contains("( 2000/2)"))
+    }
 }

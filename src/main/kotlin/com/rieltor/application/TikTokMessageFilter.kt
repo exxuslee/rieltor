@@ -40,12 +40,10 @@ class TikTokMessageFilter {
             add("🏠 $title")
             if (parameters.isNotEmpty()) {
                 add("")
-                add("Основні параметри:")
                 parameters.forEach { add("• ${it.removeListMarker()}") }
             }
             if (description.isNotEmpty()) {
                 add("")
-                add("Додатковий опис:")
                 description.forEach { add(it.removeListMarker()) }
             }
             add("")
@@ -62,6 +60,7 @@ class TikTokMessageFilter {
 
         line = googleUrl.replace(line, "")
         line = agency.replace(line, "")
+        line = priceParentheticalNote.replace(line, "$1")
         line = parenthesizedCommission.replace(line, "")
         line = commissionTail.replace(line, "")
         line = registrationPercentageTail.replace(line, "")
@@ -97,13 +96,16 @@ class TikTokMessageFilter {
     private fun String.removeListMarker(): String = replaceFirst(listMarker, "").trim()
 
     private companion object {
-        const val PUBLIC_CONTACT = "📞 066-372-71-02 Ірина"
+        const val PUBLIC_CONTACT = "🤙 066-372-71-02 Ірина"
 
         val googleUrl = Regex("""(?iu)https?://(?:drive|docs)\.google\.com/\S+""")
         val phone = Regex("""(?<!\d)(?:\+?38[\s().-]*)?0\d{2}(?:[\s().-]*\d){7}(?!\d)""")
         val agency = Regex("""(?iu)(?<!\p{L})АН\s*[«\"']?\s*(?:НОВАТОР|NOVATOR)\s*[»\"']?|(?<!\p{L})(?:АН\s+)?НОВАТОР(?!\p{L})""")
         val parenthesizedCommission = Regex(
             """(?iu)\s*\(\s*\d[\d\s.,]*\s*(?:[$€]|%)\s*[/\\]\s*2\s*\)"""
+        )
+        val priceParentheticalNote = Regex(
+            """(?iu)((?:ціна|вартість)\s*[:.]?\s*(?:від\s*)?\d[\d\s.,]*\s*(?:[$€₴]|грн\.?))(?:\s*\([^\r\n)]*\))+"""
         )
         val commissionTail = Regex(
             """(?iu)\s*(?:\(?\s*)?(?:ваша\s+)?(?:коміс(?:ія|ії)?|комиссия|ком(?:\.|(?=\s*:?\s*\d)))\s*:?.*$"""
