@@ -1,13 +1,12 @@
-package com.rieltor.application
+package com.rieltor.domain.service
 
-import com.rieltor.domain.usecase.TikTokMessageFilterUseCase
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 
-class TikTokMessageFilterUseCaseTest {
-    private val filter = TikTokMessageFilterUseCase()
+class TikTokCaptionFormatterTest {
+    private val filter = TikTokCaptionFormatter()
 
     @Test
     fun `removes private contacts drive links commission and registration percentage`() {

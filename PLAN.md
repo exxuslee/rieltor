@@ -43,7 +43,14 @@ node scripts/check-seo.mjs
 ## Telegram → TikTok
 
 - Backend организован по слоям `domain`, `application`, `infrastructure`, `web`; сборка зависимостей вынесена в
-  Koin-модули `configuration`, `persistence`, `network`, `useCase` и `integration`.
+  Koin-модули `configuration`, `persistence`, `network`, `application` и `integration`.
+- `TelegramClientAdapter` отвечает только за TDLib transport и отдаёт сообщения через `TelegramMessageSource.messages`.
+  `TelegramRepostCoordinator` последовательно наблюдает этот `Flow` и вызывает application use case публикации. Состояния
+  соединения и repost-конвейера доступны отдельно через `StateFlow<TelegramSourceState>` и
+  `StateFlow<RepostFlowState>`.
+- TDLib-маппинг/скачивание и startup-диагностика разделены на `TelegramMessageMapper` и `TelegramDiagnostics`.
+  SQLite-доступ также разделён по системам: настройки, TikTok tokens, Google Drive tokens и Telegram repost history имеют
+  отдельные реализации репозиториев.
 - Telegram API-настройки, TikTok access/refresh tokens и журнал обработанных Telegram updates хранятся в локальной
   SQLite-базе `rieltor.db` рядом с JAR (файл исключён из Git). `TELEGRAM_USER_ID`, `TIKTOK_CLIENT_KEY` и
   `TIKTOK_CLIENT_SECRET` всегда читаются из окружения или `.env` и в SQLite не сохраняются.
@@ -58,7 +65,7 @@ node scripts/check-seo.mjs
   `https://api.rieltor.dpdns.org/auth/google/callback`.
 - Перед публикацией отдельный `TikTokMessageFilter` удаляет исходные контакты, Google Drive-ссылки, комиссию, проценты
   оформления и упоминания АН «Новатор», затем формирует заголовок, основные параметры, описание, контакт Ірини и хештеги.
-- Отдельный `DeduplicateTelegramRepostUseCase` регистрирует все входящие сообщения и не допускает повторную публикацию
+- Отдельный application-сервис `TelegramRepostTracker` регистрирует все входящие сообщения и не допускает повторную публикацию
   объявления с тем же нормализованным ключом `messageThreadId + цена + адрес`. В SQLite раздельно хранятся история
   `received_telegram_messages` и подтверждённые публикации `published_reposts`; неудачная публикация освобождает ключ для
   повторной попытки.

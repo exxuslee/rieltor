@@ -1,13 +1,12 @@
-package com.rieltor.application
+package com.rieltor.domain.service
 
 import com.rieltor.domain.model.TelegramRepostKey
-import com.rieltor.domain.usecase.TelegramListingIdentityExtractorUseCase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-class TelegramListingIdentityExtractorUseCaseTest {
-    private val extractor = TelegramListingIdentityExtractorUseCase()
+class TelegramListingIdentityExtractorTest {
+    private val extractor = TelegramListingIdentityExtractor()
 
     @Test
     fun `normalizes equivalent price and street spelling`() {

@@ -1,5 +1,6 @@
-package com.rieltor.application
+package com.rieltor.application.usecase
 
+import com.rieltor.application.service.TelegramRepostTracker
 import com.rieltor.domain.model.PublishReceipt
 import com.rieltor.domain.model.ReceivedTelegramMessage
 import com.rieltor.domain.model.RepostResult
@@ -12,8 +13,6 @@ import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublicMediaStorage
 import com.rieltor.domain.repository.TelegramRepostRepository
-import com.rieltor.domain.usecase.DeduplicateTelegramRepostUseCase
-import com.rieltor.domain.usecase.PhotoRepostServiceUseCase
 import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayInputStream
 import java.io.InputStream
@@ -21,13 +20,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
-class PhotoRepostServiceUseCaseTest {
+class PublishPhotoRepostUseCaseTest {
     @Test
     fun `publishes photo from monitored chat once`() = runBlocking {
         val jobs = FakeJobs()
         val publisher = FakePublisher()
-        val service = PhotoRepostServiceUseCase(
-            deduplicateRepost = DeduplicateTelegramRepostUseCase(jobs),
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(jobs),
             mediaStorage = FakeStorage(),
             publisher = publisher,
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
@@ -45,8 +44,8 @@ class PhotoRepostServiceUseCaseTest {
     @Test
     fun `publishes all photos as one post`() = runBlocking {
         val publisher = FakePublisher()
-        val service = PhotoRepostServiceUseCase(
-            deduplicateRepost = DeduplicateTelegramRepostUseCase(FakeJobs()),
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(FakeJobs()),
             mediaStorage = FakeStorage(),
             publisher = publisher,
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
@@ -79,8 +78,8 @@ class PhotoRepostServiceUseCaseTest {
     @Test
     fun `adds google drive photos from caption to the same post`() = runBlocking {
         val publisher = FakePublisher()
-        val service = PhotoRepostServiceUseCase(
-            deduplicateRepost = DeduplicateTelegramRepostUseCase(FakeJobs()),
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(FakeJobs()),
             mediaStorage = FakeStorage(),
             publisher = publisher,
             externalPhotoSource = FakeExternalPhotoSource(),
@@ -102,8 +101,8 @@ class PhotoRepostServiceUseCaseTest {
     @Test
     fun `ignores all other chats`() = runBlocking {
         val publisher = FakePublisher()
-        val service = PhotoRepostServiceUseCase(
-            deduplicateRepost = DeduplicateTelegramRepostUseCase(FakeJobs()),
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(FakeJobs()),
             mediaStorage = FakeStorage(),
             publisher = publisher,
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
@@ -114,10 +113,32 @@ class PhotoRepostServiceUseCaseTest {
     }
 
     @Test
+    fun `ignores text without photos or supported external link`() = runBlocking {
+        val publisher = FakePublisher()
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(FakeJobs()),
+            mediaStorage = FakeStorage(),
+            publisher = publisher,
+            externalPhotoSource = FakeExternalPhotoSource(),
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
+        )
+        val message = TelegramPhotoMessage(
+            updateId = 5,
+            chatId = MONITORED_CHAT_ID,
+            messageThreadId = MONITORED_THREAD_ID,
+            caption = "Звичайне текстове повідомлення",
+            photos = emptyList(),
+        )
+
+        assertEquals(RepostResult.IgnoredContent, service.handle(message))
+        assertEquals(0, publisher.calls)
+    }
+
+    @Test
     fun `publishes photo from configured monitored chat`() = runBlocking {
         val publisher = FakePublisher()
-        val service = PhotoRepostServiceUseCase(
-            deduplicateRepost = DeduplicateTelegramRepostUseCase(FakeJobs()),
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(FakeJobs()),
             mediaStorage = FakeStorage(),
             publisher = publisher,
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
@@ -132,8 +153,8 @@ class PhotoRepostServiceUseCaseTest {
     @Test
     fun `ignores photo from unmonitored forum topic in monitored chat`() = runBlocking {
         val publisher = FakePublisher()
-        val service = PhotoRepostServiceUseCase(
-            deduplicateRepost = DeduplicateTelegramRepostUseCase(FakeJobs()),
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(FakeJobs()),
             mediaStorage = FakeStorage(),
             publisher = publisher,
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
@@ -148,8 +169,8 @@ class PhotoRepostServiceUseCaseTest {
     @Test
     fun `does not publish repeated listing with a new telegram update id`() = runBlocking {
         val publisher = FakePublisher()
-        val service = PhotoRepostServiceUseCase(
-            deduplicateRepost = DeduplicateTelegramRepostUseCase(FakeJobs()),
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(FakeJobs()),
             mediaStorage = FakeStorage(),
             publisher = publisher,
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),

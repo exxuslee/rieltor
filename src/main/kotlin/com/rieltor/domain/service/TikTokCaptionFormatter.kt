@@ -1,4 +1,4 @@
-package com.rieltor.domain.usecase
+package com.rieltor.domain.service
 
 /**
  * Converts an internal Telegram listing caption into a public TikTok description.
@@ -7,7 +7,7 @@ package com.rieltor.domain.usecase
  * public contact is appended. The class is stateless so it can be tested independently
  * from Telegram and TikTok integrations.
  */
-class TikTokMessageFilterUseCase {
+class TikTokCaptionFormatter {
     fun filter(message: String?): String? {
         if (message.isNullOrBlank()) return null
 

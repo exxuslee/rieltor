@@ -1,5 +1,6 @@
 package com.rieltor.web
 
+import com.rieltor.application.orchestration.TelegramRepostCoordinator
 import com.rieltor.di.applicationModules
 import com.rieltor.di.googleOAuthState
 import com.rieltor.di.tikTokOAuthState
@@ -9,7 +10,6 @@ import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import com.rieltor.infrastructure.media.MediaCleanupJob
 import com.rieltor.infrastructure.oauth.OAuthStateStore
-import com.rieltor.infrastructure.telegram.TelegramClientAdapter
 import com.rieltor.infrastructure.tiktok.TikTokAuthException
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
 import io.github.cdimascio.dotenv.Dotenv
@@ -51,7 +51,7 @@ fun Application.module(dotenv: Dotenv) {
     val googleStates = get<OAuthStateStore>(googleOAuthState)
     val mediaStorage = get<LocalPublicMediaStorage>()
     val mediaCleanupJob = get<MediaCleanupJob>()
-    val telegram = get<TelegramClientAdapter>()
+    val repostCoordinator = get<TelegramRepostCoordinator>()
     val httpClient = get<HttpClient>()
 
     installScannerProtection()
@@ -86,12 +86,12 @@ fun Application.module(dotenv: Dotenv) {
         googleDriveAuthRoutes(googleAuth, googleStates)
     }
 
-    telegram.start()
+    repostCoordinator.start()
     mediaCleanupJob.start()
 
     monitor.subscribe(ApplicationStopping) {
         mediaCleanupJob.close()
-        telegram.close()
+        repostCoordinator.close()
         httpClient.close()
     }
 

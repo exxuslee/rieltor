@@ -74,5 +74,6 @@ data class PublishReceipt(
 sealed interface RepostResult {
     data class Published(val receipt: PublishReceipt) : RepostResult
     data object IgnoredSource : RepostResult
+    data object IgnoredContent : RepostResult
     data object Duplicate : RepostResult
 }

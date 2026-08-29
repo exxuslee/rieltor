@@ -39,6 +39,7 @@ dependencies {
     implementation(libs.ktor.client.encoding)
 
     implementation(libs.logback.classic)
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.dotenv.kotlin)
     implementation(libs.sqlite.jdbc)

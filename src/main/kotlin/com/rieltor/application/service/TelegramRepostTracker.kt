@@ -1,14 +1,15 @@
-package com.rieltor.domain.usecase
+package com.rieltor.application.service
 
 import com.rieltor.domain.model.ReceivedTelegramMessage
 import com.rieltor.domain.model.TelegramMessageRegistration
 import com.rieltor.domain.model.TelegramPhotoMessage
 import com.rieltor.domain.repository.TelegramRepostRepository
+import com.rieltor.domain.service.TelegramListingIdentityExtractor
 
 /** Owns the receive/reserve/publish lifecycle used to suppress repeated Telegram listings. */
-class DeduplicateTelegramRepostUseCase(
+class TelegramRepostTracker(
     private val repository: TelegramRepostRepository,
-    private val identityExtractor: TelegramListingIdentityExtractorUseCase = TelegramListingIdentityExtractorUseCase(),
+    private val identityExtractor: TelegramListingIdentityExtractor = TelegramListingIdentityExtractor(),
 ) {
     fun reserve(message: TelegramPhotoMessage): TelegramMessageRegistration {
         val repostKey = identityExtractor.extract(message.messageThreadId, message.caption)

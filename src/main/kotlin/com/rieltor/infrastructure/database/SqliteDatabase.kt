@@ -49,17 +49,6 @@ class SqliteDatabase(private val path: Path) {
                 )
                 statement.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS post_jobs (
-                        telegram_update_id INTEGER PRIMARY KEY,
-                        status TEXT NOT NULL,
-                        publish_id TEXT,
-                        error TEXT,
-                        updated_at INTEGER NOT NULL
-                    )
-                    """.trimIndent()
-                )
-                statement.execute(
-                    """
                     CREATE TABLE IF NOT EXISTS received_telegram_messages (
                         telegram_update_id INTEGER PRIMARY KEY,
                         chat_id INTEGER NOT NULL,

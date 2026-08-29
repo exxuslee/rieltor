@@ -1,9 +1,9 @@
-package com.rieltor.domain.usecase
+package com.rieltor.domain.service
 
 import com.rieltor.domain.model.TelegramRepostKey
 
 /** Extracts a stable listing identity from the original, unfiltered Telegram caption. */
-class TelegramListingIdentityExtractorUseCase {
+class TelegramListingIdentityExtractor {
     fun extract(messageThreadId: Long, caption: String?): TelegramRepostKey? {
         if (caption.isNullOrBlank()) return null
 

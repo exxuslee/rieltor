@@ -1,23 +1,28 @@
 package com.rieltor.di
 
+import com.rieltor.application.orchestration.TelegramRepostCoordinator
+import com.rieltor.application.port.PhotoRepostHandler
+import com.rieltor.application.port.TelegramMessageSource
+import com.rieltor.application.service.TelegramRepostTracker
+import com.rieltor.application.usecase.PublishPhotoRepostUseCase
 import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.domain.repository.GoogleDriveTokenRepository
 import com.rieltor.domain.repository.PhotoPublisher
-import com.rieltor.domain.repository.PostJobRepository
 import com.rieltor.domain.repository.PublicMediaStorage
 import com.rieltor.domain.repository.SecretRepository
 import com.rieltor.domain.repository.TelegramRepostRepository
 import com.rieltor.domain.repository.TikTokTokenRepository
-import com.rieltor.domain.usecase.DeduplicateTelegramRepostUseCase
-import com.rieltor.domain.usecase.PhotoRepostServiceUseCase
-import com.rieltor.domain.usecase.TelegramListingIdentityExtractorUseCase
-import com.rieltor.domain.usecase.TikTokMessageFilterUseCase
+import com.rieltor.domain.service.TelegramListingIdentityExtractor
+import com.rieltor.domain.service.TikTokCaptionFormatter
 import com.rieltor.infrastructure.config.ApplicationSettings
 import com.rieltor.infrastructure.config.bootstrapSecrets
 import com.rieltor.infrastructure.config.databasePath
 import com.rieltor.infrastructure.database.LegacyTokenMigration
 import com.rieltor.infrastructure.database.SqliteDatabase
-import com.rieltor.infrastructure.database.SqliteRepositories
+import com.rieltor.infrastructure.database.GoogleDriveTokenRepositoryImpl
+import com.rieltor.infrastructure.database.SecretRepositoryImpl
+import com.rieltor.infrastructure.database.TelegramRepostRepositoryImpl
+import com.rieltor.infrastructure.database.TikTokTokenRepositoryImpl
 import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.google.GoogleDrivePhotoSource
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
@@ -44,28 +49,26 @@ fun applicationModules(dotenv: Dotenv): List<Module> = listOf(
     configurationModule(dotenv),
     persistenceModule,
     networkModule,
-    useCaseModule,
+    applicationModule,
     integrationModule,
 )
 
 private fun configurationModule(dotenv: Dotenv) = module {
     single { dotenv }
     single {
-        val repositories = get<SqliteRepositories>()
-        bootstrapSecrets(repositories, get())
-        LegacyTokenMigration.migrateIfNeeded(repositories)
-        ApplicationSettings.load(repositories, get())
+        val secrets = get<SecretRepository>()
+        bootstrapSecrets(secrets, get())
+        LegacyTokenMigration.migrateIfNeeded(get())
+        ApplicationSettings.load(secrets, get())
     }
 }
 
 private val persistenceModule = module {
     single { SqliteDatabase(databasePath(get())) }
-    single { SqliteRepositories(get()) }
-    single<SecretRepository> { get<SqliteRepositories>() }
-    single<TikTokTokenRepository> { get<SqliteRepositories>() }
-    single<GoogleDriveTokenRepository> { get<SqliteRepositories>() }
-    single<PostJobRepository> { get<SqliteRepositories>() }
-    single<TelegramRepostRepository> { get<SqliteRepositories>() }
+    single<SecretRepository> { SecretRepositoryImpl(get()) }
+    single<TikTokTokenRepository> { TikTokTokenRepositoryImpl(get()) }
+    single<GoogleDriveTokenRepository> { GoogleDriveTokenRepositoryImpl(get()) }
+    single<TelegramRepostRepository> { TelegramRepostRepositoryImpl(get()) }
 }
 
 private val networkModule = module {
@@ -82,20 +85,22 @@ private val networkModule = module {
     }
 }
 
-private val useCaseModule = module {
-    single { TelegramListingIdentityExtractorUseCase() }
-    single { TikTokMessageFilterUseCase() }
-    single { DeduplicateTelegramRepostUseCase(get(), get()) }
+private val applicationModule = module {
+    single { TelegramListingIdentityExtractor() }
+    single { TikTokCaptionFormatter() }
+    single { TelegramRepostTracker(get(), get()) }
     single {
-        PhotoRepostServiceUseCase(
+        PublishPhotoRepostUseCase(
             allowedSources = get<ApplicationSettings>().monitoredTelegramTopics,
-            deduplicateRepost = get(),
+            repostTracker = get(),
             mediaStorage = get(),
             publisher = get(),
             externalPhotoSource = get(),
-            messageFilter = get(),
+            captionFormatter = get(),
         )
     }
+    single<PhotoRepostHandler> { get<PublishPhotoRepostUseCase>() }
+    single { TelegramRepostCoordinator(get(), get()) }
 }
 
 private val integrationModule = module {
@@ -114,15 +119,13 @@ private val integrationModule = module {
     single { MediaCleanupJob(get<ApplicationSettings>().mediaDirectory) }
     single { TikTokPhotoPublisher(get(), get(), get()) }
     single<PhotoPublisher> { get<TikTokPhotoPublisher>() }
-    single {
+    single<TelegramMessageSource> {
         val settings = get<ApplicationSettings>()
         TelegramClientAdapter(
             apiId = settings.telegramApiId,
             apiHash = settings.telegramApiHash,
             sessionDirectory = settings.telegramSessionDirectory,
             monitoredTopics = settings.monitoredTelegramTopics,
-            repostService = get(),
-            externalPhotoSource = get(),
         )
     }
 }

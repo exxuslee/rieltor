@@ -1,29 +1,36 @@
-package com.rieltor.domain.usecase
+package com.rieltor.application.usecase
 
+import com.rieltor.application.port.PhotoRepostHandler
+import com.rieltor.application.service.TelegramRepostTracker
 import com.rieltor.domain.model.RepostResult
+import com.rieltor.domain.model.TelegramMessageRegistration
 import com.rieltor.domain.model.TelegramMonitoredTopic
 import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.model.TelegramPhotoMessage
-import com.rieltor.domain.model.TelegramMessageRegistration
 import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublicMediaStorage
+import com.rieltor.domain.service.TikTokCaptionFormatter
 
-class PhotoRepostServiceUseCase(
-    private val deduplicateRepost: DeduplicateTelegramRepostUseCase,
+class PublishPhotoRepostUseCase(
+    private val repostTracker: TelegramRepostTracker,
     private val mediaStorage: PublicMediaStorage,
     private val publisher: PhotoPublisher,
     private val externalPhotoSource: ExternalPhotoSource? = null,
     private val allowedSources: Set<TelegramMonitoredTopic> = emptySet(),
-    private val messageFilter: TikTokMessageFilterUseCase = TikTokMessageFilterUseCase(),
-) {
-    suspend fun handle(message: TelegramPhotoMessage): RepostResult {
+    private val captionFormatter: TikTokCaptionFormatter = TikTokCaptionFormatter(),
+) : PhotoRepostHandler {
+    override suspend fun handle(message: TelegramPhotoMessage): RepostResult {
         if (allowedSources.none { source -> source.matches(message.chatId, message.messageThreadId) }) {
             message.closePhotos()
             return RepostResult.IgnoredSource
         }
+        if (message.photos.isEmpty() && externalPhotoSource?.containsLink(message.caption) != true) {
+            message.closePhotos()
+            return RepostResult.IgnoredContent
+        }
         val registration = try {
-            deduplicateRepost.reserve(message)
+            repostTracker.reserve(message)
         } catch (error: Throwable) {
             message.closePhotos()
             throw error
@@ -48,13 +55,13 @@ class PhotoRepostServiceUseCase(
             val media = allPhotos.map { photo ->
                 photo.content.use { mediaStorage.store(photo.fileName, it) }
             }
-            val receipt = publisher.publish(media.map { it.publicUrl }, messageFilter.filter(message.caption))
+            val receipt = publisher.publish(media.map { it.publicUrl }, captionFormatter.filter(message.caption))
             submittedToTikTok = true
-            deduplicateRepost.markPublished(message.updateId, receipt.publishId)
+            repostTracker.markPublished(message.updateId, receipt.publishId)
             RepostResult.Published(receipt)
         } catch (error: Throwable) {
             if (!submittedToTikTok) {
-                runCatching { deduplicateRepost.markFailed(message.updateId, error) }
+                runCatching { repostTracker.markFailed(message.updateId, error) }
                     .onFailure(error::addSuppressed)
             }
             throw error
