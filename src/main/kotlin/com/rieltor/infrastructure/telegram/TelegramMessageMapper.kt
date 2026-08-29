@@ -93,9 +93,7 @@ internal fun TdApi.FormattedText.textWithEmbeddedLinks(): String {
 }
 
 internal fun TdApi.Message.summary(): String = when (val content = content) {
-    is TdApi.MessageText -> content.text.text.take(LOG_MESSAGE_TEXT_LIMIT).replace('\n', ' ')
-    is TdApi.MessagePhoto -> "photo: ${content.caption.text.take(LOG_MESSAGE_TEXT_LIMIT)}".replace('\n', ' ')
+    is TdApi.MessageText -> content.text.text.replace('\n', ' ')
+    is TdApi.MessagePhoto -> "photo: ${content.caption.text}".replace('\n', ' ')
     else -> content.javaClass.simpleName.removePrefix("Message")
 }
-
-private const val LOG_MESSAGE_TEXT_LIMIT = 160

@@ -116,26 +116,13 @@ internal class TelegramDiagnostics(
                         selectedTopics.size,
                         forumTopics.totalCount,
                     )
-                    forumTopics.topics.forEach { topic ->
-                        val lastMessage = topic.lastMessage
-                        logger.info(
-                            "Telegram forum topic: chatId={}, messageThreadId={}, name='{}', monitored={}, " +
-                                "lastMessageId={}, lastMessage={}",
-                            chatId,
-                            topic.info.messageThreadId,
-                            topic.info.name,
-                            isTopicMonitored(chatId, topic.info.messageThreadId),
-                            lastMessage?.id,
-                            lastMessage?.summary() ?: "no messages",
-                        )
-                    }
                     val foundTopicIds = forumTopics.topics.map { it.info.messageThreadId }.toSet()
                     val missingTopicIds = monitoredTopics
                         .asSequence()
                         .filter {
                             it.chatId == chatId &&
-                                it.messageThreadId != null &&
-                                it.messageThreadId !in foundTopicIds
+                                    it.messageThreadId != null &&
+                                    it.messageThreadId !in foundTopicIds
                         }
                         .map { it.messageThreadId }
                         .toList()
@@ -149,7 +136,7 @@ internal class TelegramDiagnostics(
                 }.onFailure { error ->
                     logger.warn(
                         "Could not read Telegram forum topics for monitored chat {}. " +
-                            "Verify that this TDLib account is a member of the chat and that the parent chat ID is correct.",
+                                "Verify that this TDLib account is a member of the chat and that the parent chat ID is correct.",
                         chatId,
                         error,
                     )
