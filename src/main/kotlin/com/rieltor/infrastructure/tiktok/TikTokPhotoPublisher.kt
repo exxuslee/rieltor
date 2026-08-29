@@ -1,7 +1,7 @@
 package com.rieltor.infrastructure.tiktok
 
 import com.rieltor.domain.model.PublishReceipt
-import com.rieltor.domain.port.PhotoPublisher
+import com.rieltor.domain.repository.PhotoPublisher
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*

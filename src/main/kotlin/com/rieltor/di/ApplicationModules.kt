@@ -1,0 +1,131 @@
+package com.rieltor.di
+
+import com.rieltor.domain.repository.ExternalPhotoSource
+import com.rieltor.domain.repository.GoogleDriveTokenRepository
+import com.rieltor.domain.repository.PhotoPublisher
+import com.rieltor.domain.repository.PostJobRepository
+import com.rieltor.domain.repository.PublicMediaStorage
+import com.rieltor.domain.repository.SecretRepository
+import com.rieltor.domain.repository.TelegramRepostRepository
+import com.rieltor.domain.repository.TikTokTokenRepository
+import com.rieltor.domain.usecase.DeduplicateTelegramRepostUseCase
+import com.rieltor.domain.usecase.PhotoRepostServiceUseCase
+import com.rieltor.domain.usecase.TelegramListingIdentityExtractorUseCase
+import com.rieltor.domain.usecase.TikTokMessageFilterUseCase
+import com.rieltor.infrastructure.config.ApplicationSettings
+import com.rieltor.infrastructure.config.bootstrapSecrets
+import com.rieltor.infrastructure.database.LegacyTokenMigration
+import com.rieltor.infrastructure.database.SqliteDatabase
+import com.rieltor.infrastructure.database.SqliteRepositories
+import com.rieltor.infrastructure.google.GoogleDriveAuthService
+import com.rieltor.infrastructure.google.GoogleDrivePhotoSource
+import com.rieltor.infrastructure.media.LocalPublicMediaStorage
+import com.rieltor.infrastructure.media.MediaCleanupJob
+import com.rieltor.infrastructure.telegram.TelegramClientAdapter
+import com.rieltor.infrastructure.tiktok.OAuthStateStore
+import com.rieltor.infrastructure.tiktok.TikTokAuthService
+import com.rieltor.infrastructure.tiktok.TikTokPhotoPublisher
+import io.github.cdimascio.dotenv.Dotenv
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
+import org.koin.core.module.Module
+import org.koin.core.qualifier.named
+import org.koin.dsl.module
+import java.nio.file.Path
+
+val tikTokOAuthState = named("tiktok-oauth-state")
+val googleOAuthState = named("google-oauth-state")
+
+fun applicationModules(dotenv: Dotenv): List<Module> = listOf(
+    configurationModule(dotenv),
+    persistenceModule,
+    networkModule,
+    useCaseModule,
+    integrationModule,
+)
+
+private fun configurationModule(dotenv: Dotenv) = module {
+    single { dotenv }
+    single {
+        val repositories = get<SqliteRepositories>()
+        bootstrapSecrets(repositories, get())
+        LegacyTokenMigration.migrateIfNeeded(repositories)
+        ApplicationSettings.load(repositories, get())
+    }
+}
+
+private val persistenceModule = module {
+    single {
+        val dotenv = get<Dotenv>()
+        SqliteDatabase(Path.of(System.getenv("APP_DB_PATH") ?: dotenv.get("APP_DB_PATH") ?: "rieltor.db"))
+    }
+    single { SqliteRepositories(get()) }
+    single<SecretRepository> { get<SqliteRepositories>() }
+    single<TikTokTokenRepository> { get<SqliteRepositories>() }
+    single<GoogleDriveTokenRepository> { get<SqliteRepositories>() }
+    single<PostJobRepository> { get<SqliteRepositories>() }
+    single<TelegramRepostRepository> { get<SqliteRepositories>() }
+}
+
+private val networkModule = module {
+    single { Json { ignoreUnknownKeys = true } }
+    single {
+        HttpClient(CIO) {
+            install(ContentNegotiation) { json(get()) }
+            install(HttpTimeout) {
+                connectTimeoutMillis = 15_000
+                requestTimeoutMillis = 45_000
+                socketTimeoutMillis = 45_000
+            }
+        }
+    }
+}
+
+private val useCaseModule = module {
+    single { TelegramListingIdentityExtractorUseCase() }
+    single { TikTokMessageFilterUseCase() }
+    single { DeduplicateTelegramRepostUseCase(get(), get()) }
+    single {
+        PhotoRepostServiceUseCase(
+            allowedSources = get<ApplicationSettings>().monitoredTelegramTopics,
+            deduplicateRepost = get(),
+            mediaStorage = get(),
+            publisher = get(),
+            externalPhotoSource = get(),
+            messageFilter = get(),
+        )
+    }
+}
+
+private val integrationModule = module {
+    single { TikTokAuthService(get(), get(), get(), get()) }
+    single(tikTokOAuthState) { OAuthStateStore() }
+    single { GoogleDriveAuthService(get(), get(), get(), get()) }
+    single(googleOAuthState) { OAuthStateStore() }
+
+    single { GoogleDrivePhotoSource(get(), get(), get()) }
+    single<ExternalPhotoSource> { get<GoogleDrivePhotoSource>() }
+    single {
+        val settings = get<ApplicationSettings>()
+        LocalPublicMediaStorage(settings.mediaDirectory, settings.publicBaseUrl)
+    }
+    single<PublicMediaStorage> { get<LocalPublicMediaStorage>() }
+    single { MediaCleanupJob(get<ApplicationSettings>().mediaDirectory) }
+    single { TikTokPhotoPublisher(get(), get(), get()) }
+    single<PhotoPublisher> { get<TikTokPhotoPublisher>() }
+    single {
+        val settings = get<ApplicationSettings>()
+        TelegramClientAdapter(
+            apiId = settings.telegramApiId,
+            apiHash = settings.telegramApiHash,
+            sessionDirectory = settings.telegramSessionDirectory,
+            monitoredTopics = settings.monitoredTelegramTopics,
+            repostService = get(),
+            externalPhotoSource = get(),
+        )
+    }
+}

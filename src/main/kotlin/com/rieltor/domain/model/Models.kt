@@ -26,6 +26,25 @@ data class TelegramPhotoMessage(
     val photos: List<TelegramPhoto>,
 )
 
+data class TelegramRepostKey(
+    val messageThreadId: Long,
+    val price: String,
+    val address: String,
+)
+
+data class ReceivedTelegramMessage(
+    val updateId: Long,
+    val chatId: Long,
+    val messageThreadId: Long,
+    val caption: String?,
+    val repostKey: TelegramRepostKey?,
+)
+
+sealed interface TelegramMessageRegistration {
+    data class Accepted(val repostKey: TelegramRepostKey?) : TelegramMessageRegistration
+    data class Duplicate(val originalUpdateId: Long?) : TelegramMessageRegistration
+}
+
 /** Null messageThreadId means that every message in the chat is monitored. */
 data class TelegramMonitoredTopic(
     val chatId: Long,

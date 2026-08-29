@@ -1,7 +1,7 @@
 package com.rieltor.infrastructure.tiktok
 
 import com.rieltor.domain.model.StoredTokens
-import com.rieltor.domain.port.TikTokTokenRepository
+import com.rieltor.domain.repository.TikTokTokenRepository
 import com.rieltor.infrastructure.config.ApplicationSettings
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -9,7 +9,6 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.contentType
 import io.ktor.http.headersOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json

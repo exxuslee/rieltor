@@ -1,11 +1,11 @@
 package com.rieltor.infrastructure.telegram
 
-import com.rieltor.application.PhotoRepostService
+import com.rieltor.domain.usecase.PhotoRepostServiceUseCase
 import com.rieltor.domain.model.RepostResult
 import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.model.TelegramPhotoMessage
 import com.rieltor.domain.model.TelegramMonitoredTopic
-import com.rieltor.domain.port.ExternalPhotoSource
+import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.infrastructure.tiktok.TikTokAuthException
 import it.tdlight.Init
 import it.tdlight.Log
@@ -35,7 +35,7 @@ class TelegramClientAdapter(
     private val apiHash: String,
     private val sessionDirectory: Path,
     private val monitoredTopics: Set<TelegramMonitoredTopic>,
-    private val repostService: PhotoRepostService,
+    private val repostService: PhotoRepostServiceUseCase,
     private val externalPhotoSource: ExternalPhotoSource,
 ) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -456,7 +456,9 @@ class TelegramClientAdapter(
                     result.receipt.publishId,
                     result.receipt.privacyLevel,
                 )
-                RepostResult.Duplicate -> logger.info("Telegram photo post was already processed")
+                RepostResult.Duplicate -> logger.info(
+                    "Telegram listing was not reposted because its thread, price and address were already received"
+                )
                 RepostResult.IgnoredSource -> Unit
             }
         }.onFailure { error ->

@@ -1,7 +1,7 @@
 package com.rieltor.infrastructure.tiktok
 
 import com.rieltor.domain.model.StoredTokens
-import com.rieltor.domain.port.TikTokTokenRepository
+import com.rieltor.domain.repository.TikTokTokenRepository
 import com.rieltor.infrastructure.config.ApplicationSettings
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header

@@ -1,7 +1,7 @@
 package com.rieltor.infrastructure.media
 
 import com.rieltor.domain.model.StoredMedia
-import com.rieltor.domain.port.PublicMediaStorage
+import com.rieltor.domain.repository.PublicMediaStorage
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path

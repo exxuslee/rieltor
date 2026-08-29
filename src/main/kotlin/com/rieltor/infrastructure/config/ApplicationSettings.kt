@@ -1,6 +1,6 @@
 package com.rieltor.infrastructure.config
 
-import com.rieltor.domain.port.SecretRepository
+import com.rieltor.domain.repository.SecretRepository
 import com.rieltor.domain.model.TelegramMonitoredTopic
 import io.github.cdimascio.dotenv.Dotenv
 import java.net.URI

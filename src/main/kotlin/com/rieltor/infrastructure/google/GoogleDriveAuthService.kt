@@ -1,7 +1,7 @@
 package com.rieltor.infrastructure.google
 
 import com.rieltor.domain.model.StoredGoogleDriveTokens
-import com.rieltor.domain.port.GoogleDriveTokenRepository
+import com.rieltor.domain.repository.GoogleDriveTokenRepository
 import com.rieltor.infrastructure.config.ApplicationSettings
 import io.ktor.client.*
 import io.ktor.client.request.*

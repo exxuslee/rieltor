@@ -42,6 +42,9 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.dotenv.kotlin)
     implementation(libs.sqlite.jdbc)
+    implementation(platform(libs.koin.bom))
+    implementation(libs.koin.ktor)
+    implementation(libs.koin.logger.slf4j)
     implementation(platform("it.tdlight:tdlight-java-bom:3.4.0+td.1.8.26"))
     implementation("it.tdlight:tdlight-java")
     implementation("it.tdlight:tdlight-natives") {

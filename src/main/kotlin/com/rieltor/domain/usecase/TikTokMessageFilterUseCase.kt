@@ -1,4 +1,4 @@
-package com.rieltor.application
+package com.rieltor.domain.usecase
 
 /**
  * Converts an internal Telegram listing caption into a public TikTok description.
@@ -7,7 +7,7 @@ package com.rieltor.application
  * public contact is appended. The class is stateless so it can be tested independently
  * from Telegram and TikTok integrations.
  */
-class TikTokMessageFilter {
+class TikTokMessageFilterUseCase {
     fun filter(message: String?): String? {
         if (message.isNullOrBlank()) return null
 
@@ -40,10 +40,12 @@ class TikTokMessageFilter {
             add("🏠 $title")
             if (parameters.isNotEmpty()) {
                 add("")
+                add("Основні параметри:")
                 parameters.forEach { add("• ${it.removeListMarker()}") }
             }
             if (description.isNotEmpty()) {
                 add("")
+                add("Додатковий опис:")
                 description.forEach { add(it.removeListMarker()) }
             }
             add("")
@@ -96,7 +98,7 @@ class TikTokMessageFilter {
     private fun String.removeListMarker(): String = replaceFirst(listMarker, "").trim()
 
     private companion object {
-        const val PUBLIC_CONTACT = "🤙 066-372-71-02 Ірина"
+        const val PUBLIC_CONTACT = "📞 066-372-71-02 Ірина"
 
         val googleUrl = Regex("""(?iu)https?://(?:drive|docs)\.google\.com/\S+""")
         val phone = Regex("""(?<!\d)(?:\+?38[\s().-]*)?0\d{2}(?:[\s().-]*\d){7}(?!\d)""")

@@ -1,7 +1,7 @@
 package com.rieltor.infrastructure.google
 
 import com.rieltor.domain.model.TelegramPhoto
-import com.rieltor.domain.port.ExternalPhotoSource
+import com.rieltor.domain.repository.ExternalPhotoSource
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get

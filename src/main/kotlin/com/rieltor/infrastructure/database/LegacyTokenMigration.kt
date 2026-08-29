@@ -1,7 +1,7 @@
 package com.rieltor.infrastructure.database
 
 import com.rieltor.domain.model.StoredTokens
-import com.rieltor.domain.port.TikTokTokenRepository
+import com.rieltor.domain.repository.TikTokTokenRepository
 import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path

@@ -1,15 +1,19 @@
 package com.rieltor.application
 
 import com.rieltor.domain.model.PublishReceipt
+import com.rieltor.domain.model.ReceivedTelegramMessage
 import com.rieltor.domain.model.RepostResult
 import com.rieltor.domain.model.StoredMedia
 import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.model.TelegramPhotoMessage
 import com.rieltor.domain.model.TelegramMonitoredTopic
-import com.rieltor.domain.port.PhotoPublisher
-import com.rieltor.domain.port.ExternalPhotoSource
-import com.rieltor.domain.port.PostJobRepository
-import com.rieltor.domain.port.PublicMediaStorage
+import com.rieltor.domain.model.TelegramMessageRegistration
+import com.rieltor.domain.repository.ExternalPhotoSource
+import com.rieltor.domain.repository.PhotoPublisher
+import com.rieltor.domain.repository.PublicMediaStorage
+import com.rieltor.domain.repository.TelegramRepostRepository
+import com.rieltor.domain.usecase.DeduplicateTelegramRepostUseCase
+import com.rieltor.domain.usecase.PhotoRepostServiceUseCase
 import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayInputStream
 import java.io.InputStream
@@ -17,13 +21,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
-class PhotoRepostServiceTest {
+class PhotoRepostServiceUseCaseTest {
     @Test
     fun `publishes photo from monitored chat once`() = runBlocking {
         val jobs = FakeJobs()
         val publisher = FakePublisher()
-        val service = PhotoRepostService(
-            jobs = jobs,
+        val service = PhotoRepostServiceUseCase(
+            deduplicateRepost = DeduplicateTelegramRepostUseCase(jobs),
             mediaStorage = FakeStorage(),
             publisher = publisher,
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
@@ -41,8 +45,8 @@ class PhotoRepostServiceTest {
     @Test
     fun `publishes all photos as one post`() = runBlocking {
         val publisher = FakePublisher()
-        val service = PhotoRepostService(
-            jobs = FakeJobs(),
+        val service = PhotoRepostServiceUseCase(
+            deduplicateRepost = DeduplicateTelegramRepostUseCase(FakeJobs()),
             mediaStorage = FakeStorage(),
             publisher = publisher,
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
@@ -75,8 +79,8 @@ class PhotoRepostServiceTest {
     @Test
     fun `adds google drive photos from caption to the same post`() = runBlocking {
         val publisher = FakePublisher()
-        val service = PhotoRepostService(
-            jobs = FakeJobs(),
+        val service = PhotoRepostServiceUseCase(
+            deduplicateRepost = DeduplicateTelegramRepostUseCase(FakeJobs()),
             mediaStorage = FakeStorage(),
             publisher = publisher,
             externalPhotoSource = FakeExternalPhotoSource(),
@@ -98,8 +102,8 @@ class PhotoRepostServiceTest {
     @Test
     fun `ignores all other chats`() = runBlocking {
         val publisher = FakePublisher()
-        val service = PhotoRepostService(
-            jobs = FakeJobs(),
+        val service = PhotoRepostServiceUseCase(
+            deduplicateRepost = DeduplicateTelegramRepostUseCase(FakeJobs()),
             mediaStorage = FakeStorage(),
             publisher = publisher,
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
@@ -112,8 +116,8 @@ class PhotoRepostServiceTest {
     @Test
     fun `publishes photo from configured monitored chat`() = runBlocking {
         val publisher = FakePublisher()
-        val service = PhotoRepostService(
-            jobs = FakeJobs(),
+        val service = PhotoRepostServiceUseCase(
+            deduplicateRepost = DeduplicateTelegramRepostUseCase(FakeJobs()),
             mediaStorage = FakeStorage(),
             publisher = publisher,
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
@@ -128,8 +132,8 @@ class PhotoRepostServiceTest {
     @Test
     fun `ignores photo from unmonitored forum topic in monitored chat`() = runBlocking {
         val publisher = FakePublisher()
-        val service = PhotoRepostService(
-            jobs = FakeJobs(),
+        val service = PhotoRepostServiceUseCase(
+            deduplicateRepost = DeduplicateTelegramRepostUseCase(FakeJobs()),
             mediaStorage = FakeStorage(),
             publisher = publisher,
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
@@ -141,15 +145,39 @@ class PhotoRepostServiceTest {
         assertEquals(0, publisher.calls)
     }
 
+    @Test
+    fun `does not publish repeated listing with a new telegram update id`() = runBlocking {
+        val publisher = FakePublisher()
+        val service = PhotoRepostServiceUseCase(
+            deduplicateRepost = DeduplicateTelegramRepostUseCase(FakeJobs()),
+            mediaStorage = FakeStorage(),
+            publisher = publisher,
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
+        )
+        val first = message(
+            updateId = 10,
+            caption = "Вул. Мечнікова, 10\nЦіна: 175 000 ${'$'}",
+        )
+        val repeated = message(
+            updateId = 11,
+            caption = "вулиця Мечнікова 10\nЦіна 175000 USD",
+        )
+
+        assertIs<RepostResult.Published>(service.handle(first))
+        assertEquals(RepostResult.Duplicate, service.handle(repeated))
+        assertEquals(1, publisher.calls)
+    }
+
     private fun message(
         updateId: Long,
         chatId: Long = MONITORED_CHAT_ID,
         messageThreadId: Long = MONITORED_THREAD_ID,
+        caption: String = "Квартира в Ірпені",
     ) = TelegramPhotoMessage(
         updateId = updateId,
         chatId = chatId,
         messageThreadId = messageThreadId,
-        caption = "Квартира в Ірпені",
+        caption = caption,
         photos = listOf(TelegramPhoto("photo.jpg", ByteArrayInputStream(byteArrayOf(1, 2, 3)))),
     )
 
@@ -184,13 +212,29 @@ class PhotoRepostServiceTest {
         ).take(limit)
     }
 
-    private class FakeJobs : PostJobRepository {
-        private val started = mutableSetOf<Long>()
+    private class FakeJobs : TelegramRepostRepository {
+        private val messages = mutableMapOf<Long, ReceivedTelegramMessage>()
+        private val activeKeys = mutableMapOf<com.rieltor.domain.model.TelegramRepostKey, Long>()
         var publishedId: String? = null
-        override fun tryStart(telegramUpdateId: Long) = started.add(telegramUpdateId)
-        override fun markPublished(telegramUpdateId: Long, publishId: String) {
+
+        override fun register(message: ReceivedTelegramMessage): TelegramMessageRegistration {
+            messages[message.updateId]?.let {
+                return TelegramMessageRegistration.Duplicate(message.updateId)
+            }
+            messages[message.updateId] = message
+            val key = message.repostKey
+            val original = key?.let(activeKeys::get)
+            if (original != null) return TelegramMessageRegistration.Duplicate(original)
+            if (key != null) activeKeys[key] = message.updateId
+            return TelegramMessageRegistration.Accepted(key)
+        }
+
+        override fun markRepostPublished(telegramUpdateId: Long, publishId: String) {
             publishedId = publishId
         }
-        override fun markFailed(telegramUpdateId: Long, error: String) = Unit
+
+        override fun markRepostFailed(telegramUpdateId: Long, error: String) {
+            messages.remove(telegramUpdateId)?.repostKey?.let(activeKeys::remove)
+        }
     }
 }
