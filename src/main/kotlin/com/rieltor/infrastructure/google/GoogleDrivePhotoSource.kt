@@ -18,6 +18,7 @@ sealed interface DriveTarget {
 
     data class File(override val id: String) : DriveTarget
     data class Folder(override val id: String) : DriveTarget
+    data class Unknown(override val id: String) : DriveTarget
 }
 
 object GoogleDriveLinkParser {
@@ -30,8 +31,12 @@ object GoogleDriveLinkParser {
         """https?://(?:www\.)?drive\.google\.com/file/d/($ID)""",
         RegexOption.IGNORE_CASE,
     )
+    private val unknownQueryPattern = Regex(
+        """https?://(?:www\.)?drive\.google\.com/open\?(?:[^\s#&]+&)*id=($ID)""",
+        RegexOption.IGNORE_CASE,
+    )
     private val queryFilePattern = Regex(
-        """https?://(?:www\.)?drive\.google\.com/(?:open|uc)\?(?:[^\s#&]+&)*id=($ID)""",
+        """https?://(?:www\.)?drive\.google\.com/uc\?(?:[^\s#&]+&)*id=($ID)""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -40,6 +45,7 @@ object GoogleDriveLinkParser {
         val matches = buildList {
             folderPattern.findAll(text).forEach { add(it.range.first to DriveTarget.Folder(it.groupValues[1])) }
             filePattern.findAll(text).forEach { add(it.range.first to DriveTarget.File(it.groupValues[1])) }
+            unknownQueryPattern.findAll(text).forEach { add(it.range.first to DriveTarget.Unknown(it.groupValues[1])) }
             queryFilePattern.findAll(text).forEach { add(it.range.first to DriveTarget.File(it.groupValues[1])) }
         }
         return matches.sortedBy { it.first }.map { it.second }.distinct()
@@ -66,6 +72,14 @@ class GoogleDrivePhotoSource(
             val targetFiles = when (target) {
                 is DriveTarget.File -> listOf(getFileMetadata(target.id, token))
                 is DriveTarget.Folder -> listFolderFiles(target.id, token)
+                is DriveTarget.Unknown -> {
+                    val targetMetadata = getFileMetadata(target.id, token)
+                    if (targetMetadata.mimeType == GOOGLE_DRIVE_FOLDER_MIME_TYPE) {
+                        listFolderFiles(target.id, token)
+                    } else {
+                        listOf(targetMetadata)
+                    }
+                }
             }
             targetFiles.forEach { file -> metadata.putIfAbsent(file.id, file) }
         }
@@ -175,6 +189,7 @@ class GoogleDrivePhotoSource(
         const val MAX_DISCOVERED_FILES = 5_000
         const val MAX_DOWNLOAD_BYTES = 20L * 1024 * 1024
         const val MAX_ERROR_BODY_LENGTH = 500
+        const val GOOGLE_DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
         val SUPPORTED_IMAGE_MIME_TYPES = setOf("image/jpeg", "image/webp")
     }
 }

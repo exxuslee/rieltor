@@ -24,13 +24,56 @@ class GoogleDrivePhotoSourceTest {
             """
             Фото: https://drive.google.com/drive/u/0/folders/folder_123-abc?usp=sharing
             Обкладинка: https://drive.google.com/file/d/file_456-def/view
+            Старе посилання: https://drive.google.com/open?id=unknown_789-ghi&usp=drive_copy
             """.trimIndent()
         )
 
         assertEquals(
-            listOf(DriveTarget.Folder("folder_123-abc"), DriveTarget.File("file_456-def")),
+            listOf(
+                DriveTarget.Folder("folder_123-abc"),
+                DriveTarget.File("file_456-def"),
+                DriveTarget.Unknown("unknown_789-ghi"),
+            ),
             targets,
         )
+    }
+
+    @Test
+    fun `resolves legacy open link as folder before downloading photos`() = runBlocking {
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/drive/v3/files/legacy-folder-id" -> respond(
+                    content = """{
+                        "id":"legacy-folder-id",
+                        "name":"Photos",
+                        "mimeType":"application/vnd.google-apps.folder"
+                    }""".trimIndent(),
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                )
+                "/drive/v3/files" -> respond(
+                    content = """{"files":[
+                        {"id":"legacy-jpg-id","name":"house.jpg","mimeType":"image/jpeg","size":"3"}
+                    ]}""".trimIndent(),
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                )
+                "/drive/v3/files/legacy-jpg-id" -> respond(
+                    byteArrayOf(1, 2, 3),
+                    headers = headersOf(HttpHeaders.ContentType, "image/jpeg"),
+                )
+                else -> error("Unexpected request: ${request.url}")
+            }
+        }
+        val source = createSource(HttpClient(engine))
+
+        val photos = source.downloadPhotos(
+            "https://drive.google.com/open?id=legacy-folder-id&usp=drive_copy",
+            limit = 35,
+        )
+
+        assertEquals(listOf("house.jpg"), photos.map { it.fileName })
+        assertContentEquals(byteArrayOf(1, 2, 3), photos.single().content.readBytes())
     }
 
     @Test
@@ -60,6 +103,19 @@ class GoogleDrivePhotoSourceTest {
             }
         }
         val client = HttpClient(engine)
+        val source = createSource(client)
+
+        val photos = source.downloadPhotos(
+            "https://drive.google.com/drive/folders/folder-123456",
+            limit = 35,
+        )
+
+        assertEquals(listOf("one.jpg", "two.webp"), photos.map { it.fileName })
+        assertContentEquals(byteArrayOf(1, 2, 3), photos[0].content.readBytes())
+        assertContentEquals(byteArrayOf(4, 5), photos[1].content.readBytes())
+    }
+
+    private fun createSource(client: HttpClient): GoogleDrivePhotoSource {
         val repository = object : GoogleDriveTokenRepository {
             override fun save(tokens: StoredGoogleDriveTokens) = Unit
             override fun load() = StoredGoogleDriveTokens(
@@ -80,15 +136,6 @@ class GoogleDrivePhotoSourceTest {
         )
         val json = Json { ignoreUnknownKeys = true }
         val auth = GoogleDriveAuthService(client, settings, repository, json)
-        val source = GoogleDrivePhotoSource(client, auth, json)
-
-        val photos = source.downloadPhotos(
-            "https://drive.google.com/drive/folders/folder-123456",
-            limit = 35,
-        )
-
-        assertEquals(listOf("one.jpg", "two.webp"), photos.map { it.fileName })
-        assertContentEquals(byteArrayOf(1, 2, 3), photos[0].content.readBytes())
-        assertContentEquals(byteArrayOf(4, 5), photos[1].content.readBytes())
+        return GoogleDrivePhotoSource(client, auth, json)
     }
 }
