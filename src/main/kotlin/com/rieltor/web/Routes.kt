@@ -1,5 +1,6 @@
 package com.rieltor.web
 
+import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import com.rieltor.infrastructure.tiktok.OAuthStateStore
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
@@ -60,6 +61,36 @@ fun Route.tikTokAuthRoutes(auth: TikTokAuthService, states: OAuthStateStore) {
         val tokens = auth.exchangeCodeForTokens(code)
         call.respondText(
             "TikTok account connected successfully.\nopenId: ${tokens.openId}\nYou can close this window.",
+            contentType = ContentType.Text.Plain,
+        )
+    }
+}
+
+fun Route.googleDriveAuthRoutes(auth: GoogleDriveAuthService, states: OAuthStateStore) {
+    get("/auth/google/login") {
+        val state = states.issue()
+        call.respondRedirect(auth.buildAuthorizeUrl(state))
+    }
+
+    get("/auth/google/callback") {
+        val error = call.request.queryParameters["error"]
+        if (error != null) {
+            call.respondText(
+                "Google Drive authorization was not completed: $error - " +
+                    call.request.queryParameters["error_description"],
+                status = HttpStatusCode.BadRequest,
+            )
+            return@get
+        }
+        val code = call.request.queryParameters["code"]
+        val state = call.request.queryParameters["state"]
+        if (code == null || state == null || !states.consume(state)) {
+            call.respondText("Invalid or expired OAuth callback.", status = HttpStatusCode.Unauthorized)
+            return@get
+        }
+        auth.exchangeCodeForTokens(code)
+        call.respondText(
+            "Google Drive account connected successfully.\nYou can close this window.",
             contentType = ContentType.Text.Plain,
         )
     }

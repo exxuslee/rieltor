@@ -38,6 +38,17 @@ class SqliteDatabase(private val path: Path) {
                 )
                 statement.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS google_drive_tokens (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        access_token TEXT NOT NULL,
+                        refresh_token TEXT NOT NULL,
+                        access_token_expires_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                statement.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS post_jobs (
                         telegram_update_id INTEGER PRIMARY KEY,
                         status TEXT NOT NULL,
@@ -50,16 +61,21 @@ class SqliteDatabase(private val path: Path) {
                 val schemaVersion = statement.executeQuery("PRAGMA user_version").use { result ->
                     if (result.next()) result.getInt(1) else 0
                 }
-                if (schemaVersion < 2) {
+                if (schemaVersion < 3) {
                     if (schemaVersion < 1) {
                         // Remove the retired Bot API credential and overwrite its SQLite cell.
                         statement.executeUpdate("DELETE FROM app_secrets WHERE name = 'TELEGRAM_BOT_TOKEN'")
                     }
-                    // TikTok application credentials are environment-only.
+                    // OAuth application credentials are environment-only.
                     statement.executeUpdate(
-                        "DELETE FROM app_secrets WHERE name IN ('TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET')"
+                        """
+                        DELETE FROM app_secrets WHERE name IN (
+                            'TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET',
+                            'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'
+                        )
+                        """.trimIndent()
                     )
-                    statement.execute("PRAGMA user_version=2")
+                    statement.execute("PRAGMA user_version=3")
                     statement.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                     statement.execute("VACUUM")
                 }

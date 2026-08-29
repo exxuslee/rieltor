@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width,initial-scale=1" name="viewport">
+    <title>Підключити сервіси — Ірина Ліннік</title>
+    <meta content="Підключення Google Drive і TikTok для автоматичної публікації оголошень нерухомості."
+          name="description">
+    <link href="https://rieltor.dpdns.org/connect.html" rel="canonical">
+    <meta content="noindex,nofollow" name="robots">
+    <meta content="#f5f1e8" name="theme-color">
+    <link href="/images/favicon.svg" rel="icon" type="image/svg+xml">
+    <link href="/site.webmanifest" rel="manifest">
+    <script src="js/theme.js"></script>
+    <link href="css/styles.css" rel="stylesheet">
+    <style>
+        .connect-page {
+            overflow-x: clip;
+        }
+
+        .connect-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 24px;
+            align-items: stretch;
+        }
+
+        .connect-card {
+            display: flex;
+            flex-direction: column;
+            padding: 38px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface-strong);
+        }
+
+        .connect-service {
+            width: fit-content;
+            margin: 0 0 18px;
+            padding: 7px 12px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            color: var(--accent);
+            font-size: .78rem;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .connect-card h2 {
+            margin: 0 0 14px;
+            font-size: clamp(1.6rem, 3vw, 2.15rem);
+        }
+
+        .connect-card > p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 1rem;
+            line-height: 1.65;
+        }
+
+        .connect-scopes {
+            margin: 24px 0 0;
+            padding: 0;
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .connect-scopes li {
+            display: flex;
+            gap: 10px;
+            color: var(--text);
+            font-size: .94rem;
+        }
+
+        .connect-scopes li::before {
+            content: "✓";
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        .connect-action {
+            margin-top: auto;
+            padding-top: 28px;
+        }
+
+        .connect-action .btn {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .connect-status {
+            margin-top: 18px;
+            padding-top: 18px;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: .88rem;
+            line-height: 1.55;
+        }
+
+        @media (max-width: 780px) {
+            .connect-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .connect-page .page-hero h1 {
+                font-size: clamp(2.55rem, 12vw, 2.9rem);
+                overflow-wrap: anywhere;
+            }
+
+            .connect-card {
+                padding: 28px 22px;
+            }
+        }
+    </style>
+</head>
+<body class="connect-page">
+<site-header></site-header>
+<main>
+    <section class="page-hero">
+        <div class="container">
+            <p class="eyebrow">Підключення сервісів</p>
+            <h1>Налаштувати автопублікацію</h1>
+            <p>Підключіть обидва акаунти: Google Drive надає фотографії, а TikTok приймає готові фотопости.</p>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container connect-grid">
+            <article class="connect-card">
+                <p class="connect-service">Джерело фотографій</p>
+                <h2>Google Drive</h2>
+                <p>Сервіс знаходить посилання на папки у повідомленнях Telegram і додає фотографії до публікації.</p>
+
+                <ul class="connect-scopes">
+                    <li>Доступ до файлів лише для читання</li>
+                    <li>Без видалення або зміни фотографій</li>
+                    <li>Автоматичне оновлення доступу</li>
+                </ul>
+
+                <div class="connect-action">
+                    <a class="btn" href="https://api.rieltor.dpdns.org/auth/google/login">Увійти через Google</a>
+                    <p class="connect-status">Використайте акаунт, який має доступ до папок із фотографіями.</p>
+                </div>
+            </article>
+
+            <article class="connect-card">
+                <p class="connect-service">Публікація контенту</p>
+                <h2>TikTok</h2>
+                <p>Сервіс надсилає підготовлені фотографії та опис у робочий TikTok-акаунт.</p>
+
+                <ul class="connect-scopes">
+                    <li>Базова інформація профілю</li>
+                    <li>Публікація фотопостів</li>
+                    <li>Передача опису та хештегів</li>
+                </ul>
+
+                <div class="connect-action">
+                    <a class="btn" href="https://api.rieltor.dpdns.org/auth/tiktok/login">Увійти через TikTok</a>
+                    <p class="connect-status">Використайте робочий акаунт, у якому мають з’являтися публікації.</p>
+                </div>
+            </article>
+        </div>
+    </section>
+</main>
+<site-footer></site-footer>
+<script src="js/components.js?v=3"></script>
+</body>
+</html>

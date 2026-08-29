@@ -6,6 +6,9 @@ import com.rieltor.infrastructure.config.bootstrapSecrets
 import com.rieltor.infrastructure.database.LegacyTokenMigration
 import com.rieltor.infrastructure.database.SqliteDatabase
 import com.rieltor.infrastructure.database.SqliteRepositories
+import com.rieltor.infrastructure.google.GoogleDriveAuthException
+import com.rieltor.infrastructure.google.GoogleDriveAuthService
+import com.rieltor.infrastructure.google.GoogleDrivePhotoSource
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import com.rieltor.infrastructure.media.MediaCleanupJob
 import com.rieltor.infrastructure.telegram.TelegramClientAdapter
@@ -57,7 +60,10 @@ fun Application.module(dotenv: Dotenv) {
         }
     }
     val auth = TikTokAuthService(httpClient, settings, repositories, json)
-    val states = OAuthStateStore()
+    val tikTokStates = OAuthStateStore()
+    val googleAuth = GoogleDriveAuthService(httpClient, settings, repositories, json)
+    val googleStates = OAuthStateStore()
+    val googleDrivePhotos = GoogleDrivePhotoSource(httpClient, googleAuth, json)
     val mediaStorage = LocalPublicMediaStorage(settings.mediaDirectory, settings.publicBaseUrl)
     val mediaCleanupJob = MediaCleanupJob(settings.mediaDirectory)
     val publisher = TikTokPhotoPublisher(httpClient, auth, json)
@@ -66,6 +72,7 @@ fun Application.module(dotenv: Dotenv) {
         jobs = repositories,
         mediaStorage = mediaStorage,
         publisher = publisher,
+        externalPhotoSource = googleDrivePhotos,
     )
     val telegram = TelegramClientAdapter(
         apiId = settings.telegramApiId,
@@ -73,6 +80,7 @@ fun Application.module(dotenv: Dotenv) {
         sessionDirectory = settings.telegramSessionDirectory,
         monitoredTopics = settings.monitoredTelegramTopics,
         repostService = repostService,
+        externalPhotoSource = googleDrivePhotos,
     )
 
     installScannerProtection()
@@ -83,6 +91,12 @@ fun Application.module(dotenv: Dotenv) {
         exception<TikTokAuthException> { call, cause ->
             call.respondText(
                 text = "TikTok operation failed: ${cause.message}",
+                status = HttpStatusCode.BadGateway,
+            )
+        }
+        exception<GoogleDriveAuthException> { call, cause ->
+            call.respondText(
+                text = "Google Drive operation failed: ${cause.message}",
                 status = HttpStatusCode.BadGateway,
             )
         }
@@ -97,7 +111,8 @@ fun Application.module(dotenv: Dotenv) {
         get("/health") { call.respondText("ok") }
         tikTokVerificationRoutes(Path.of("docs"))
         mediaRoutes(mediaStorage)
-        tikTokAuthRoutes(auth, states)
+        tikTokAuthRoutes(auth, tikTokStates)
+        googleDriveAuthRoutes(googleAuth, googleStates)
     }
 
     telegram.start()

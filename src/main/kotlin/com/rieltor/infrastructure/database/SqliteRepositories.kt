@@ -1,6 +1,8 @@
 package com.rieltor.infrastructure.database
 
+import com.rieltor.domain.model.StoredGoogleDriveTokens
 import com.rieltor.domain.model.StoredTokens
+import com.rieltor.domain.port.GoogleDriveTokenRepository
 import com.rieltor.domain.port.PostJobRepository
 import com.rieltor.domain.port.SecretRepository
 import com.rieltor.domain.port.TikTokTokenRepository
@@ -9,6 +11,7 @@ import java.time.Instant
 class SqliteRepositories(private val database: SqliteDatabase) :
     SecretRepository,
     TikTokTokenRepository,
+    GoogleDriveTokenRepository,
     PostJobRepository {
 
     override fun get(name: String): String? = database.connection().use { connection ->
@@ -81,6 +84,47 @@ class SqliteRepositories(private val database: SqliteDatabase) :
             """.trimIndent()
         ).use { statement ->
             statement.executeQuery().use { result -> if (result.next()) result.toTokens() else null }
+        }
+    }
+
+    override fun save(tokens: StoredGoogleDriveTokens) {
+        database.connection().use { connection ->
+            connection.prepareStatement(
+                """
+                INSERT INTO google_drive_tokens(
+                    id, access_token, refresh_token, access_token_expires_at, updated_at
+                ) VALUES (1, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    access_token = excluded.access_token,
+                    refresh_token = excluded.refresh_token,
+                    access_token_expires_at = excluded.access_token_expires_at,
+                    updated_at = excluded.updated_at
+                """.trimIndent()
+            ).use { statement ->
+                statement.setString(1, tokens.accessToken)
+                statement.setString(2, tokens.refreshToken)
+                statement.setLong(3, tokens.accessTokenExpiresAt)
+                statement.setLong(4, now())
+                statement.executeUpdate()
+            }
+        }
+    }
+
+    override fun load(): StoredGoogleDriveTokens? = database.connection().use { connection ->
+        connection.prepareStatement(
+            """
+            SELECT access_token, refresh_token, access_token_expires_at
+            FROM google_drive_tokens WHERE id = 1
+            """.trimIndent()
+        ).use { statement ->
+            statement.executeQuery().use { result ->
+                if (!result.next()) return@use null
+                StoredGoogleDriveTokens(
+                    accessToken = result.getString("access_token"),
+                    refreshToken = result.getString("refresh_token"),
+                    accessTokenExpiresAt = result.getLong("access_token_expires_at"),
+                )
+            }
         }
     }
 

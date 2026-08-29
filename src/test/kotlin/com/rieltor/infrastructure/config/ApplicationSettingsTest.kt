@@ -15,7 +15,12 @@ class ApplicationSettingsTest {
         val directory = Files.createTempDirectory("rieltor-bootstrap-test")
         Files.writeString(
             directory.resolve(".env"),
-            "TIKTOK_CLIENT_KEY=client-key\nTIKTOK_CLIENT_SECRET=client-secret\n"
+            """
+            TIKTOK_CLIENT_KEY=client-key
+            TIKTOK_CLIENT_SECRET=client-secret
+            GOOGLE_CLIENT_ID=google-client-id
+            GOOGLE_CLIENT_SECRET=google-client-secret
+            """.trimIndent()
         )
         val secrets = FakeSecrets(mutableMapOf())
 
@@ -23,6 +28,8 @@ class ApplicationSettingsTest {
 
         assertNull(secrets.get(SecretNames.TIKTOK_CLIENT_KEY))
         assertNull(secrets.get(SecretNames.TIKTOK_CLIENT_SECRET))
+        assertNull(secrets.get(SecretNames.GOOGLE_CLIENT_ID))
+        assertNull(secrets.get(SecretNames.GOOGLE_CLIENT_SECRET))
     }
 
     @Test
@@ -33,6 +40,8 @@ class ApplicationSettingsTest {
             """
             TIKTOK_CLIENT_KEY=env-client-key
             TIKTOK_CLIENT_SECRET=env-client-secret
+            GOOGLE_CLIENT_ID=google-client-id
+            GOOGLE_CLIENT_SECRET=google-client-secret
             TELEGRAM_USER_ID=999888777
             """.trimIndent()
         )
@@ -40,6 +49,7 @@ class ApplicationSettingsTest {
         val secrets = FakeSecrets(
             mutableMapOf(
                 SecretNames.TIKTOK_REDIRECT_URI to "https://api.example/auth/tiktok/callback",
+                SecretNames.GOOGLE_REDIRECT_URI to "https://api.example/auth/google/callback",
                 SecretNames.TELEGRAM_API_ID to "12345",
                 SecretNames.TELEGRAM_API_HASH to "api-hash",
                 SecretNames.TELEGRAM_USER_ID to "530666333",
@@ -54,6 +64,9 @@ class ApplicationSettingsTest {
         )
         assertEquals("env-client-key", settings.tikTokClientKey)
         assertEquals("env-client-secret", settings.tikTokClientSecret)
+        assertEquals("google-client-id", settings.googleClientId)
+        assertEquals("google-client-secret", settings.googleClientSecret)
+        assertEquals("https://api.example/auth/google/callback", settings.googleRedirectUri)
     }
 
     @Test
@@ -64,12 +77,15 @@ class ApplicationSettingsTest {
             """
             TIKTOK_CLIENT_KEY=client-key
             TIKTOK_CLIENT_SECRET=client-secret
+            GOOGLE_CLIENT_ID=google-client-id
+            GOOGLE_CLIENT_SECRET=google-client-secret
             TELEGRAM_MONITORED_TOPICS=-1002681732909,-1001234567890_50180
             """.trimIndent()
         )
         val secrets = FakeSecrets(
             mutableMapOf(
                 SecretNames.TIKTOK_REDIRECT_URI to "https://api.example/auth/tiktok/callback",
+                SecretNames.GOOGLE_REDIRECT_URI to "https://api.example/auth/google/callback",
                 SecretNames.TELEGRAM_API_ID to "12345",
                 SecretNames.TELEGRAM_API_HASH to "api-hash",
                 SecretNames.TELEGRAM_USER_ID to "530666333",
@@ -98,6 +114,8 @@ class ApplicationSettingsTest {
             """
             TIKTOK_CLIENT_KEY=client-key
             TIKTOK_CLIENT_SECRET=client-secret
+            GOOGLE_CLIENT_ID=google-client-id
+            GOOGLE_CLIENT_SECRET=google-client-secret
             TELEGRAM_MONITORED_CHAT_ID=-1002681732909
             TELEGRAM_MONITORED_MESSAGE_THREAD_IDS=5242880,4194304
             """.trimIndent()
@@ -105,6 +123,7 @@ class ApplicationSettingsTest {
         val secrets = FakeSecrets(
             mutableMapOf(
                 SecretNames.TIKTOK_REDIRECT_URI to "https://api.example/auth/tiktok/callback",
+                SecretNames.GOOGLE_REDIRECT_URI to "https://api.example/auth/google/callback",
                 SecretNames.TELEGRAM_API_ID to "12345",
                 SecretNames.TELEGRAM_API_HASH to "api-hash",
                 SecretNames.TELEGRAM_USER_ID to "530666333",

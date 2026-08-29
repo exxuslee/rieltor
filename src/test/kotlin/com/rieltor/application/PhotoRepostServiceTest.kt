@@ -7,6 +7,7 @@ import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.model.TelegramPhotoMessage
 import com.rieltor.domain.model.TelegramMonitoredTopic
 import com.rieltor.domain.port.PhotoPublisher
+import com.rieltor.domain.port.ExternalPhotoSource
 import com.rieltor.domain.port.PostJobRepository
 import com.rieltor.domain.port.PublicMediaStorage
 import kotlinx.coroutines.runBlocking
@@ -69,6 +70,29 @@ class PhotoRepostServiceTest {
 #нерухомість #продажнерухомості #квартира #ІринаЛіннік""",
             publisher.publishedCaptions.single(),
         )
+    }
+
+    @Test
+    fun `adds google drive photos from caption to the same post`() = runBlocking {
+        val publisher = FakePublisher()
+        val service = PhotoRepostService(
+            jobs = FakeJobs(),
+            mediaStorage = FakeStorage(),
+            publisher = publisher,
+            externalPhotoSource = FakeExternalPhotoSource(),
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
+        )
+        val message = TelegramPhotoMessage(
+            updateId = 44,
+            chatId = MONITORED_CHAT_ID,
+            messageThreadId = MONITORED_THREAD_ID,
+            caption = "Будинок\nhttps://drive.google.com/drive/folders/folder123456",
+            photos = listOf(TelegramPhoto("telegram.jpg", ByteArrayInputStream(byteArrayOf(1)))),
+        )
+
+        assertIs<RepostResult.Published>(service.handle(message))
+        assertEquals(3, publisher.publishedUrls.single().size)
+        assertEquals(false, publisher.publishedCaptions.single()?.contains("drive.google.com"))
     }
 
     @Test
@@ -149,6 +173,15 @@ class PhotoRepostServiceTest {
             publishedCaptions += caption
             return PublishReceipt("publish-42", "Ірина", "SELF_ONLY")
         }
+    }
+
+    private class FakeExternalPhotoSource : ExternalPhotoSource {
+        override fun containsLink(text: String?) = text?.contains("drive.google.com") == true
+
+        override suspend fun downloadPhotos(text: String?, limit: Int): List<TelegramPhoto> = listOf(
+            TelegramPhoto("drive-one.jpg", ByteArrayInputStream(byteArrayOf(2))),
+            TelegramPhoto("drive-two.jpg", ByteArrayInputStream(byteArrayOf(3))),
+        ).take(limit)
     }
 
     private class FakeJobs : PostJobRepository {

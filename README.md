@@ -1,7 +1,7 @@
 # Сайт Ірини Ліннік
 
 Репозиторий объединяет **статический сайт** (GitHub Pages из папки `docs/`) и **Kotlin/Ktor backend** для автоматической
-передачи фотографий из Telegram в TikTok.
+передачи фотографий из Telegram и связанных папок Google Drive в TikTok.
 
 ## Структура проекта
 
@@ -34,12 +34,12 @@ python -m http.server 4173
 
 ## Первичная настройка backend
 
-Telegram-настройки и токены авторизации TikTok хранятся в `rieltor.db`. При первом запуске отсутствующие
+Telegram-настройки и токены авторизации TikTok/Google Drive хранятся в `rieltor.db`. При первом запуске отсутствующие
 Telegram-настройки импортируются из переменных окружения или `.env`. `TELEGRAM_USER_ID` читается при каждом запуске,
 имеет приоритет над SQLite и выбирает папку `tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR.
 
-`TIKTOK_CLIENT_KEY` и `TIKTOK_CLIENT_SECRET` в SQLite не сохраняются и при каждом запуске обязательно читаются из
-переменных окружения или локального `.env`.
+`TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET` в SQLite не сохраняются и при
+каждом запуске обязательно читаются из переменных окружения или локального `.env`.
 
 Запуск:
 
@@ -47,14 +47,28 @@ Telegram-настройки импортируются из переменных
 $env:TIKTOK_CLIENT_KEY = "ваш_client_key"
 $env:TIKTOK_CLIENT_SECRET = "ваш_client_secret"
 $env:TIKTOK_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/tiktok/callback"
+$env:GOOGLE_CLIENT_ID = "ваш_client_id.apps.googleusercontent.com"
+$env:GOOGLE_CLIENT_SECRET = "ваш_client_secret"
+$env:GOOGLE_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/google/callback"
+$env:GOOGLE_ACCOUNT_HINT = "рабочий-google-аккаунт@example.com"
 .\gradlew.bat run
 ```
 
 Сервер стартует на `http://localhost:8383`. Пользовательский Telegram-клиент TDLight открывает сессию из
 `tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR. Фото из настроенных Telegram-чатов передаются через TikTok Photo Direct
 Post; caption перед публикацией очищается от внутренних контактов, комиссий, процентов оформления и Google Drive-ссылок,
-после чего приводится к единой структуре с публичным контактом Ірини и хештегами. Остальные чаты игнорируются. Старый `autoposter` нельзя запускать
+а JPEG/WebP из указанных в тексте файлов или папок Google Drive добавляются к фотографиям сообщения (до 35 изображений
+в одном TikTok-посте). Затем caption приводится к единой структуре с публичным контактом Ірини и хештегами. Остальные
+чаты игнорируются. Старый `autoposter` нельзя запускать
 одновременно с этим backend: два процесса не должны открывать одну TDLib-сессию.
+
+### Подключение Google Drive
+
+В Google Cloud Console включите Google Drive API и создайте OAuth client типа **Web application**. В список Authorized
+redirect URIs добавьте `https://api.rieltor.dpdns.org/auth/google/callback`. Если приложение находится в режиме Testing,
+добавьте рабочий Google-аккаунт в Test users. После запуска backend откройте единую страницу подключений
+`https://rieltor.dpdns.org/connect.html`, войдите под аккаунтом с доступом к папкам и подтвердите read-only доступ.
+Refresh token сохранится в локальной SQLite-базе и будет обновлять доступ без повторного входа.
 
 ### Мониторинг форумных чатов Telegram
 

@@ -10,6 +10,9 @@ object SecretNames {
     const val TIKTOK_CLIENT_KEY = "TIKTOK_CLIENT_KEY"
     const val TIKTOK_CLIENT_SECRET = "TIKTOK_CLIENT_SECRET"
     const val TIKTOK_REDIRECT_URI = "TIKTOK_REDIRECT_URI"
+    const val GOOGLE_CLIENT_ID = "GOOGLE_CLIENT_ID"
+    const val GOOGLE_CLIENT_SECRET = "GOOGLE_CLIENT_SECRET"
+    const val GOOGLE_REDIRECT_URI = "GOOGLE_REDIRECT_URI"
     const val TELEGRAM_API_ID = "TELEGRAM_API_ID"
     const val TELEGRAM_API_HASH = "TELEGRAM_API_HASH"
     const val TELEGRAM_USER_ID = "TELEGRAM_USER_ID"
@@ -17,6 +20,7 @@ object SecretNames {
 
     val sqliteNames = listOf(
         TIKTOK_REDIRECT_URI,
+        GOOGLE_REDIRECT_URI,
         TELEGRAM_API_ID,
         TELEGRAM_API_HASH,
         TELEGRAM_USER_ID,
@@ -36,6 +40,10 @@ data class ApplicationSettings(
     val tikTokClientKey: String,
     val tikTokClientSecret: String,
     val tikTokRedirectUri: String,
+    val googleClientId: String = "",
+    val googleClientSecret: String = "",
+    val googleRedirectUri: String = "",
+    val googleAccountHint: String? = null,
 ) {
     companion object {
         fun load(secrets: SecretRepository, dotenv: Dotenv): ApplicationSettings {
@@ -66,6 +74,10 @@ data class ApplicationSettings(
                 tikTokClientKey = requireEnvironmentOrDotenv(SecretNames.TIKTOK_CLIENT_KEY, dotenv),
                 tikTokClientSecret = requireEnvironmentOrDotenv(SecretNames.TIKTOK_CLIENT_SECRET, dotenv),
                 tikTokRedirectUri = redirectUri,
+                googleClientId = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_ID, dotenv),
+                googleClientSecret = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_SECRET, dotenv),
+                googleRedirectUri = secrets.require(SecretNames.GOOGLE_REDIRECT_URI),
+                googleAccountHint = environmentOrDotenv("GOOGLE_ACCOUNT_HINT", dotenv),
             )
         }
     }

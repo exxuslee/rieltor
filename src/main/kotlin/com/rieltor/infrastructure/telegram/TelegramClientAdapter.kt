@@ -5,6 +5,7 @@ import com.rieltor.domain.model.RepostResult
 import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.model.TelegramPhotoMessage
 import com.rieltor.domain.model.TelegramMonitoredTopic
+import com.rieltor.domain.port.ExternalPhotoSource
 import com.rieltor.infrastructure.tiktok.TikTokAuthException
 import it.tdlight.Init
 import it.tdlight.Log
@@ -35,6 +36,7 @@ class TelegramClientAdapter(
     private val sessionDirectory: Path,
     private val monitoredTopics: Set<TelegramMonitoredTopic>,
     private val repostService: PhotoRepostService,
+    private val externalPhotoSource: ExternalPhotoSource,
 ) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -43,7 +45,7 @@ class TelegramClientAdapter(
         settleDelayMillis = ALBUM_SETTLE_DELAY_MILLIS,
         maxItemCount = TELEGRAM_MAX_ALBUM_SIZE,
         itemId = { it.id },
-        onReady = ::processPhotoMessages,
+        onReady = ::processMessages,
     )
     private var factory: SimpleTelegramClientFactory? = null
     private var client: SimpleTelegramClient? = null
@@ -116,12 +118,20 @@ class TelegramClientAdapter(
             messageSummary(message),
         )
 
-        if (message.content !is TdApi.MessagePhoto) return
-
-        if (message.mediaAlbumId == 0L) {
-            scope.launch { processPhotoMessages(listOf(message)) }
-        } else {
-            albumCollector.add(message.mediaAlbumId, message)
+        when (val content = message.content) {
+            is TdApi.MessagePhoto -> {
+                if (message.mediaAlbumId == 0L) {
+                    scope.launch { processMessages(listOf(message)) }
+                } else {
+                    albumCollector.add(message.mediaAlbumId, message)
+                }
+            }
+            is TdApi.MessageText -> {
+                if (externalPhotoSource.containsLink(content.text.textWithEmbeddedLinks())) {
+                    scope.launch { processMessages(listOf(message)) }
+                }
+            }
+            else -> Unit
         }
     }
 
@@ -393,20 +403,25 @@ class TelegramClientAdapter(
         else -> content.javaClass.simpleName.removePrefix("Message")
     }
 
-    private suspend fun processPhotoMessages(messages: List<TdApi.Message>) {
+    private suspend fun processMessages(messages: List<TdApi.Message>) {
         val orderedMessages = messages.sortedBy { it.id }
         val firstMessage = orderedMessages.firstOrNull() ?: return
         val telegramClient = client ?: return
         val caption = orderedMessages.asSequence()
-            .mapNotNull { (it.content as? TdApi.MessagePhoto)?.caption?.text?.trim() }
+            .mapNotNull { message ->
+                when (val content = message.content) {
+                    is TdApi.MessagePhoto -> content.caption.textWithEmbeddedLinks().trim()
+                    is TdApi.MessageText -> content.text.textWithEmbeddedLinks().trim()
+                    else -> null
+                }
+            }
             .firstOrNull { it.isNotBlank() }
 
         runCatching {
             val photos = mutableListOf<TelegramPhoto>()
             try {
                 orderedMessages.forEach { message ->
-                    val photoContent = message.content as? TdApi.MessagePhoto
-                        ?: error("Telegram media album contains a non-photo message")
+                    val photoContent = message.content as? TdApi.MessagePhoto ?: return@forEach
                     val largestPhoto = photoContent.photo.sizes.maxByOrNull { size ->
                         size.photo.expectedSize.takeIf { it > 0 } ?: (size.width.toLong() * size.height.toLong())
                     } ?: error("Telegram photo has no downloadable sizes")
@@ -437,10 +452,9 @@ class TelegramClientAdapter(
         }.onSuccess { result ->
             when (result) {
                 is RepostResult.Published -> logger.info(
-                    "Telegram photo post submitted to TikTok. publishId={}, privacy={}, photoCount={}",
+                    "Telegram/Google Drive photo post submitted to TikTok. publishId={}, privacy={}",
                     result.receipt.publishId,
                     result.receipt.privacyLevel,
-                    orderedMessages.size,
                 )
                 RepostResult.Duplicate -> logger.info("Telegram photo post was already processed")
                 RepostResult.IgnoredSource -> Unit
@@ -470,6 +484,15 @@ class TelegramClientAdapter(
                 (lastError?.message ?: "timeout"),
             lastError,
         )
+    }
+
+    private fun TdApi.FormattedText.textWithEmbeddedLinks(): String {
+        val embeddedLinks = entities.asSequence()
+            .mapNotNull { (it.type as? TdApi.TextEntityTypeTextUrl)?.url }
+            .filter { it.isNotBlank() && !text.contains(it) }
+            .distinct()
+            .toList()
+        return if (embeddedLinks.isEmpty()) text else (listOf(text) + embeddedLinks).joinToString("\n")
     }
 
     override fun close() {

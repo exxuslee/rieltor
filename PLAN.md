@@ -49,6 +49,12 @@ node scripts/check-seo.mjs
 - Пользовательский Telegram-клиент TDLight использует локальную сессию, принимает фото пользователя `530667295` только
   из личного чата «Избранное», сохраняет изображение под случайным именем и инициирует TikTok Photo Direct Post.
   Повторная обработка одного сообщения блокируется базой.
+- Если текст или подпись сообщения содержит ссылку на файл/папку Google Drive, backend получает доступ через OAuth 2.0
+  со scope `drive.readonly`, скачивает JPEG/WebP из Drive и добавляет их в тот же TikTok-фотопост (не более 35 фото).
+  Access/refresh tokens Google хранятся в SQLite; client ID/secret всегда читаются из окружения или `.env`.
+- Единая страница подключения Google Drive и TikTok: `docs/connect.html`. Старые адреса `google-connect.html` и
+  `tiktok-connect.html` перенаправляют на неё. Google callback backend:
+  `https://api.rieltor.dpdns.org/auth/google/callback`.
 - Перед публикацией отдельный `TikTokMessageFilter` удаляет исходные контакты, Google Drive-ссылки, комиссию, проценты
   оформления и упоминания АН «Новатор», затем формирует заголовок, основные параметры, описание, контакт Ірини и хештеги.
 - Старый `tiktok-tokens.json` автоматически переносится в SQLite при первом запуске.

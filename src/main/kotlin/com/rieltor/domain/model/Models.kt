@@ -12,6 +12,12 @@ data class StoredTokens(
     val refreshTokenExpiresAt: Long,
 )
 
+data class StoredGoogleDriveTokens(
+    val accessToken: String,
+    val refreshToken: String,
+    val accessTokenExpiresAt: Long,
+)
+
 data class TelegramPhotoMessage(
     val updateId: Long,
     val chatId: Long,
