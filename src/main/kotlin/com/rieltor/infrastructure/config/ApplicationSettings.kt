@@ -13,6 +13,9 @@ object SecretNames {
     const val GOOGLE_CLIENT_ID = "GOOGLE_CLIENT_ID"
     const val GOOGLE_CLIENT_SECRET = "GOOGLE_CLIENT_SECRET"
     const val GOOGLE_REDIRECT_URI = "GOOGLE_REDIRECT_URI"
+    const val THREADS_APP_ID = "THREADS_APP_ID"
+    const val THREADS_APP_SECRET = "THREADS_APP_SECRET"
+    const val THREADS_REDIRECT_URI = "THREADS_REDIRECT_URI"
     const val TELEGRAM_API_ID = "TELEGRAM_API_ID"
     const val TELEGRAM_API_HASH = "TELEGRAM_API_HASH"
     const val TELEGRAM_USER_ID = "TELEGRAM_USER_ID"
@@ -21,6 +24,7 @@ object SecretNames {
     val sqliteNames = listOf(
         TIKTOK_REDIRECT_URI,
         GOOGLE_REDIRECT_URI,
+        THREADS_REDIRECT_URI,
         TELEGRAM_API_ID,
         TELEGRAM_API_HASH,
         PUBLIC_BASE_URL,
@@ -40,7 +44,13 @@ data class ApplicationSettings(
     val googleClientId: String = "",
     val googleClientSecret: String = "",
     val googleRedirectUri: String = "",
+    val threadsAppId: String = "",
+    val threadsAppSecret: String = "",
+    val threadsRedirectUri: String = "",
 ) {
+    val threadsConfigured: Boolean
+        get() = threadsAppId.isNotBlank() && threadsAppSecret.isNotBlank() && threadsRedirectUri.isNotBlank()
+
     companion object {
         fun load(secrets: SecretRepository, dotenv: Dotenv): ApplicationSettings {
             val redirectUri = secrets.require(SecretNames.TIKTOK_REDIRECT_URI)
@@ -69,6 +79,9 @@ data class ApplicationSettings(
                 googleClientId = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_ID, dotenv),
                 googleClientSecret = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_SECRET, dotenv),
                 googleRedirectUri = secrets.require(SecretNames.GOOGLE_REDIRECT_URI),
+                threadsAppId = environmentOrDotenv(SecretNames.THREADS_APP_ID, dotenv).orEmpty(),
+                threadsAppSecret = environmentOrDotenv(SecretNames.THREADS_APP_SECRET, dotenv).orEmpty(),
+                threadsRedirectUri = secrets.get(SecretNames.THREADS_REDIRECT_URI).orEmpty(),
             )
         }
     }

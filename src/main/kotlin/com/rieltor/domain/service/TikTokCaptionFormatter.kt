@@ -1,13 +1,13 @@
 package com.rieltor.domain.service
 
 /**
- * Converts an internal Telegram listing caption into a public TikTok description.
+ * Converts an internal Telegram listing caption into a reusable public description.
  *
  * Contact and commercial terms from the source are deliberately discarded before the
  * public contact is appended. The class is stateless so it can be tested independently
- * from Telegram and TikTok integrations.
+ * from Telegram and destination integrations.
  */
-class TikTokCaptionFormatter {
+class ListingCaptionFormatter {
     fun filter(message: String?): String? {
         if (message.isNullOrBlank()) return null
 

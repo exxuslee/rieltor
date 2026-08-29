@@ -40,7 +40,7 @@ node scripts/check-seo.mjs
 - Проверить формы с реальным обработчиком, rate limit и антиспамом.
 - Выполнить внешние проверки из `SEO-CHECKLIST.md` после публикации.
 
-## Telegram → TikTok
+## Telegram → TikTok + Threads
 
 - Backend организован по слоям `domain`, `application`, `infrastructure`, `web`; сборка зависимостей вынесена в
   Koin-модули `configuration`, `persistence`, `network`, `application` и `integration`.
@@ -49,21 +49,21 @@ node scripts/check-seo.mjs
   соединения и repost-конвейера доступны отдельно через `StateFlow<TelegramSourceState>` и
   `StateFlow<RepostFlowState>`.
 - TDLib-маппинг/скачивание и startup-диагностика разделены на `TelegramMessageMapper` и `TelegramDiagnostics`.
-  SQLite-доступ также разделён по системам: настройки, TikTok tokens, Google Drive tokens и Telegram repost history имеют
+  SQLite-доступ также разделён по системам: настройки, TikTok tokens, Threads tokens, Google Drive tokens и Telegram repost history имеют
   отдельные реализации репозиториев.
-- Telegram API-настройки, TikTok access/refresh tokens и журнал обработанных Telegram updates хранятся в локальной
+- Telegram API-настройки, TikTok/Threads access tokens и журнал обработанных Telegram updates хранятся в локальной
   SQLite-базе `rieltor.db` рядом с JAR (файл исключён из Git). `TELEGRAM_USER_ID`, `TIKTOK_CLIENT_KEY` и
   `TIKTOK_CLIENT_SECRET` всегда читаются из окружения или `.env` и в SQLite не сохраняются.
 - Пользовательский Telegram-клиент TDLight использует локальную сессию, принимает фото пользователя `530667295` только
-  из личного чата «Избранное», сохраняет изображение под случайным именем и инициирует TikTok Photo Direct Post.
+  из личного чата «Избранное», сохраняет изображение под случайным именем и инициирует независимые публикации в TikTok и Threads.
   Повторная обработка одного сообщения блокируется базой.
 - Если текст или подпись сообщения содержит ссылку на файл/папку Google Drive, backend получает доступ через OAuth 2.0
-  со scope `drive.readonly`, скачивает JPEG/WebP из Drive и добавляет их в тот же TikTok-фотопост (не более 35 фото).
+  со scope `drive.readonly`, скачивает JPEG/WebP из Drive и добавляет их в публикации TikTok и Threads с учётом лимита платформы.
   Access/refresh tokens Google хранятся в SQLite; client ID/secret всегда читаются из окружения или `.env`.
-- Единая страница подключения Google Drive и TikTok: `docs/connect.html`. Старые адреса `google-connect.html` и
+- Единая страница подключения Google Drive, TikTok и Threads: `docs/connect.html`. Старые адреса `google-connect.html` и
   `tiktok-connect.html` перенаправляют на неё. Google callback backend:
   `https://api.rieltor.dpdns.org/auth/google/callback`.
-- Перед публикацией отдельный `TikTokMessageFilter` удаляет исходные контакты, Google Drive-ссылки, комиссию, проценты
+- Перед публикацией общий `ListingCaptionFormatter` удаляет исходные контакты, Google Drive-ссылки, комиссию, проценты
   оформления и упоминания АН «Новатор», затем формирует заголовок, основные параметры, описание, контакт Ірини и хештеги.
 - Отдельный application-сервис `TelegramRepostTracker` регистрирует все входящие сообщения и не допускает повторную публикацию
   объявления с тем же нормализованным ключом `messageThreadId + цена + адрес`. В SQLite раздельно хранятся история
@@ -72,5 +72,8 @@ node scripts/check-seo.mjs
 - Старый `tiktok-tokens.json` автоматически переносится в SQLite при первом запуске.
 - Папка TDLib-сессии `tdlib-session-id<TELEGRAM_USER_ID>` находится рядом с JAR и не публикуется в Git.
 - Фоновая очистка запускается при старте backend и затем каждый час, удаляя из `media` изображения старше 24 часов.
+- Threads подключён отдельными OAuth, token repository и `ThreadsPhotoPublisher`. Одно фото публикуется как IMAGE,
+  несколько — как карусель до 20 фото. TikTok и Threads резервируются и фиксируются раздельно в
+  `repost_publications`; ошибка одного назначения не отменяет другое и допускает независимый повтор.
 - Для Photo API необходимо добавить Content Posting API, подтвердить домен `https://api.rieltor.dpdns.org` в TikTok
   Developer Portal и развернуть runtime-файлы рядом с JAR.

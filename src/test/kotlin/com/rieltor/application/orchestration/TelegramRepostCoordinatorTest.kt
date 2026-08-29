@@ -31,7 +31,7 @@ class TelegramRepostCoordinatorTest {
         val coordinator = TelegramRepostCoordinator(
             source,
             PhotoRepostHandler {
-                RepostResult.Published(PublishReceipt("publish-17", "Ірина", "SELF_ONLY"))
+                RepostResult.Published(listOf(PublishReceipt("publish-17", "Ірина", "SELF_ONLY")))
             },
         )
 

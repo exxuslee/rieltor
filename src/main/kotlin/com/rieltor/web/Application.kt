@@ -4,6 +4,7 @@ import com.rieltor.application.orchestration.TelegramRepostCoordinator
 import com.rieltor.di.applicationModules
 import com.rieltor.di.googleOAuthState
 import com.rieltor.di.tikTokOAuthState
+import com.rieltor.di.threadsOAuthState
 import com.rieltor.infrastructure.config.serverPort
 import com.rieltor.infrastructure.google.GoogleDriveAuthException
 import com.rieltor.infrastructure.google.GoogleDriveAuthService
@@ -12,6 +13,8 @@ import com.rieltor.infrastructure.media.MediaCleanupJob
 import com.rieltor.infrastructure.oauth.OAuthStateStore
 import com.rieltor.infrastructure.tiktok.TikTokAuthException
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
+import com.rieltor.infrastructure.threads.ThreadsAuthException
+import com.rieltor.infrastructure.threads.ThreadsAuthService
 import io.github.cdimascio.dotenv.Dotenv
 import io.ktor.client.HttpClient
 import io.ktor.http.*
@@ -49,6 +52,8 @@ fun Application.module(dotenv: Dotenv) {
     val tikTokStates = get<OAuthStateStore>(tikTokOAuthState)
     val googleAuth = get<GoogleDriveAuthService>()
     val googleStates = get<OAuthStateStore>(googleOAuthState)
+    val threadsAuth = get<ThreadsAuthService>()
+    val threadsStates = get<OAuthStateStore>(threadsOAuthState)
     val mediaStorage = get<LocalPublicMediaStorage>()
     val mediaCleanupJob = get<MediaCleanupJob>()
     val repostCoordinator = get<TelegramRepostCoordinator>()
@@ -71,6 +76,12 @@ fun Application.module(dotenv: Dotenv) {
                 status = HttpStatusCode.BadGateway,
             )
         }
+        exception<ThreadsAuthException> { call, cause ->
+            call.respondText(
+                text = "Threads operation failed: ${cause.message}",
+                status = HttpStatusCode.BadGateway,
+            )
+        }
         exception<Throwable> { call, cause ->
             call.application.log.error("Unhandled error", cause)
             call.respondText("Internal server error", status = HttpStatusCode.InternalServerError)
@@ -78,12 +89,13 @@ fun Application.module(dotenv: Dotenv) {
     }
 
     routing {
-        get("/") { call.respondText("Rieltor Telegram → TikTok integration is running.") }
+        get("/") { call.respondText("Rieltor Telegram → TikTok/Threads integration is running.") }
         get("/health") { call.respondText("ok") }
         tikTokVerificationRoutes(Path.of("docs"))
         mediaRoutes(mediaStorage)
         tikTokAuthRoutes(auth, tikTokStates)
         googleDriveAuthRoutes(googleAuth, googleStates)
+        threadsAuthRoutes(threadsAuth, threadsStates)
     }
 
     repostCoordinator.start()

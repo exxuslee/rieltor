@@ -7,6 +7,7 @@ map $uri $rieltor_route_allowed {
     "/health" 1;
     ~^/auth/tiktok/(?:login|callback)$ 1;
     ~^/auth/google/(?:login|callback)$ 1;
+    ~^/auth/threads/(?:login|callback)$ 1;
     "~^/media/[0-9a-fA-F-]{36}\.(?:jpg|jpeg|png|webp)$" 1;
     ~^/tiktok[A-Za-z0-9]+\.txt$ 1;
     ~^/\.well-known/acme-challenge/[A-Za-z0-9_-]+$ 1;

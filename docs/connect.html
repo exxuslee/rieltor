@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta content="width=device-width,initial-scale=1" name="viewport">
     <title>Підключити сервіси — Ірина Ліннік</title>
-    <meta content="Підключення Google Drive і TikTok для автоматичної публікації оголошень нерухомості."
+    <meta content="Підключення Google Drive, TikTok і Threads для автоматичної публікації оголошень нерухомості."
           name="description">
     <link href="https://rieltor.dpdns.org/connect.html" rel="canonical">
     <meta content="noindex,nofollow" name="robots">
@@ -20,7 +20,7 @@
 
         .connect-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 24px;
             align-items: stretch;
         }
@@ -125,7 +125,7 @@
         <div class="container">
             <p class="eyebrow">Підключення сервісів</p>
             <h1>Налаштувати автопублікацію</h1>
-            <p>Підключіть обидва акаунти: Google Drive надає фотографії, а TikTok приймає готові фотопости.</p>
+            <p>Google Drive надає фотографії, а TikTok і Threads незалежно отримують готові публікації.</p>
         </div>
     </section>
 
@@ -162,6 +162,23 @@
                 <div class="connect-action">
                     <a class="btn" href="https://api.rieltor.dpdns.org/auth/tiktok/login">Увійти через TikTok</a>
                     <p class="connect-status">Використайте робочий акаунт, у якому мають з’являтися публікації.</p>
+                </div>
+            </article>
+
+            <article class="connect-card">
+                <p class="connect-service">Публікація контенту</p>
+                <h2>Threads</h2>
+                <p>Сервіс незалежно публікує підготовлений опис і фотографії як допис або карусель у Threads.</p>
+
+                <ul class="connect-scopes">
+                    <li>Базова інформація профілю</li>
+                    <li>Публікація дописів і каруселей</li>
+                    <li>До 20 фотографій в одному дописі</li>
+                </ul>
+
+                <div class="connect-action">
+                    <a class="btn" href="https://api.rieltor.dpdns.org/auth/threads/login">Увійти через Threads</a>
+                    <p class="connect-status">Помилка Threads не зупиняє публікацію в TikTok, і навпаки.</p>
                 </div>
             </article>
         </div>

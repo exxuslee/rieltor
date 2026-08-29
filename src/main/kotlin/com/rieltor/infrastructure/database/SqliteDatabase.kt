@@ -49,6 +49,16 @@ class SqliteDatabase(private val path: Path) {
                 )
                 statement.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS threads_tokens (
+                        user_id TEXT PRIMARY KEY,
+                        access_token TEXT NOT NULL,
+                        access_token_expires_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                statement.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS received_telegram_messages (
                         telegram_update_id INTEGER PRIMARY KEY,
                         chat_id INTEGER NOT NULL,
@@ -75,6 +85,8 @@ class SqliteDatabase(private val path: Path) {
                       AND status IN ('PROCESSING', 'PUBLISHED')
                     """.trimIndent()
                 )
+                // Destination-specific uniqueness is enforced by repost_publications below.
+                statement.execute("DROP INDEX IF EXISTS uq_active_telegram_repost_key")
                 statement.execute(
                     """
                     CREATE TABLE IF NOT EXISTS published_reposts (
@@ -88,10 +100,37 @@ class SqliteDatabase(private val path: Path) {
                     )
                     """.trimIndent()
                 )
+                statement.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS repost_publications (
+                        telegram_update_id INTEGER NOT NULL,
+                        destination TEXT NOT NULL CHECK (destination IN ('TIKTOK', 'THREADS')),
+                        message_thread_id INTEGER NOT NULL,
+                        normalized_price TEXT,
+                        normalized_address TEXT,
+                        status TEXT NOT NULL CHECK (status IN ('PROCESSING', 'PUBLISHED', 'DUPLICATE', 'FAILED')),
+                        duplicate_of_update_id INTEGER,
+                        publish_id TEXT,
+                        error TEXT,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY (telegram_update_id, destination)
+                    )
+                    """.trimIndent()
+                )
+                statement.execute(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_active_repost_destination_key
+                    ON repost_publications(destination, message_thread_id, normalized_price, normalized_address)
+                    WHERE normalized_price IS NOT NULL
+                      AND normalized_address IS NOT NULL
+                      AND status IN ('PROCESSING', 'PUBLISHED')
+                    """.trimIndent()
+                )
                 val schemaVersion = statement.executeQuery("PRAGMA user_version").use { result ->
                     if (result.next()) result.getInt(1) else 0
                 }
-                if (schemaVersion < 5) {
+                if (schemaVersion < 6) {
                     if (schemaVersion < 1) {
                         // Remove the retired Bot API credential and overwrite its SQLite cell.
                         statement.executeUpdate("DELETE FROM app_secrets WHERE name = 'TELEGRAM_BOT_TOKEN'")
@@ -102,14 +141,33 @@ class SqliteDatabase(private val path: Path) {
                             """
                             DELETE FROM app_secrets WHERE name IN (
                                 'TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET',
-                                'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'
+                                'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET',
+                                'THREADS_APP_ID', 'THREADS_APP_SECRET'
                             )
                             """.trimIndent()
                         )
                     }
                     // Deployment identity is environment-only and must not become stale in SQLite.
                     statement.executeUpdate("DELETE FROM app_secrets WHERE name = 'TELEGRAM_USER_ID'")
-                    statement.execute("PRAGMA user_version=5")
+                    statement.executeUpdate(
+                        "DELETE FROM app_secrets WHERE name IN ('THREADS_APP_ID', 'THREADS_APP_SECRET')"
+                    )
+                    if (schemaVersion < 6) {
+                        statement.executeUpdate(
+                            """
+                            INSERT OR IGNORE INTO repost_publications(
+                                telegram_update_id, destination, message_thread_id,
+                                normalized_price, normalized_address, status,
+                                publish_id, created_at, updated_at
+                            )
+                            SELECT telegram_update_id, 'TIKTOK', message_thread_id,
+                                   normalized_price, normalized_address, 'PUBLISHED',
+                                   publish_id, published_at, published_at
+                            FROM published_reposts
+                            """.trimIndent()
+                        )
+                    }
+                    statement.execute("PRAGMA user_version=6")
                     statement.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                     statement.execute("VACUUM")
                 }

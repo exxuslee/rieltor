@@ -5,8 +5,8 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 
-class TikTokCaptionFormatterTest {
-    private val filter = TikTokCaptionFormatter()
+class ListingCaptionFormatterTest {
+    private val filter = ListingCaptionFormatter()
 
     @Test
     fun `removes private contacts drive links commission and registration percentage`() {

@@ -18,6 +18,17 @@ data class StoredGoogleDriveTokens(
     val accessTokenExpiresAt: Long,
 )
 
+data class StoredThreadsTokens(
+    val userId: String,
+    val accessToken: String,
+    val accessTokenExpiresAt: Long,
+)
+
+enum class RepostDestination {
+    TIKTOK,
+    THREADS,
+}
+
 data class TelegramPhotoMessage(
     val updateId: Long,
     val chatId: Long,
@@ -69,10 +80,21 @@ data class PublishReceipt(
     val publishId: String,
     val creatorName: String,
     val privacyLevel: String,
+    val destination: RepostDestination = RepostDestination.TIKTOK,
+)
+
+data class RepostFailure(
+    val destination: RepostDestination,
+    val reason: String,
 )
 
 sealed interface RepostResult {
-    data class Published(val receipt: PublishReceipt) : RepostResult
+    data class Published(
+        val receipts: List<PublishReceipt>,
+        val failures: List<RepostFailure> = emptyList(),
+    ) : RepostResult {
+        val receipt: PublishReceipt get() = receipts.first()
+    }
     data object IgnoredSource : RepostResult
     data object IgnoredContent : RepostResult
     data object Duplicate : RepostResult

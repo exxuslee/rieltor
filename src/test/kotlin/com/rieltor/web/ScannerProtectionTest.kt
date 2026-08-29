@@ -49,6 +49,8 @@ class ScannerProtectionTest {
             "/health",
             "/auth/tiktok/login",
             "/auth/tiktok/callback",
+            "/auth/threads/login",
+            "/auth/threads/callback",
             "/media/apartment-photo.jpg",
             "/tiktok-site-verification.txt",
         ).forEach { path -> assertFalse(ScannerProtection.isProbe(path), path) }

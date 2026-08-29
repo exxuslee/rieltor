@@ -4,6 +4,7 @@ import com.rieltor.application.service.TelegramRepostTracker
 import com.rieltor.domain.model.PublishReceipt
 import com.rieltor.domain.model.ReceivedTelegramMessage
 import com.rieltor.domain.model.RepostResult
+import com.rieltor.domain.model.RepostDestination
 import com.rieltor.domain.model.StoredMedia
 import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.model.TelegramPhotoMessage
@@ -19,6 +20,7 @@ import java.io.InputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class PublishPhotoRepostUseCaseTest {
     @Test
@@ -28,7 +30,7 @@ class PublishPhotoRepostUseCaseTest {
         val service = PublishPhotoRepostUseCase(
             repostTracker = TelegramRepostTracker(jobs),
             mediaStorage = FakeStorage(),
-            publisher = publisher,
+            publishers = listOf(publisher),
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
         val message = message(updateId = 42)
@@ -47,7 +49,7 @@ class PublishPhotoRepostUseCaseTest {
         val service = PublishPhotoRepostUseCase(
             repostTracker = TelegramRepostTracker(FakeJobs()),
             mediaStorage = FakeStorage(),
-            publisher = publisher,
+            publishers = listOf(publisher),
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
         val message = TelegramPhotoMessage(
@@ -81,7 +83,7 @@ class PublishPhotoRepostUseCaseTest {
         val service = PublishPhotoRepostUseCase(
             repostTracker = TelegramRepostTracker(FakeJobs()),
             mediaStorage = FakeStorage(),
-            publisher = publisher,
+            publishers = listOf(publisher),
             externalPhotoSource = FakeExternalPhotoSource(),
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
@@ -104,7 +106,7 @@ class PublishPhotoRepostUseCaseTest {
         val service = PublishPhotoRepostUseCase(
             repostTracker = TelegramRepostTracker(FakeJobs()),
             mediaStorage = FakeStorage(),
-            publisher = publisher,
+            publishers = listOf(publisher),
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
 
@@ -118,7 +120,7 @@ class PublishPhotoRepostUseCaseTest {
         val service = PublishPhotoRepostUseCase(
             repostTracker = TelegramRepostTracker(FakeJobs()),
             mediaStorage = FakeStorage(),
-            publisher = publisher,
+            publishers = listOf(publisher),
             externalPhotoSource = FakeExternalPhotoSource(),
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
@@ -140,7 +142,7 @@ class PublishPhotoRepostUseCaseTest {
         val service = PublishPhotoRepostUseCase(
             repostTracker = TelegramRepostTracker(FakeJobs()),
             mediaStorage = FakeStorage(),
-            publisher = publisher,
+            publishers = listOf(publisher),
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
 
@@ -156,7 +158,7 @@ class PublishPhotoRepostUseCaseTest {
         val service = PublishPhotoRepostUseCase(
             repostTracker = TelegramRepostTracker(FakeJobs()),
             mediaStorage = FakeStorage(),
-            publisher = publisher,
+            publishers = listOf(publisher),
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
 
@@ -172,7 +174,7 @@ class PublishPhotoRepostUseCaseTest {
         val service = PublishPhotoRepostUseCase(
             repostTracker = TelegramRepostTracker(FakeJobs()),
             mediaStorage = FakeStorage(),
-            publisher = publisher,
+            publishers = listOf(publisher),
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
         val first = message(
@@ -187,6 +189,31 @@ class PublishPhotoRepostUseCaseTest {
         assertIs<RepostResult.Published>(service.handle(first))
         assertEquals(RepostResult.Duplicate, service.handle(repeated))
         assertEquals(1, publisher.calls)
+    }
+
+    @Test
+    fun `one destination failure does not cancel another destination`() = runBlocking {
+        val jobs = FakeJobs()
+        val tikTok = FakePublisher()
+        val threads = FakePublisher(
+            destination = RepostDestination.THREADS,
+            maxPhotoCount = 20,
+            failure = IllegalStateException("Threads unavailable"),
+        )
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(jobs),
+            mediaStorage = FakeStorage(),
+            publishers = listOf(tikTok, threads),
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
+        )
+
+        val result = assertIs<RepostResult.Published>(service.handle(message(20)))
+
+        assertEquals(listOf(RepostDestination.TIKTOK), result.receipts.map { it.destination })
+        assertEquals(RepostDestination.THREADS, result.failures.single().destination)
+        assertTrue(result.failures.single().reason.contains("Threads unavailable"))
+        assertEquals(1, tikTok.calls)
+        assertEquals(1, threads.calls)
     }
 
     private fun message(
@@ -212,15 +239,20 @@ class PublishPhotoRepostUseCaseTest {
             StoredMedia("https://api.example/media/photo.jpg", "photo.jpg")
     }
 
-    private class FakePublisher : PhotoPublisher {
+    private class FakePublisher(
+        override val destination: RepostDestination = RepostDestination.TIKTOK,
+        override val maxPhotoCount: Int = 35,
+        private val failure: Throwable? = null,
+    ) : PhotoPublisher {
         var calls = 0
         val publishedUrls = mutableListOf<List<String>>()
         val publishedCaptions = mutableListOf<String?>()
         override suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt {
             calls++
+            failure?.let { throw it }
             publishedUrls += photoUrls
             publishedCaptions += caption
-            return PublishReceipt("publish-42", "Ірина", "SELF_ONLY")
+            return PublishReceipt("publish-42", "Ірина", "SELF_ONLY", destination)
         }
     }
 
@@ -235,27 +267,31 @@ class PublishPhotoRepostUseCaseTest {
 
     private class FakeJobs : TelegramRepostRepository {
         private val messages = mutableMapOf<Long, ReceivedTelegramMessage>()
-        private val activeKeys = mutableMapOf<com.rieltor.domain.model.TelegramRepostKey, Long>()
+        private val activeKeys = mutableMapOf<Pair<RepostDestination, com.rieltor.domain.model.TelegramRepostKey>, Long>()
+        private val publications = mutableSetOf<Pair<Long, RepostDestination>>()
         var publishedId: String? = null
 
-        override fun register(message: ReceivedTelegramMessage): TelegramMessageRegistration {
-            messages[message.updateId]?.let {
+        override fun register(message: ReceivedTelegramMessage, destination: RepostDestination): TelegramMessageRegistration {
+            if (message.updateId to destination in publications) {
                 return TelegramMessageRegistration.Duplicate(message.updateId)
             }
             messages[message.updateId] = message
             val key = message.repostKey
-            val original = key?.let(activeKeys::get)
+            val destinationKey = key?.let { destination to it }
+            val original = destinationKey?.let(activeKeys::get)
             if (original != null) return TelegramMessageRegistration.Duplicate(original)
-            if (key != null) activeKeys[key] = message.updateId
+            if (destinationKey != null) activeKeys[destinationKey] = message.updateId
+            publications += message.updateId to destination
             return TelegramMessageRegistration.Accepted(key)
         }
 
-        override fun markRepostPublished(telegramUpdateId: Long, publishId: String) {
+        override fun markRepostPublished(telegramUpdateId: Long, destination: RepostDestination, publishId: String) {
             publishedId = publishId
         }
 
-        override fun markRepostFailed(telegramUpdateId: Long, error: String) {
-            messages.remove(telegramUpdateId)?.repostKey?.let(activeKeys::remove)
+        override fun markRepostFailed(telegramUpdateId: Long, destination: RepostDestination, error: String) {
+            publications -= telegramUpdateId to destination
+            messages[telegramUpdateId]?.repostKey?.let { activeKeys.remove(destination to it) }
         }
     }
 }

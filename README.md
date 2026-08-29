@@ -1,7 +1,7 @@
 # Сайт Ірини Ліннік
 
 Репозиторий объединяет **статический сайт** (GitHub Pages из папки `docs/`) и **Kotlin/Ktor backend** для автоматической
-передачи фотографий из Telegram и связанных папок Google Drive в TikTok.
+передачи фотографий из Telegram и связанных папок Google Drive в TikTok и Threads.
 
 ## Структура проекта
 
@@ -34,13 +34,14 @@ python -m http.server 4173
 
 ## Первичная настройка backend
 
-Telegram API-настройки и токены авторизации TikTok/Google Drive хранятся в `rieltor.db`. При первом запуске отсутствующие
+Telegram API-настройки и токены авторизации TikTok/Threads/Google Drive хранятся в `rieltor.db`. При первом запуске отсутствующие
 Telegram API-настройки импортируются из переменных окружения или `.env`. `TELEGRAM_USER_ID` в SQLite не сохраняется:
 он обязательно читается при каждом запуске из окружения/`.env` и выбирает папку
 `tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR. При обновлении старая строка `TELEGRAM_USER_ID` автоматически удаляется
 из `app_secrets`.
 
-`TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET` в SQLite не сохраняются и при
+`TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `THREADS_APP_ID`, `THREADS_APP_SECRET`, `GOOGLE_CLIENT_ID` и
+`GOOGLE_CLIENT_SECRET` в SQLite не сохраняются и при
 каждом запуске обязательно читаются из переменных окружения или локального `.env`.
 
 Запуск:
@@ -49,6 +50,9 @@ Telegram API-настройки импортируются из переменн
 $env:TIKTOK_CLIENT_KEY = "ваш_client_key"
 $env:TIKTOK_CLIENT_SECRET = "ваш_client_secret"
 $env:TIKTOK_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/tiktok/callback"
+$env:THREADS_APP_ID = "ваш_threads_app_id"
+$env:THREADS_APP_SECRET = "ваш_threads_app_secret"
+$env:THREADS_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/threads/callback"
 $env:GOOGLE_CLIENT_ID = "ваш_client_id.apps.googleusercontent.com"
 $env:GOOGLE_CLIENT_SECRET = "ваш_client_secret"
 $env:GOOGLE_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/google/callback"
@@ -57,10 +61,11 @@ $env:TELEGRAM_USER_ID = "ваш_telegram_user_id"
 ```
 
 Сервер стартует на `http://localhost:8383`. Пользовательский Telegram-клиент TDLight открывает сессию из
-`tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR. Фото из настроенных Telegram-чатов передаются через TikTok Photo Direct
+`tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR. Фото из настроенных Telegram-чатов независимо передаются через TikTok Photo Direct
 Post; caption перед публикацией очищается от внутренних контактов, комиссий, процентов оформления и Google Drive-ссылок,
 а JPEG/WebP из указанных в тексте файлов или папок Google Drive добавляются к фотографиям сообщения (до 35 изображений
-в одном TikTok-посте). Затем caption приводится к единой структуре с публичным контактом Ірини и хештегами. Остальные
+в одном TikTok-посте) и Threads (до 20 фото в карусели). Затем caption приводится к единой структуре с публичным контактом
+Ірини и хештегами. Ошибка одного сервиса не отменяет публикацию в другом. Остальные
 чаты игнорируются. Старый `autoposter` нельзя запускать
 одновременно с этим backend: два процесса не должны открывать одну TDLib-сессию.
 
@@ -68,14 +73,15 @@ Post; caption перед публикацией очищается от внут
 
 TDLib-адаптер только получает сообщения, собирает альбомы и передаёт подготовленные сообщения через
 `TelegramMessageSource`. `TelegramRepostCoordinator` наблюдает поток последовательно, поэтому две публикации не запускаются
-параллельно. Google Drive и TikTok подключены к application use case через отдельные интерфейсы и не импортируются в
+параллельно. Google Drive, TikTok и Threads подключены к application use case через отдельные интерфейсы и не импортируются в
 Telegram transport. Состояние TDLib-соединения и состояние repost-конвейера публикуются раздельными `StateFlow`, а их
 изменения записываются в журнал.
 
 Перед загрузкой фотографий backend извлекает из исходного caption цену и адрес, нормализует их и вместе с ID форумной
 темы использует как ключ объявления. Каждое входящее сообщение сохраняется в `received_telegram_messages`, а успешно
-отправленный TikTok-пост — в `published_reposts`. Повтор с новым Telegram message ID, но тем же ключом
-`messageThreadId + цена + адрес`, остаётся в истории со статусом `DUPLICATE` и повторно не публикуется. Если цену или
+результат каждого назначения — в `repost_publications`. Повтор с новым Telegram message ID, но тем же ключом
+`destination + messageThreadId + цена + адрес` не публикуется повторно именно в этом сервисе. Если TikTok уже успешен,
+а Threads временно упал, повтор затронет только Threads. Если цену или
 адрес извлечь невозможно, сохраняется только защита от повторной доставки того же Telegram update ID.
 
 ### Подключение Google Drive
@@ -88,11 +94,19 @@ Refresh token сохранится в локальной SQLite-базе и бу
 OAuth-форма сразу подсказывает публичный аккаунт `irinalinnik.lee@gmail.com`; отдельная переменная
 `GOOGLE_ACCOUNT_HINT` не используется.
 
+### Подключение Threads
+
+В Meta for Developers создайте приложение с Threads API, укажите callback
+`https://api.rieltor.dpdns.org/auth/threads/callback` и разрешения `threads_basic`, `threads_content_publish`.
+Добавьте `THREADS_APP_ID`, `THREADS_APP_SECRET` и `THREADS_REDIRECT_URI` в окружение или `.env`, перезапустите backend,
+затем откройте `https://rieltor.dpdns.org/connect.html` и подключите рабочий Threads-аккаунт. Долгоживущий пользовательский
+токен хранится в SQLite и обновляется отдельно от TikTok.
+
 ### Мониторинг форумных чатов Telegram
 
 Родительский форум укажите в `TELEGRAM_MONITORED_CHAT_ID`, например `-1002681732909`. ID его тем храните отдельно в
 `TELEGRAM_MONITORED_MESSAGE_THREAD_IDS` через запятую, например `5242880,4194304`. Если список тем пуст, обрабатывается
-весь чат. Фото из перечисленных источников передаются в TikTok. Изменения `.env` применяются после перезапуска backend.
+весь чат. Фото из перечисленных источников передаются в подключённые TikTok и Threads. Изменения `.env` применяются после перезапуска backend.
 Старый составной формат `TELEGRAM_MONITORED_TOPICS` пока поддерживается для обратной совместимости.
 
 Для сборки JAR под Linux-сервер из Windows укажите native-классификатор:
@@ -126,7 +140,7 @@ Copy-Item `
 `tdlib-session-id<TELEGRAM_USER_ID>`. Для работы в фоне используйте уже настроенный сервис `rieltor.service`,
 а после замены JAR перезапускайте его командой `sudo systemctl restart rieltor.service`.
 
-TikTok получает фотографию по `https://api.rieltor.dpdns.org/media/...`, поэтому в настройках Content Posting API нужно
+TikTok и Threads получают фотографии по `https://api.rieltor.dpdns.org/media/...`, поэтому в настройках Content Posting API нужно
 подтвердить владение доменом `https://api.rieltor.dpdns.org`. Для неаудированного TikTok-клиента публикации ограничены
 видимостью `SELF_ONLY`.
 

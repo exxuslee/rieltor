@@ -77,12 +77,14 @@ class TelegramRepostCoordinator(
         try {
             when (val result = repostHandler.handle(message)) {
                 is RepostResult.Published -> {
-                    logger.info(
-                        "Telegram/Google Drive photo post submitted to TikTok. updateId={}, publishId={}, privacy={}",
-                        message.updateId,
-                        result.receipt.publishId,
-                        result.receipt.privacyLevel,
-                    )
+                    result.receipts.forEach { receipt -> logger.info(
+                        "Telegram/Google Drive photo post submitted. destination={}, updateId={}, publishId={}, privacy={}",
+                        receipt.destination, message.updateId, receipt.publishId, receipt.privacyLevel,
+                    ) }
+                    result.failures.forEach { failure -> logger.error(
+                        "Independent repost destination failed. destination={}, updateId={}, reason={}",
+                        failure.destination, message.updateId, failure.reason,
+                    ) }
                     mutableState.value = RepostFlowState.Published(message.updateId, result.receipt.publishId)
                 }
                 RepostResult.Duplicate -> {

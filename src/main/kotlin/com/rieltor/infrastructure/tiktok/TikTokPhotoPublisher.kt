@@ -1,6 +1,7 @@
 package com.rieltor.infrastructure.tiktok
 
 import com.rieltor.domain.model.PublishReceipt
+import com.rieltor.domain.model.RepostDestination
 import com.rieltor.domain.repository.PhotoPublisher
 import io.ktor.client.*
 import io.ktor.client.request.*
@@ -28,6 +29,8 @@ class TikTokPhotoPublisher(
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val delayMillis: suspend (Long) -> Unit = { delay(it) },
 ) : PhotoPublisher {
+    override val destination = RepostDestination.TIKTOK
+    override val maxPhotoCount = MAX_PHOTO_COUNT
     private val publishMutex = Mutex()
     private var lastPublishAttemptAtMillis: Long? = null
 

@@ -5,6 +5,7 @@ import com.rieltor.domain.model.StoredGoogleDriveTokens
 import com.rieltor.domain.model.ReceivedTelegramMessage
 import com.rieltor.domain.model.TelegramMessageRegistration
 import com.rieltor.domain.model.TelegramRepostKey
+import com.rieltor.domain.model.RepostDestination
 import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -59,7 +60,7 @@ class SqlitePersistenceTest {
             connection.createStatement().use { statement ->
                 statement.executeQuery("PRAGMA user_version").use { result ->
                     assertTrue(result.next())
-                    assertEquals(5, result.getInt(1))
+                    assertEquals(6, result.getInt(1))
                 }
             }
         }
@@ -93,10 +94,10 @@ class SqlitePersistenceTest {
         val repository = TelegramRepostRepositoryImpl(database)
         val key = TelegramRepostKey(5242880, "175000:USD", "мечнікова 10")
 
-        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(101, key)))
-        repository.markRepostPublished(101, "publish-101")
+        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(101, key), RepostDestination.TIKTOK))
+        repository.markRepostPublished(101, RepostDestination.TIKTOK, "publish-101")
         val duplicate = assertIs<TelegramMessageRegistration.Duplicate>(
-            repository.register(message(102, key))
+            repository.register(message(102, key), RepostDestination.TIKTOK)
         )
 
         assertEquals(101, duplicate.originalUpdateId)
@@ -117,7 +118,7 @@ class SqlitePersistenceTest {
                     assertEquals(101, result.getLong("duplicate_of_update_id"))
                 }
                 statement.executeQuery(
-                    "SELECT publish_id FROM published_reposts WHERE telegram_update_id = 101"
+                    "SELECT publish_id FROM repost_publications WHERE telegram_update_id = 101 AND destination = 'TIKTOK'"
                 ).use { result ->
                     assertTrue(result.next())
                     assertEquals("publish-101", result.getString("publish_id"))
@@ -132,11 +133,11 @@ class SqlitePersistenceTest {
         val repository = TelegramRepostRepositoryImpl(SqliteDatabase(directory.resolve("test.db")))
         val base = TelegramRepostKey(10, "90000:USD", "соборна 1")
 
-        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(1, base)))
-        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(2, base.copy(messageThreadId = 11))))
-        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(3, base.copy(price = "91000:USD"))))
-        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(4, base.copy(address = "соборна 2"))))
-        assertIs<TelegramMessageRegistration.Duplicate>(repository.register(message(5, base)))
+        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(1, base), RepostDestination.TIKTOK))
+        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(2, base.copy(messageThreadId = 11)), RepostDestination.TIKTOK))
+        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(3, base.copy(price = "91000:USD")), RepostDestination.TIKTOK))
+        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(4, base.copy(address = "соборна 2")), RepostDestination.TIKTOK))
+        assertIs<TelegramMessageRegistration.Duplicate>(repository.register(message(5, base), RepostDestination.TIKTOK))
     }
 
     @Test
@@ -145,10 +146,31 @@ class SqlitePersistenceTest {
         val repository = TelegramRepostRepositoryImpl(SqliteDatabase(directory.resolve("test.db")))
         val key = TelegramRepostKey(10, "90000:USD", "соборна 1")
 
-        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(1, key)))
-        repository.markRepostFailed(1, "temporary")
+        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(1, key), RepostDestination.TIKTOK))
+        repository.markRepostFailed(1, RepostDestination.TIKTOK, "temporary")
 
-        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(1, key)))
+        assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(1, key), RepostDestination.TIKTOK))
+    }
+
+    @Test
+    fun `destinations keep independent duplicate and retry state`() {
+        val directory = Files.createTempDirectory("rieltor-repost-destinations-test")
+        val repository = TelegramRepostRepositoryImpl(SqliteDatabase(directory.resolve("test.db")))
+        val key = TelegramRepostKey(10, "90000:USD", "соборна 1")
+        val first = message(1, key)
+
+        assertIs<TelegramMessageRegistration.Accepted>(repository.register(first, RepostDestination.TIKTOK))
+        assertIs<TelegramMessageRegistration.Accepted>(repository.register(first, RepostDestination.THREADS))
+        repository.markRepostPublished(1, RepostDestination.TIKTOK, "tiktok-1")
+        repository.markRepostFailed(1, RepostDestination.THREADS, "temporary")
+
+        val repeated = message(2, key)
+        assertIs<TelegramMessageRegistration.Duplicate>(
+            repository.register(repeated, RepostDestination.TIKTOK)
+        )
+        assertIs<TelegramMessageRegistration.Accepted>(
+            repository.register(repeated, RepostDestination.THREADS)
+        )
     }
 
     @Test
@@ -166,7 +188,7 @@ class SqlitePersistenceTest {
                 executor.submit<TelegramMessageRegistration> {
                     ready.countDown()
                     start.await()
-                    repository.register(message(updateId.toLong(), key))
+                    repository.register(message(updateId.toLong(), key), RepostDestination.TIKTOK)
                 }
             }
 

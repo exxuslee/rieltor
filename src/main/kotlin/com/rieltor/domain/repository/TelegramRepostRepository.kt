@@ -2,10 +2,11 @@ package com.rieltor.domain.repository
 
 import com.rieltor.domain.model.TelegramMessageRegistration
 import com.rieltor.domain.model.ReceivedTelegramMessage
+import com.rieltor.domain.model.RepostDestination
 
 interface TelegramRepostRepository {
-    /** Records every received message and atomically reserves a new listing identity for publication. */
-    fun register(message: ReceivedTelegramMessage): TelegramMessageRegistration
-    fun markRepostPublished(telegramUpdateId: Long, publishId: String)
-    fun markRepostFailed(telegramUpdateId: Long, error: String)
+    /** Reserves a listing independently for one destination. */
+    fun register(message: ReceivedTelegramMessage, destination: RepostDestination): TelegramMessageRegistration
+    fun markRepostPublished(telegramUpdateId: Long, destination: RepostDestination, publishId: String)
+    fun markRepostFailed(telegramUpdateId: Long, destination: RepostDestination, error: String)
 }
