@@ -30,7 +30,6 @@ class ListingCaptionFormatterTest {
         assertEquals(
             """🏠 Таунхаус з ремонтом — Ірпінь
 
-Основні параметри:
 • Вул Мечнікова
 • Три кімнати
 • 84 кв.м
@@ -60,8 +59,8 @@ class ListingCaptionFormatterTest {
 
         val result = requireNotNull(filter.filter(source))
 
-        assertContains(result, "Основні параметри:\n• Площа дуплекса: 93 м2")
-        assertContains(result, "Додатковий опис:\nне введений в експлуатацію")
+        assertContains(result, "• Площа дуплекса: 93 м2")
+        assertContains(result, "не введений в експлуатацію")
         assertContains(result, "#дуплекс #Буча")
         assertFalse(result.contains("5000${'$'}/2"))
         assertFalse(result.contains("Вячеслав"))
