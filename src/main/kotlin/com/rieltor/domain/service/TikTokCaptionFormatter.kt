@@ -40,12 +40,10 @@ class ListingCaptionFormatter {
             add("🏠 $title")
             if (parameters.isNotEmpty()) {
                 add("")
-                add("Основні параметри:")
                 parameters.forEach { add("• ${it.removeListMarker()}") }
             }
             if (description.isNotEmpty()) {
                 add("")
-                add("Додатковий опис:")
                 description.forEach { add(it.removeListMarker()) }
             }
             add("")
