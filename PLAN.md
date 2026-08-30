@@ -45,6 +45,8 @@ node scripts/check-seo.mjs
 - Backend организован по слоям `domain`, `application`, `infrastructure`, `web`; сборка зависимостей вынесена в
   Koin-модули `configuration`, `persistence`, `network`, `application` и `integration`.
 - `TelegramClientAdapter` отвечает только за TDLib transport и отдаёт сообщения через `TelegramMessageSource.messages`.
+  Перед передачей в repost-конвейер новое сообщение удерживается 30 минут, а непосредственно перед публикацией его
+  актуальная версия повторно запрашивается у TDLib, чтобы учесть отредактированный текст или подпись.
   `TelegramRepostCoordinator` последовательно наблюдает этот `Flow` и вызывает application use case публикации. Состояния
   соединения и repost-конвейера доступны отдельно через `StateFlow<TelegramSourceState>` и
   `StateFlow<RepostFlowState>`.

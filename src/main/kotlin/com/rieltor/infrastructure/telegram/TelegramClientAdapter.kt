@@ -31,6 +31,8 @@ import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Telegram transport backed by TDLib. Emits monitored messages and knows nothing about TikTok or Google Drive. */
@@ -39,12 +41,14 @@ class TelegramClientAdapter(
     private val apiHash: String,
     private val sessionDirectory: Path,
     private val monitoredTopics: Set<TelegramMonitoredTopic>,
+    private val repostDelayMillis: Long = REPOST_DELAY_MILLIS,
 ) : TelegramMessageSource {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val messageChannel = Channel<TelegramPhotoMessage>(Channel.RENDEZVOUS)
     private val mutableState = MutableStateFlow<TelegramSourceState>(TelegramSourceState.Stopped)
     private val deliveryMutex = Mutex()
+    private val pendingMessageContents = ConcurrentHashMap<MessageKey, TdApi.MessageContent>()
     private val messageMapper = TelegramMessageMapper()
     private val diagnostics = TelegramDiagnostics(monitoredTopics)
     private val started = AtomicBoolean(false)
@@ -79,6 +83,7 @@ class TelegramClientAdapter(
             val builder = clientFactory.builder(tdSettings)
             builder.addUpdateHandler(TdApi.UpdateAuthorizationState::class.java, ::onAuthorizationState)
             builder.addUpdateHandler(TdApi.UpdateNewMessage::class.java, ::onNewMessage)
+            builder.addUpdateHandler(TdApi.UpdateMessageContent::class.java, ::onMessageContentUpdated)
             builder.addUpdateExceptionHandler { error ->
                 logger.error("Telegram update handler failed", error)
             }
@@ -151,11 +156,27 @@ class TelegramClientAdapter(
 
         when (message.content) {
             is TdApi.MessagePhoto -> {
+                pendingMessageContents[message.key()] = message.content
                 if (message.mediaAlbumId == 0L) enqueue(listOf(message))
                 else albumCollector.add(message.mediaAlbumId, message)
             }
-            is TdApi.MessageText -> enqueue(listOf(message))
+            is TdApi.MessageText -> {
+                pendingMessageContents[message.key()] = message.content
+                enqueue(listOf(message))
+            }
             else -> Unit
+        }
+    }
+
+    private fun onMessageContentUpdated(update: TdApi.UpdateMessageContent) {
+        val key = MessageKey(update.chatId, update.messageId)
+        val wasPending = pendingMessageContents.computeIfPresent(key) { _, _ -> update.newContent } != null
+        if (wasPending) {
+            logger.info(
+                "Updated pending Telegram message before repost. chatId={}, messageId={}",
+                update.chatId,
+                update.messageId,
+            )
         }
     }
 
@@ -172,17 +193,64 @@ class TelegramClientAdapter(
     }
 
     private suspend fun deliverMessages(messages: List<TdApi.Message>) {
-        deliveryMutex.withLock {
-            val telegramClient = client ?: return
-            val message = messageMapper.map(telegramClient, messages) ?: return
-            var delivered = false
+        val messageKeys = messages.map { message -> message.key() }
+        try {
+            logger.info(
+                "Telegram message scheduled for repost in {} minutes. chatId={}, messageIds={}",
+                TimeUnit.MILLISECONDS.toMinutes(repostDelayMillis),
+                messages.firstOrNull()?.chatId,
+                messages.map(TdApi.Message::id),
+            )
+            delay(repostDelayMillis)
+
+            deliveryMutex.withLock {
+                val telegramClient = client ?: return
+                val latestMessages = messages.map { original ->
+                    fetchLatestMessage(telegramClient, original) ?: original.also { fallback ->
+                        pendingMessageContents[original.key()]?.let { latestContent ->
+                            fallback.content = latestContent
+                        }
+                    }
+                }
+                val message = messageMapper.map(telegramClient, latestMessages) ?: return
+                var delivered = false
+                try {
+                    messageChannel.send(message)
+                    delivered = true
+                } finally {
+                    if (!delivered) message.closePhotos()
+                }
+            }
+        } finally {
+            messageKeys.forEach(pendingMessageContents::remove)
+        }
+    }
+
+    private suspend fun fetchLatestMessage(
+        telegramClient: SimpleTelegramClient,
+        original: TdApi.Message,
+    ): TdApi.Message? {
+        repeat(GET_MESSAGE_MAX_ATTEMPTS) { attempt ->
             try {
-                messageChannel.send(message)
-                delivered = true
-            } finally {
-                if (!delivered) message.closePhotos()
+                return telegramClient.send(TdApi.GetMessage(original.chatId, original.id))
+                    .get(GET_MESSAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                if (attempt + 1 < GET_MESSAGE_MAX_ATTEMPTS) {
+                    delay(GET_MESSAGE_RETRY_DELAY_MILLIS * (attempt + 1))
+                } else {
+                    logger.warn(
+                        "Could not refresh Telegram message before repost; using the latest content received via updates. " +
+                            "chatId={}, messageId={}",
+                        original.chatId,
+                        original.id,
+                        error,
+                    )
+                }
             }
         }
+        return null
     }
 
     private fun isMonitored(message: TdApi.Message): Boolean =
@@ -192,6 +260,7 @@ class TelegramClientAdapter(
         albumCollector.close()
         messageChannel.close()
         scope.cancel()
+        pendingMessageContents.clear()
         runCatching { client?.closeAndWait() }
             .onFailure { logger.warn("Could not close Telegram client cleanly", it) }
         runCatching { factory?.close() }
@@ -208,9 +277,17 @@ class TelegramClientAdapter(
     private fun Throwable.failureReason(): String = message?.takeIf(String::isNotBlank)
         ?: javaClass.simpleName
 
+    private fun TdApi.Message.key(): MessageKey = MessageKey(chatId, id)
+
+    private data class MessageKey(val chatId: Long, val messageId: Long)
+
     private companion object {
+        const val REPOST_DELAY_MILLIS = 30 * 60 * 1_000L
         const val ALBUM_SETTLE_DELAY_MILLIS = 2_000L
         const val TELEGRAM_MAX_ALBUM_SIZE = 10
         const val STARTUP_MONITORING_LOG_DELAY_MILLIS = 500L
+        const val GET_MESSAGE_TIMEOUT_SECONDS = 30L
+        const val GET_MESSAGE_MAX_ATTEMPTS = 2
+        const val GET_MESSAGE_RETRY_DELAY_MILLIS = 1_000L
     }
 }
