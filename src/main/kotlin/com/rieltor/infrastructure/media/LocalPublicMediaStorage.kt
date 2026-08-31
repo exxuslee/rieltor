@@ -1,18 +1,19 @@
 package com.rieltor.infrastructure.media
 
+import com.rieltor.domain.model.MediaTextOverlay
 import com.rieltor.domain.model.StoredMedia
 import com.rieltor.domain.repository.PublicMediaStorage
 import java.awt.Color
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import java.io.InputStream
-import javax.imageio.IIOImage
-import javax.imageio.ImageIO
-import javax.imageio.ImageWriteParam
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
-import java.util.UUID
+import java.util.*
+import javax.imageio.IIOImage
+import javax.imageio.ImageIO
+import javax.imageio.ImageWriteParam
 
 class LocalPublicMediaStorage(
     private val directory: Path,
@@ -23,10 +24,11 @@ class LocalPublicMediaStorage(
         setPublicDirectoryPermissions(directory)
     }
 
-    override fun store(fileName: String, content: InputStream): StoredMedia {
+    override fun store(fileName: String, content: InputStream, textOverlay: MediaTextOverlay?): StoredMedia {
         val image = ImageIO.read(content)
             ?: throw IllegalArgumentException("Unsupported or corrupt image: $fileName")
         val normalized = normalizeForPublish(image)
+        textOverlay?.let { ListingPhotoOverlayRenderer.draw(normalized, it) }
         val publicName = "${UUID.randomUUID()}.jpg"
         val destination = directory.resolve(publicName).normalize()
         require(destination.parent == directory.toAbsolutePath().normalize() || destination.parent == directory.normalize()) {

@@ -71,6 +71,12 @@ data class TelegramPhoto(
     val content: InputStream,
 )
 
+data class MediaTextOverlay(
+    val title: String,
+    val price: String?,
+    val contact: String,
+)
+
 data class StoredMedia(
     val publicUrl: String,
     val localPath: String,

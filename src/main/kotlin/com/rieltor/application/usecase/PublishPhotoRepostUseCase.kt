@@ -2,12 +2,7 @@ package com.rieltor.application.usecase
 
 import com.rieltor.application.port.PhotoRepostHandler
 import com.rieltor.application.service.TelegramRepostTracker
-import com.rieltor.domain.model.RepostResult
-import com.rieltor.domain.model.RepostFailure
-import com.rieltor.domain.model.TelegramMessageRegistration
-import com.rieltor.domain.model.TelegramMonitoredTopic
-import com.rieltor.domain.model.TelegramPhoto
-import com.rieltor.domain.model.TelegramPhotoMessage
+import com.rieltor.domain.model.*
 import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublicMediaStorage
@@ -59,10 +54,13 @@ class PublishPhotoRepostUseCase(
             extraPhotos = loadExtraPhotos(message, effectivePhotoLimit)
             val allPhotos = (message.photos + extraPhotos).take(effectivePhotoLimit)
             require(allPhotos.isNotEmpty()) { "At least one Telegram or Google Drive photo is required." }
-            val media = allPhotos.map { photo ->
-                photo.content.use { mediaStorage.store(photo.fileName, it) }
-            }
             val caption = captionFormatter.filter(message.caption)
+            val textOverlay = captionFormatter.photoOverlay(caption)
+            val media = allPhotos.mapIndexed { index, photo ->
+                photo.content.use {
+                    mediaStorage.store(photo.fileName, it, textOverlay.takeIf { index == 0 })
+                }
+            }
             // The production VM has one OCPU and 1 GB RAM. Running TikTok and Threads
             // requests concurrently only increases peak memory/connection pressure there.
             // Keep destinations failure-isolated, but publish them one at a time.

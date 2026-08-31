@@ -1,5 +1,6 @@
 package com.rieltor.infrastructure.media
 
+import com.rieltor.domain.model.MediaTextOverlay
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
@@ -52,6 +53,38 @@ class LocalPublicMediaStorageTest {
 
             assertEquals(720, output.width)
             assertEquals(960, output.height)
+        } finally {
+            directory.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `draws readable text cards in the lower left corner`() {
+        val directory = Files.createTempDirectory("media-storage-overlay-test")
+        try {
+            val storage = LocalPublicMediaStorage(directory, "https://api.example")
+            val source = BufferedImage(720, 960, BufferedImage.TYPE_INT_RGB).also { image ->
+                image.createGraphics().run {
+                    color = Color(30, 50, 70)
+                    fillRect(0, 0, image.width, image.height)
+                    dispose()
+                }
+            }
+            val input = ByteArrayOutputStream().also { ImageIO.write(source, "jpeg", it) }.toByteArray()
+
+            val stored = storage.store(
+                "photo.jpeg",
+                ByteArrayInputStream(input),
+                MediaTextOverlay("Квартира в Ірпені", "Ціна 22 000 $", "🤙 066-372-71-02 Ірина"),
+            )
+            val output = ImageIO.read(Path.of(stored.localPath).toFile())
+            val lightPixels = (0 until output.width / 2).sumOf { x ->
+                (output.height / 2 until output.height).count { y ->
+                    Color(output.getRGB(x, y)).run { red > 180 && green > 180 && blue > 180 }
+                }
+            }
+
+            assertTrue(lightPixels > 5_000, "Expected translucent text cards in the lower-left quadrant")
         } finally {
             directory.toFile().deleteRecursively()
         }

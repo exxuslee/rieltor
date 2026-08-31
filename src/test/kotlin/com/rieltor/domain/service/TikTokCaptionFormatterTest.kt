@@ -36,7 +36,7 @@ class ListingCaptionFormatterTest {
 • ГАЗ
 • Ціна. 175000${'$'}
 
-📞 066-372-71-02 Ірина
+🤙 066-372-71-02 Ірина
 
 #нерухомість #продажнерухомості #таунхаус #Ірпінь #ІринаЛіннік""",
             result,
@@ -90,7 +90,7 @@ class ListingCaptionFormatterTest {
         assertFalse(result.contains("5%/2"))
         assertFalse(result.contains("Сергій"))
         assertFalse(result.contains("Novator", ignoreCase = true))
-        assertContains(result, "📞 066-372-71-02 Ірина")
+        assertContains(result, "🤙 066-372-71-02 Ірина")
     }
 
     @Test
@@ -104,5 +104,16 @@ class ListingCaptionFormatterTest {
 
         assertContains(result, "Ціна 22 000${'$'}")
         assertFalse(result.contains("( 2000/2)"))
+    }
+
+    @Test
+    fun `extracts title price and public contact for the first photo`() {
+        val caption = requireNotNull(filter.filter("Квартира в Ірпені\nЦіна 22 000${'$'}"))
+
+        val overlay = requireNotNull(filter.photoOverlay(caption))
+
+        assertEquals("Квартира в Ірпені", overlay.title)
+        assertEquals("Ціна 22 000${'$'}", overlay.price)
+        assertEquals("🤙 066-372-71-02 Ірина", overlay.contact)
     }
 }

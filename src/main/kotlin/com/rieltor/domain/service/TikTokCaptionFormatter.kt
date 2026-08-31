@@ -1,5 +1,7 @@
 package com.rieltor.domain.service
 
+import com.rieltor.domain.model.MediaTextOverlay
+
 /**
  * Converts an internal Telegram listing caption into a reusable public description.
  *
@@ -53,6 +55,23 @@ class ListingCaptionFormatter {
         }.joinToString("\n")
     }
 
+    fun photoOverlay(filteredCaption: String?): MediaTextOverlay? {
+        if (filteredCaption.isNullOrBlank()) return null
+
+        val lines = filteredCaption.lineSequence().map(String::trim).filter(String::isNotBlank).toList()
+        val title = lines.firstOrNull { it.startsWith(TITLE_PREFIX) }
+            ?.removePrefix(TITLE_PREFIX)
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
+            ?: return null
+        val price = lines.asSequence()
+            .filterNot { it.startsWith(TITLE_PREFIX) || it == PUBLIC_CONTACT || it.startsWith('#') }
+            .map { it.removePrefix(ITEM_PREFIX).trim() }
+            .firstOrNull(priceLine::containsMatchIn)
+
+        return MediaTextOverlay(title, price, PUBLIC_CONTACT)
+    }
+
     private fun cleanLine(source: String): String {
         var line = source.trim()
         if (line.isBlank() || phone.containsMatchIn(line)) return ""
@@ -96,7 +115,9 @@ class ListingCaptionFormatter {
     private fun String.removeListMarker(): String = replaceFirst(listMarker, "").trim()
 
     private companion object {
-        const val PUBLIC_CONTACT = "📞 066-372-71-02 Ірина"
+        const val PUBLIC_CONTACT = "🤙 066-372-71-02 Ірина"
+        const val TITLE_PREFIX = "🏠 "
+        const val ITEM_PREFIX = "• "
 
         val googleUrl = Regex("""(?iu)https?://(?:drive|docs)\.google\.com/\S+""")
         val phone = Regex("""(?<!\d)(?:\+?38[\s().-]*)?0\d{2}(?:[\s().-]*\d){7}(?!\d)""")
@@ -131,6 +152,7 @@ class ListingCaptionFormatter {
         val parameterWords = Regex(
             """(?iu)(?:ціна|вартість|площа|м\s*[²2]|м\.?\s*кв\.?|кв\.?\s*м|сот\p{L}*|ділянк\p{L}*|поверх\p{L}*|кімнат\p{L}*|санвуз\p{L}*|(?:^|\s)жк(?:\s|$)|(?:^|\s)вул\.?\s|вулиц\p{L}*|опален\p{L}*|комунікаці\p{L}*|вода|каналізаці\p{L}*|септик|свердловин\p{L}*|скважин\p{L}*|газ|електр\p{L}*|програм\p{L}*|сертифікат|іпотек\p{L}*|розтермінув\p{L}*)"""
         )
+        val priceLine = Regex("""(?iu)(?:ціна|вартість|від\s+\d|\d[\d\s.,]*\s*(?:[$€₴]|грн\.?|usd|eur))""")
 
         val propertyHashtags = listOf(
             Regex("(?iu)таунхаус") to "#таунхаус",

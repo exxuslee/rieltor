@@ -1,15 +1,7 @@
 package com.rieltor.application.usecase
 
 import com.rieltor.application.service.TelegramRepostTracker
-import com.rieltor.domain.model.PublishReceipt
-import com.rieltor.domain.model.ReceivedTelegramMessage
-import com.rieltor.domain.model.RepostResult
-import com.rieltor.domain.model.RepostDestination
-import com.rieltor.domain.model.StoredMedia
-import com.rieltor.domain.model.TelegramPhoto
-import com.rieltor.domain.model.TelegramPhotoMessage
-import com.rieltor.domain.model.TelegramMonitoredTopic
-import com.rieltor.domain.model.TelegramMessageRegistration
+import com.rieltor.domain.model.*
 import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublicMediaStorage
@@ -19,11 +11,7 @@ import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 class PublishPhotoRepostUseCaseTest {
     @Test
@@ -49,9 +37,10 @@ class PublishPhotoRepostUseCaseTest {
     @Test
     fun `publishes all photos as one post`() = runBlocking {
         val publisher = FakePublisher()
+        val storage = FakeStorage()
         val service = PublishPhotoRepostUseCase(
             repostTracker = TelegramRepostTracker(FakeJobs()),
-            mediaStorage = FakeStorage(),
+            mediaStorage = storage,
             publishers = listOf(publisher),
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
@@ -70,10 +59,13 @@ class PublishPhotoRepostUseCaseTest {
         assertIs<RepostResult.Published>(service.handle(message))
         assertEquals(1, publisher.calls)
         assertEquals(3, publisher.publishedUrls.single().size)
+        assertEquals("Альбом квартири", storage.textOverlays[0]?.title)
+        assertEquals("🤙 066-372-71-02 Ірина", storage.textOverlays[0]?.contact)
+        assertEquals(listOf(false, true, true), storage.textOverlays.map { it == null })
         assertEquals(
             """🏠 Альбом квартири
 
-📞 066-372-71-02 Ірина
+🤙 066-372-71-02 Ірина
 
 #нерухомість #продажнерухомості #квартира #ІринаЛіннік""",
             publisher.publishedCaptions.single(),
@@ -335,8 +327,12 @@ class PublishPhotoRepostUseCaseTest {
     }
 
     private class FakeStorage : PublicMediaStorage {
-        override fun store(fileName: String, content: InputStream) =
-            StoredMedia("https://api.example/media/photo.jpg", "photo.jpg")
+        val textOverlays = mutableListOf<MediaTextOverlay?>()
+
+        override fun store(fileName: String, content: InputStream, textOverlay: MediaTextOverlay?): StoredMedia {
+            textOverlays += textOverlay
+            return StoredMedia("https://api.example/media/photo.jpg", "photo.jpg")
+        }
     }
 
     private class FakePublisher(
