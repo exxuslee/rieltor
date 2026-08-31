@@ -3,26 +3,27 @@ package com.rieltor.web
 import com.rieltor.application.orchestration.TelegramRepostCoordinator
 import com.rieltor.di.applicationModules
 import com.rieltor.di.googleOAuthState
-import com.rieltor.di.tikTokOAuthState
 import com.rieltor.di.threadsOAuthState
+import com.rieltor.di.tikTokOAuthState
 import com.rieltor.infrastructure.config.serverPort
 import com.rieltor.infrastructure.google.GoogleDriveAuthException
 import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import com.rieltor.infrastructure.media.MediaCleanupJob
 import com.rieltor.infrastructure.oauth.OAuthStateStore
-import com.rieltor.infrastructure.tiktok.TikTokAuthException
-import com.rieltor.infrastructure.tiktok.TikTokAuthService
 import com.rieltor.infrastructure.threads.ThreadsAuthException
 import com.rieltor.infrastructure.threads.ThreadsAuthService
+import com.rieltor.infrastructure.tiktok.TikTokAuthException
+import com.rieltor.infrastructure.tiktok.TikTokAuthService
 import io.github.cdimascio.dotenv.Dotenv
-import io.ktor.client.HttpClient
+import io.ktor.client.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.plugins.autohead.*
 import io.ktor.server.plugins.calllogging.*
+import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -58,10 +59,17 @@ fun Application.module(dotenv: Dotenv) {
     val mediaCleanupJob = get<MediaCleanupJob>()
     val repostCoordinator = get<TelegramRepostCoordinator>()
     val httpClient = get<HttpClient>()
+    val landingLeadSender = get<LandingLeadSender>()
 
     installScannerProtection()
     install(CallLogging) { level = Level.INFO }
     install(AutoHeadResponse)
+    install(CORS) {
+        allowHost("rieltor.dpdns.org", schemes = listOf("https"))
+        allowHost("localhost:4173", schemes = listOf("http"))
+        allowMethod(HttpMethod.Post)
+        allowHeader(HttpHeaders.ContentType)
+    }
     install(ServerContentNegotiation) { json(json) }
     install(StatusPages) {
         exception<TikTokAuthException> { call, cause ->
@@ -96,6 +104,7 @@ fun Application.module(dotenv: Dotenv) {
         tikTokAuthRoutes(auth, tikTokStates)
         googleDriveAuthRoutes(googleAuth, googleStates)
         threadsAuthRoutes(threadsAuth, threadsStates)
+        landingLeadRoutes(landingLeadSender)
     }
 
     repostCoordinator.start()

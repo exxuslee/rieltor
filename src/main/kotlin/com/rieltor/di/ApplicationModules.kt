@@ -23,6 +23,7 @@ import com.rieltor.infrastructure.threads.ThreadsPhotoPublisher
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
 import com.rieltor.infrastructure.tiktok.TikTokPhotoPublisher
 import com.rieltor.infrastructure.tiktok.TikTokPublishDispatcher
+import com.rieltor.web.LandingLeadSender
 import io.github.cdimascio.dotenv.Dotenv
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
@@ -105,6 +106,7 @@ private val applicationModule = module {
 }
 
 private val integrationModule = module {
+    single { LandingLeadSender(get(), get()) }
     single { TikTokAuthService(get(), get(), get(), get()) }
     single(tikTokOAuthState) { OAuthStateStore() }
     single { ThreadsAuthService(get(), get(), get(), get()) }

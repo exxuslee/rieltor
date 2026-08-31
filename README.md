@@ -57,8 +57,14 @@ $env:GOOGLE_CLIENT_ID = "ваш_client_id.apps.googleusercontent.com"
 $env:GOOGLE_CLIENT_SECRET = "ваш_client_secret"
 $env:GOOGLE_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/google/callback"
 $env:TELEGRAM_USER_ID = "ваш_telegram_user_id"
+$env:LANDING_TELEGRAM_BOT_TOKEN = "токен_бота_для_форм"
+$env:LANDING_TELEGRAM_CHAT_ID = "ваш_chat_id"
 .\gradlew.bat run
 ```
+
+### Заявки с лендинга
+
+Формы на `https://rieltor.dpdns.org` отправляют JSON на `POST /v1/landing/leads`; backend проверяет тип и поля формы, ограничивает частые запросы и передаёт сообщение в Telegram Bot API. Токен бота и chat ID хранятся только в окружении или `.env` через `LANDING_TELEGRAM_BOT_TOKEN` и `LANDING_TELEGRAM_CHAT_ID`. После их добавления перезапустите backend.
 
 Сервер стартует на `http://localhost:8383`. Пользовательский Telegram-клиент TDLight открывает сессию из
 `tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR. Фото из настроенных Telegram-чатов независимо передаются через TikTok Photo Direct

@@ -1,29 +1,16 @@
-const TELEGRAM_TOKEN = '7018688132:AAEttjnGgvF9yfSqwT4ag40IE1Nzp00gbrI';
-const ADMIN_CHAT_ID = '530667295';
-const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+const LANDING_LEAD_API_URL = 'https://api.rieltor.dpdns.org/v1/landing/leads';
 
-const formTitles = {
-    selection: 'Новий запит: підбір нерухомості',
-    valuation: 'Нова заявка: оцінка нерухомості',
-    question: 'Нове питання із сайту'
-};
-
-function formatTelegramMessage(form) {
-    const lines = [`🔔 ${formTitles[form.dataset.formType] || 'Нова заявка із сайту'}`];
-
-    new FormData(form).forEach((rawValue, fieldName) => {
-        const control = form.elements[fieldName];
-        const label = control?.id ? form.querySelector(`label[for="${control.id}"]`)?.textContent.trim() : fieldName;
-        const value = control instanceof HTMLSelectElement
-            ? control.selectedOptions[0]?.textContent.trim()
-            : String(rawValue).trim();
-
-        if (value) lines.push(`${label || fieldName}: ${value}`);
+function landingLeadPayload(form) {
+    const fields = {};
+    new FormData(form).forEach((value, name) => {
+        if (name !== 'website') fields[name] = String(value).trim();
     });
-
-    lines.push(`Сторінка: ${window.location.href}`);
-    lines.push(`Час: ${new Date().toLocaleString('uk-UA', {timeZone: 'Europe/Kyiv'})}`);
-    return lines.join('\n');
+    return {
+        formType: form.dataset.formType,
+        fields,
+        pageUrl: window.location.href,
+        website: form.elements.website?.value || ''
+    };
 }
 
 document.querySelectorAll('[data-telegram-form]').forEach(form => {
@@ -45,17 +32,14 @@ document.querySelectorAll('[data-telegram-form]').forEach(form => {
         }
 
         try {
-            const response = await fetch(TELEGRAM_API_URL, {
+            const response = await fetch(LANDING_LEAD_API_URL, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'},
-                body: new URLSearchParams({
-                    chat_id: ADMIN_CHAT_ID,
-                    text: formatTelegramMessage(form)
-                })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(landingLeadPayload(form))
             });
             const result = await response.json();
 
-            if (!response.ok || !result.ok) throw new Error(result.description || `Telegram API: ${response.status}`);
+            if (!response.ok || !result.ok) throw new Error(`API: ${response.status}`);
 
             form.reset();
             success?.classList.add('is-visible');

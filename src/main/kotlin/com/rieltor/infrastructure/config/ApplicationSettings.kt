@@ -19,6 +19,8 @@ object SecretNames {
     const val TELEGRAM_API_ID = "TELEGRAM_API_ID"
     const val TELEGRAM_API_HASH = "TELEGRAM_API_HASH"
     const val TELEGRAM_USER_ID = "TELEGRAM_USER_ID"
+    const val LANDING_TELEGRAM_BOT_TOKEN = "LANDING_TELEGRAM_BOT_TOKEN"
+    const val LANDING_TELEGRAM_CHAT_ID = "LANDING_TELEGRAM_CHAT_ID"
     const val PUBLIC_BASE_URL = "PUBLIC_BASE_URL"
 
     val sqliteNames = listOf(
@@ -52,9 +54,14 @@ data class ApplicationSettings(
     val threadsAppId: String = "",
     val threadsAppSecret: String = "",
     val threadsRedirectUri: String = "",
+    val landingTelegramBotToken: String = "",
+    val landingTelegramChatId: String = "",
 ) {
     val threadsConfigured: Boolean
         get() = threadsAppId.isNotBlank() && threadsAppSecret.isNotBlank() && threadsRedirectUri.isNotBlank()
+
+    val landingTelegramConfigured: Boolean
+        get() = landingTelegramBotToken.isNotBlank() && landingTelegramChatId.isNotBlank()
 
     companion object {
         fun load(secrets: SecretRepository, dotenv: Dotenv): ApplicationSettings {
@@ -92,6 +99,8 @@ data class ApplicationSettings(
                 threadsAppId = environmentOrDotenv(SecretNames.THREADS_APP_ID, dotenv).orEmpty(),
                 threadsAppSecret = environmentOrDotenv(SecretNames.THREADS_APP_SECRET, dotenv).orEmpty(),
                 threadsRedirectUri = secrets.get(SecretNames.THREADS_REDIRECT_URI).orEmpty(),
+                landingTelegramBotToken = environmentOrDotenv(SecretNames.LANDING_TELEGRAM_BOT_TOKEN, dotenv).orEmpty(),
+                landingTelegramChatId = environmentOrDotenv(SecretNames.LANDING_TELEGRAM_CHAT_ID, dotenv).orEmpty(),
             )
         }
     }
