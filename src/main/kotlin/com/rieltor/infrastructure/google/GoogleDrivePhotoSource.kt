@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.withPermit
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayInputStream
 import java.io.IOException
+import kotlin.time.Duration.Companion.milliseconds
 
 sealed interface DriveTarget {
     val id: String
@@ -236,7 +237,7 @@ class GoogleDrivePhotoSource(
                 retryDelay / 1_000,
                 failure.message ?: failure.javaClass.simpleName,
             )
-            delay(retryDelay)
+            delay(retryDelay.milliseconds)
         }
         throw IOException("Google Drive photo download failed after retries", lastError)
     }
@@ -257,12 +258,12 @@ class GoogleDrivePhotoSource(
     private companion object {
         const val FILES_URL = "https://www.googleapis.com/drive/v3/files"
         const val FILE_FIELDS = "id,name,mimeType,size,capabilities(canDownload)"
-        const val MAX_DISCOVERED_FILES = 5_000
+        const val MAX_DISCOVERED_FILES = 1000
         const val MAX_DOWNLOAD_BYTES = 20L * 1024 * 1024
         const val MAX_ERROR_BODY_LENGTH = 500
         const val MAX_CONCURRENT_DOWNLOAD_BATCHES = 2
-        const val DOWNLOAD_MAX_ATTEMPTS = 3
-        const val DOWNLOAD_TIMEOUT_MILLIS = 10_000L
+        const val DOWNLOAD_MAX_ATTEMPTS = 2
+        const val DOWNLOAD_TIMEOUT_MILLIS = 120_000L
         const val DOWNLOAD_RETRY_DELAY_MILLIS = 2_000L
         const val GOOGLE_DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
         val SUPPORTED_IMAGE_MIME_TYPES = setOf("image/jpeg", "image/webp")
