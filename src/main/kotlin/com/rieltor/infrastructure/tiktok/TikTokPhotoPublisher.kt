@@ -45,7 +45,9 @@ class TikTokPhotoPublisher(
     private var lastPublishAttemptAtMillis: Long? = null
 
     override suspend fun awaitPublishSlot() {
-        dispatcher?.awaitSlot()
+        if (tikTokMode == TikTokMode.POST) {
+            dispatcher?.awaitSlot()
+        }
     }
 
     override suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt {

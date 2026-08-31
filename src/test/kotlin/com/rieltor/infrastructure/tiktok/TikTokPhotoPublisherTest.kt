@@ -22,6 +22,34 @@ import kotlin.test.assertTrue
 
 class TikTokPhotoPublisherTest {
     @Test
+    fun `awaits dispatcher slot only for direct post mode`() = runBlocking {
+        val json = Json { ignoreUnknownKeys = true }
+        val postThrottle = CapturingThrottleRepository()
+        val draftThrottle = CapturingThrottleRepository()
+        val httpClient = HttpClient(MockEngine { error("HTTP request is not expected") })
+        val auth = TikTokAuthService(httpClient, settings(), validTokens(), json)
+
+        fun publisher(mode: TikTokMode, throttle: CapturingThrottleRepository) = TikTokPhotoPublisher(
+            httpClient = httpClient,
+            auth = auth,
+            json = json,
+            tikTokMode = mode,
+            dispatcher = TikTokPublishDispatcher(
+                repository = throttle,
+                maxPostsPer24Hours = 10,
+                minPostIntervalMillis = 0,
+                dailyLimitCooldownMillis = TikTokPublishDispatcher.WINDOW_MILLIS,
+            ),
+        )
+
+        publisher(TikTokMode.POST, postThrottle).awaitPublishSlot()
+        publisher(TikTokMode.DRAFT, draftThrottle).awaitPublishSlot()
+
+        assertEquals(1, postThrottle.reserveSlotCalls)
+        assertEquals(0, draftThrottle.reserveSlotCalls)
+    }
+
+    @Test
     fun `queues concurrent posts and keeps safe interval between them`() = runBlocking {
         val json = Json { ignoreUnknownKeys = true }
         var clockMillis = 0L
@@ -488,13 +516,17 @@ class TikTokPhotoPublisherTest {
 
     private class CapturingThrottleRepository : TikTokPublishThrottleRepository {
         var blockedUntil: Long? = null
+        var reserveSlotCalls = 0
 
         override fun reserveSlot(
             nowMillis: Long,
             windowMillis: Long,
             maxPostsPerWindow: Int,
             minIntervalMillis: Long,
-        ): Long = 0
+        ): Long {
+            reserveSlotCalls++
+            return 0
+        }
 
         override fun blockUntil(blockedUntilMillis: Long) {
             blockedUntil = blockedUntilMillis
