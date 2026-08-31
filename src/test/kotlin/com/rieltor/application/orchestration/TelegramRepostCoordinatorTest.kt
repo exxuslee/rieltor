@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -94,21 +95,20 @@ class TelegramRepostCoordinatorTest {
     }
 
     @Test
-    fun `processes incoming messages sequentially`() = runBlocking {
+    fun `processes incoming messages independently`() = runBlocking {
         val source = FakeTelegramMessageSource()
         val completed = CompletableDeferred<Unit>()
-        var activeHandlers = 0
-        var maximumActiveHandlers = 0
-        var processed = 0
+        val activeHandlers = AtomicInteger()
+        val maximumActiveHandlers = AtomicInteger()
+        val processed = AtomicInteger()
         val coordinator = TelegramRepostCoordinator(
             source,
             PhotoRepostHandler {
-                activeHandlers++
-                maximumActiveHandlers = maxOf(maximumActiveHandlers, activeHandlers)
+                val active = activeHandlers.incrementAndGet()
+                maximumActiveHandlers.updateAndGet { maximum -> maxOf(maximum, active) }
                 delay(25)
-                activeHandlers--
-                processed++
-                if (processed == 2) completed.complete(Unit)
+                activeHandlers.decrementAndGet()
+                if (processed.incrementAndGet() == 2) completed.complete(Unit)
                 RepostResult.Duplicate
             },
         )
@@ -120,7 +120,7 @@ class TelegramRepostCoordinatorTest {
 
             withTimeout(1_000) { completed.await() }
 
-            assertEquals(1, maximumActiveHandlers)
+            assertEquals(2, maximumActiveHandlers.get())
         } finally {
             coordinator.close()
         }

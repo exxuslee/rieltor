@@ -4,14 +4,19 @@ import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.repository.ExternalPhotoSource
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayInputStream
+import java.io.IOException
 
 sealed interface DriveTarget {
     val id: String
@@ -58,6 +63,7 @@ class GoogleDrivePhotoSource(
     private val json: Json,
 ) : ExternalPhotoSource {
     private val logger = LoggerFactory.getLogger(javaClass)
+    private val downloadSemaphore = Semaphore(MAX_CONCURRENT_DOWNLOAD_BATCHES)
 
     override fun containsLink(text: String?): Boolean = GoogleDriveLinkParser.extract(text).isNotEmpty()
 
@@ -66,6 +72,19 @@ class GoogleDrivePhotoSource(
         val targets = GoogleDriveLinkParser.extract(text)
         if (targets.isEmpty()) return emptyList()
 
+        logger.info(
+            "Google Drive photo batch queued. targets={}, limit={}, concurrentBatchLimit={}",
+            targets.size,
+            limit,
+            MAX_CONCURRENT_DOWNLOAD_BATCHES,
+        )
+        return downloadSemaphore.withPermit {
+            logger.info("Google Drive photo batch started. targets={}, limit={}", targets.size, limit)
+            downloadPhotoBatch(targets, limit)
+        }
+    }
+
+    private suspend fun downloadPhotoBatch(targets: List<DriveTarget>, limit: Int): List<TelegramPhoto> {
         val token = auth.validAccessToken()
         val metadata = linkedMapOf<String, DriveFileMetadata>()
         targets.forEach { target ->
@@ -155,19 +174,48 @@ class GoogleDrivePhotoSource(
         require(declaredSize == null || declaredSize <= MAX_DOWNLOAD_BYTES) {
             "Google Drive photo '${file.name}' is larger than ${MAX_DOWNLOAD_BYTES / 1024 / 1024} MB."
         }
-        val response = httpClient.get("$FILES_URL/${file.id}") {
-            header(HttpHeaders.Authorization, "Bearer $token")
-            url {
-                parameters.append("alt", "media")
-                parameters.append("supportsAllDrives", "true")
+        var lastError: Throwable? = null
+        repeat(DOWNLOAD_MAX_ATTEMPTS) { attempt ->
+            try {
+                val response = httpClient.get("$FILES_URL/${file.id}") {
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                    timeout {
+                        requestTimeoutMillis = DOWNLOAD_TIMEOUT_MILLIS
+                        socketTimeoutMillis = DOWNLOAD_TIMEOUT_MILLIS
+                    }
+                    url {
+                        parameters.append("alt", "media")
+                        parameters.append("supportsAllDrives", "true")
+                    }
+                }
+                if (!response.status.isSuccess()) {
+                    val error = driveApiError("download '${file.name}'", response.bodyAsText())
+                    if (response.status.value < 500 || attempt + 1 >= DOWNLOAD_MAX_ATTEMPTS) throw error
+                    lastError = error
+                } else {
+                    return response.body<ByteArray>().also { bytes ->
+                        require(bytes.size <= MAX_DOWNLOAD_BYTES) {
+                            "Google Drive photo '${file.name}' is larger than ${MAX_DOWNLOAD_BYTES / 1024 / 1024} MB."
+                        }
+                    }
+                }
+            } catch (error: IOException) {
+                lastError = error
+                if (attempt + 1 >= DOWNLOAD_MAX_ATTEMPTS) throw error
             }
+            val retryDelay = DOWNLOAD_RETRY_DELAY_MILLIS * (attempt + 1)
+            val failure = requireNotNull(lastError)
+            logger.warn(
+                "Temporary Google Drive photo download failure; retrying. fileId={}, attempt={}/{}, retryInSeconds={}, reason={}",
+                file.id,
+                attempt + 1,
+                DOWNLOAD_MAX_ATTEMPTS,
+                retryDelay / 1_000,
+                failure.message ?: failure.javaClass.simpleName,
+            )
+            delay(retryDelay)
         }
-        if (!response.status.isSuccess()) throw driveApiError("download '${file.name}'", response.bodyAsText())
-        return response.body<ByteArray>().also { bytes ->
-            require(bytes.size <= MAX_DOWNLOAD_BYTES) {
-                "Google Drive photo '${file.name}' is larger than ${MAX_DOWNLOAD_BYTES / 1024 / 1024} MB."
-            }
-        }
+        throw IOException("Google Drive photo download failed after retries", lastError)
     }
 
     private fun safeFileName(file: DriveFileMetadata): String {
@@ -189,6 +237,10 @@ class GoogleDrivePhotoSource(
         const val MAX_DISCOVERED_FILES = 5_000
         const val MAX_DOWNLOAD_BYTES = 20L * 1024 * 1024
         const val MAX_ERROR_BODY_LENGTH = 500
+        const val MAX_CONCURRENT_DOWNLOAD_BATCHES = 2
+        const val DOWNLOAD_MAX_ATTEMPTS = 3
+        const val DOWNLOAD_TIMEOUT_MILLIS = 120_000L
+        const val DOWNLOAD_RETRY_DELAY_MILLIS = 2_000L
         const val GOOGLE_DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
         val SUPPORTED_IMAGE_MIME_TYPES = setOf("image/jpeg", "image/webp")
     }

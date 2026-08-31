@@ -146,7 +146,16 @@ Copy-Item `
 После замены JAR и unit-файла выполните `sudo systemctl daemon-reload && sudo systemctl restart rieltor.service`.
 
 Конфигурация `api.rieltor.dpdns.org.nginx` отдаёт `/media/` напрямую из
-`/home/exxus/rieltorSite/media/`, минуя JVM и общий API rate limit. После её замены проверьте и перезагрузите nginx:
+`/var/www/rieltor/media/`, минуя JVM и общий API rate limit. Путь задаётся один раз через
+`MEDIA_DIRECTORY` в `.env`, который также читает systemd. При первом переходе со старого пути выполните:
+
+```bash
+sudo install -d -o exxus -g www-data -m 0755 /var/www/rieltor/media
+sudo cp -a /home/exxus/rieltorSite/media/. /var/www/rieltor/media/
+sudo find /var/www/rieltor/media -type f -exec chmod 0644 {} +
+```
+
+После замены конфигурации проверьте и перезагрузите nginx:
 
 ```bash
 sudo nginx -t

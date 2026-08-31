@@ -6,6 +6,7 @@ import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFilePermission
 import java.util.UUID
 
 class LocalPublicMediaStorage(
@@ -14,6 +15,7 @@ class LocalPublicMediaStorage(
 ) : PublicMediaStorage {
     init {
         Files.createDirectories(directory)
+        setPublicDirectoryPermissions(directory)
     }
 
     override fun store(fileName: String, content: InputStream): StoredMedia {
@@ -24,6 +26,7 @@ class LocalPublicMediaStorage(
             "Invalid media path"
         }
         Files.copy(content, destination, StandardCopyOption.REPLACE_EXISTING)
+        setPublicFilePermissions(destination)
         return StoredMedia(
             publicUrl = "${publicBaseUrl.trimEnd('/')}/media/$publicName",
             localPath = destination.toString(),
@@ -40,4 +43,35 @@ class LocalPublicMediaStorage(
         fileName.substringAfterLast('.', "jpg").lowercase().let {
             if (it in setOf("jpg", "jpeg", "png", "webp")) it else "jpg"
         }
+
+    private fun setPublicDirectoryPermissions(path: Path) {
+        runCatching {
+            Files.setPosixFilePermissions(
+                path,
+                setOf(
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE,
+                    PosixFilePermission.OWNER_EXECUTE,
+                    PosixFilePermission.GROUP_READ,
+                    PosixFilePermission.GROUP_EXECUTE,
+                    PosixFilePermission.OTHERS_READ,
+                    PosixFilePermission.OTHERS_EXECUTE,
+                ),
+            )
+        }
+    }
+
+    private fun setPublicFilePermissions(path: Path) {
+        runCatching {
+            Files.setPosixFilePermissions(
+                path,
+                setOf(
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE,
+                    PosixFilePermission.GROUP_READ,
+                    PosixFilePermission.OTHERS_READ,
+                ),
+            )
+        }
+    }
 }

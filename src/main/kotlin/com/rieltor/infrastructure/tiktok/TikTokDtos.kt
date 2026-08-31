@@ -31,6 +31,7 @@ data class CreatorInfoResponse(
 
 @Serializable
 data class CreatorInfo(
+    @SerialName("creator_username") val username: String = "",
     @SerialName("creator_nickname") val nickname: String = "",
     @SerialName("privacy_level_options") val privacyLevelOptions: List<String> = emptyList(),
 )
@@ -44,4 +45,19 @@ data class PublishResponse(
 @Serializable
 data class PublishData(
     @SerialName("publish_id") val publishId: String? = null,
+)
+
+@Serializable
+data class PublishStatusResponse(
+    val data: PublishStatusData? = null,
+    val error: TikTokApiError? = null,
+)
+
+@Serializable
+data class PublishStatusData(
+    val status: String = "UNKNOWN",
+    @SerialName("fail_reason") val failReason: String? = null,
+    @SerialName("publicaly_available_post_id") val publiclyAvailablePostIds: List<Long> = emptyList(),
+    @SerialName("uploaded_bytes") val uploadedBytes: Long? = null,
+    @SerialName("downloaded_bytes") val downloadedBytes: Long? = null,
 )

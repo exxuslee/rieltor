@@ -17,7 +17,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.slf4j.LoggerFactory
 import java.io.IOException
+import java.net.URI
 import java.nio.charset.StandardCharsets
 
 class TikTokPhotoPublisher(
@@ -28,10 +30,13 @@ class TikTokPhotoPublisher(
     private val minPublishIntervalMillis: Long = DEFAULT_MIN_PUBLISH_INTERVAL_MILLIS,
     private val rateLimitRetryDelayMillis: Long = DEFAULT_RATE_LIMIT_RETRY_DELAY_MILLIS,
     private val rateLimitMaxAttempts: Int = DEFAULT_RATE_LIMIT_MAX_ATTEMPTS,
+    private val statusPollIntervalMillis: Long = DEFAULT_STATUS_POLL_INTERVAL_MILLIS,
+    private val statusPollMaxAttempts: Int = DEFAULT_STATUS_POLL_MAX_ATTEMPTS,
     override val maxPhotoCount: Int = DEFAULT_REPOST_MAX_PHOTO_COUNT,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val delayMillis: suspend (Long) -> Unit = { delay(it) },
 ) : PhotoPublisher {
+    private val logger = LoggerFactory.getLogger(javaClass)
     override val destination = RepostDestination.TIKTOK
     private val publishMutex = Mutex()
     private var lastPublishAttemptAtMillis: Long? = null
@@ -47,13 +52,16 @@ class TikTokPhotoPublisher(
         require(minPublishIntervalMillis >= 0) { "Minimum publish interval must not be negative." }
         require(rateLimitRetryDelayMillis >= 0) { "Rate limit retry delay must not be negative." }
         require(rateLimitMaxAttempts > 0) { "Rate limit max attempts must be positive." }
+        require(statusPollIntervalMillis >= 0) { "Status poll interval must not be negative." }
+        require(statusPollMaxAttempts > 0) { "Status poll max attempts must be positive." }
 
-        return publishMutex.withLock {
+        validatePublicPhotoUrls(photoUrls)
+        val pendingPublish = publishMutex.withLock {
             var lastRateLimitError: TikTokRateLimitException? = null
             repeat(rateLimitMaxAttempts) { attempt ->
                 waitForPublishSlot()
                 try {
-                    return@withLock publishOnce(photoUrls, caption)
+                    return@withLock initializePublish(photoUrls, caption)
                 } catch (error: TikTokRateLimitException) {
                     lastRateLimitError = error
                     if (attempt + 1 < rateLimitMaxAttempts) {
@@ -63,6 +71,12 @@ class TikTokPhotoPublisher(
             }
             throw requireNotNull(lastRateLimitError)
         }
+        awaitPublishCompletion(pendingPublish.accessToken, pendingPublish.publishId)
+        return PublishReceipt(
+            pendingPublish.publishId,
+            pendingPublish.creatorName,
+            pendingPublish.privacyLevel,
+        )
     }
 
     private suspend fun waitForPublishSlot() {
@@ -74,7 +88,7 @@ class TikTokPhotoPublisher(
         lastPublishAttemptAtMillis = nowMillis()
     }
 
-    private suspend fun publishOnce(photoUrls: List<String>, caption: String?): PublishReceipt {
+    private suspend fun initializePublish(photoUrls: List<String>, caption: String?): PendingTikTokPublish {
         val accessToken = auth.validAccessToken()
         val creator = queryCreator(accessToken)
         // TikTok blocks unaudited clients from publishing anything except a private post.
@@ -108,6 +122,14 @@ class TikTokPhotoPublisher(
                 })
             })
         }
+        logger.info(
+            "TikTok photo post initialization started. creator={}, privacy={}, photoCount={}, photoHosts={}, captionChars={}",
+            creator.nickname,
+            privacy,
+            photoUrls.size,
+            photoUrls.mapNotNull(::hostOf).distinct(),
+            normalizedCaption.length,
+        )
         val response = httpClient.post(PHOTO_POST_URL) {
             header(HttpHeaders.Authorization, "Bearer $accessToken")
             setBody(TextContent(json.encodeToString(body), ContentType.Application.Json.withCharset(StandardCharsets.UTF_8)))
@@ -116,7 +138,89 @@ class TikTokPhotoPublisher(
         payload.error.ensureOk("photo publish")
         val publishId = payload.data?.publishId
             ?: throw TikTokAuthException("TikTok photo publish response has no publish_id.")
-        return PublishReceipt(publishId, creator.nickname, privacy)
+        logger.info(
+            "TikTok photo post accepted for processing. publishId={}, httpStatus={}, logId={}",
+            publishId,
+            response.status.value,
+            payload.error?.logId,
+        )
+        return PendingTikTokPublish(accessToken, publishId, creator.nickname, privacy)
+    }
+
+    private suspend fun validatePublicPhotoUrls(photoUrls: List<String>) {
+        photoUrls.forEachIndexed { index, url ->
+            val response = runCatching { httpClient.head(url) }
+                .getOrElse { error ->
+                    throw TikTokAuthException(
+                        "Public photo preflight failed for photo ${index + 1}/${photoUrls.size}: " +
+                            (error.message ?: error.javaClass.simpleName)
+                    )
+                }
+            logger.info(
+                "TikTok public photo preflight. photo={}/{}, host={}, httpStatus={}, contentType={}, contentLength={}",
+                index + 1,
+                photoUrls.size,
+                hostOf(url),
+                response.status.value,
+                response.headers[HttpHeaders.ContentType],
+                response.headers[HttpHeaders.ContentLength],
+            )
+            if (!response.status.isSuccess()) {
+                throw TikTokAuthException(
+                    "Public photo is not readable before TikTok initialization. " +
+                        "photo=${index + 1}/${photoUrls.size}, host=${hostOf(url)}, HTTP ${response.status.value}"
+                )
+            }
+        }
+    }
+
+    private suspend fun awaitPublishCompletion(accessToken: String, publishId: String) {
+        var lastStatus: String? = null
+        repeat(statusPollMaxAttempts) { attempt ->
+            if (attempt > 0) delayMillis(statusPollIntervalMillis)
+            val response = httpClient.post(PUBLISH_STATUS_URL) {
+                header(HttpHeaders.Authorization, "Bearer $accessToken")
+                setBody(TextContent(
+                    json.encodeToString(buildJsonObject { put("publish_id", publishId) }),
+                    ContentType.Application.Json.withCharset(StandardCharsets.UTF_8),
+                ))
+            }
+            val payload = json.decodeFromString<PublishStatusResponse>(response.bodyAsText())
+            payload.error.ensureOk("publish status")
+            val statusData = payload.data
+                ?: throw TikTokAuthException("TikTok publish status response has no data. publishId=$publishId")
+            val statusChanged = statusData.status != lastStatus
+            if (statusChanged || attempt + 1 == statusPollMaxAttempts) {
+                logger.info(
+                    "TikTok photo post status. publishId={}, status={}, attempt={}/{}, failReason={}, downloadedBytes={}, postIds={}, httpStatus={}, logId={}",
+                    publishId,
+                    statusData.status,
+                    attempt + 1,
+                    statusPollMaxAttempts,
+                    statusData.failReason,
+                    statusData.downloadedBytes,
+                    statusData.publiclyAvailablePostIds,
+                    response.status.value,
+                    payload.error?.logId,
+                )
+            }
+            lastStatus = statusData.status
+            when (statusData.status) {
+                "PUBLISH_COMPLETE" -> return
+                "FAILED" -> throw TikTokAuthException(
+                    "TikTok photo post failed after initialization. publishId=$publishId, " +
+                        "reason=${statusData.failReason ?: "unknown"}"
+                )
+                "PROCESSING_UPLOAD", "PROCESSING_DOWNLOAD", "SEND_TO_USER_INBOX" -> Unit
+                else -> throw TikTokAuthException(
+                    "TikTok returned an unknown publish status. publishId=$publishId, status=${statusData.status}"
+                )
+            }
+        }
+        throw TikTokAuthException(
+            "TikTok photo post did not reach a final status after $statusPollMaxAttempts checks. " +
+                "publishId=$publishId, lastStatus=${lastStatus ?: "unknown"}"
+        )
     }
 
     private suspend fun queryCreator(accessToken: String): CreatorInfo {
@@ -144,10 +248,21 @@ class TikTokPhotoPublisher(
         }
         val payload = json.decodeFromString<CreatorInfoResponse>(response.bodyAsText())
         payload.error.ensureOk("creator info")
-        return payload.data
+        val creator = payload.data
             ?.takeIf { it.nickname.isNotBlank() }
             ?: throw TikTokAuthException("TikTok creator info response has no creator_nickname.")
+        logger.info(
+            "TikTok creator info received. username={}, nickname={}, privacyOptions={}, httpStatus={}, logId={}",
+            creator.username.ifBlank { "unavailable" },
+            creator.nickname,
+            creator.privacyLevelOptions,
+            response.status.value,
+            payload.error?.logId,
+        )
+        return creator
     }
+
+    private fun hostOf(url: String): String? = runCatching { URI(url).host }.getOrNull()
 
     private fun TikTokApiError?.ensureOk(operation: String) {
         if (this != null && code != "ok") {
@@ -157,13 +272,23 @@ class TikTokPhotoPublisher(
         }
     }
 
+    private data class PendingTikTokPublish(
+        val accessToken: String,
+        val publishId: String,
+        val creatorName: String,
+        val privacyLevel: String,
+    )
+
     companion object {
         private const val CREATOR_INFO_URL = "https://open.tiktokapis.com/v2/post/publish/creator_info/query/"
         private const val PHOTO_POST_URL = "https://open.tiktokapis.com/v2/post/publish/content/init/"
+        private const val PUBLISH_STATUS_URL = "https://open.tiktokapis.com/v2/post/publish/status/fetch/"
         private const val CREATOR_INFO_MAX_ATTEMPTS = 3
         private const val DEFAULT_MIN_PUBLISH_INTERVAL_MILLIS = 11_000L
         private const val DEFAULT_RATE_LIMIT_RETRY_DELAY_MILLIS = 60_000L
         private const val DEFAULT_RATE_LIMIT_MAX_ATTEMPTS = 3
+        private const val DEFAULT_STATUS_POLL_INTERVAL_MILLIS = 5_000L
+        private const val DEFAULT_STATUS_POLL_MAX_ATTEMPTS = 60
     }
 }
 

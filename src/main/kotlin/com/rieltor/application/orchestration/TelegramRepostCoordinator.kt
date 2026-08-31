@@ -47,7 +47,9 @@ class TelegramRepostCoordinator(
         }
         observerJob = scope.launch {
             try {
-                source.messages.collect(::process)
+                source.messages.collect { message ->
+                    scope.launch { process(message) }
+                }
                 if (!closing.get()) {
                     mutableState.value = RepostFlowState.Failed(null, "Telegram message stream completed")
                 }
@@ -73,13 +75,14 @@ class TelegramRepostCoordinator(
     }
 
     private suspend fun process(message: TelegramPhotoMessage) {
+        logger.info("Independent repost processing started. updateId={}", message.updateId)
         mutableState.value = RepostFlowState.Processing(message.updateId)
         try {
             when (val result = repostHandler.handle(message)) {
                 is RepostResult.Published -> {
                     result.receipts.forEach { receipt -> logger.info(
-                        "Telegram/Google Drive photo post submitted. destination={}, updateId={}, publishId={}, privacy={}",
-                        receipt.destination, message.updateId, receipt.publishId, receipt.privacyLevel,
+                        "Telegram/Google Drive photo post completed. destination={}, updateId={}, publishId={}, creator={}, privacy={}",
+                        receipt.destination, message.updateId, receipt.publishId, receipt.creatorName, receipt.privacyLevel,
                     ) }
                     result.failures.forEach { failure -> logger.error(
                         "Independent repost destination failed. destination={}, updateId={}, reason={}",

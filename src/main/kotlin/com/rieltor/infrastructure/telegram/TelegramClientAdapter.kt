@@ -26,8 +26,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.nio.file.Files
@@ -46,9 +44,8 @@ class TelegramClientAdapter(
 ) : TelegramMessageSource {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val messageChannel = Channel<TelegramPhotoMessage>(Channel.RENDEZVOUS)
+    private val messageChannel = Channel<TelegramPhotoMessage>(Channel.BUFFERED)
     private val mutableState = MutableStateFlow<TelegramSourceState>(TelegramSourceState.Stopped)
-    private val deliveryMutex = Mutex()
     private val pendingMessageContents = ConcurrentHashMap<MessageKey, TdApi.MessageContent>()
     private val messageMapper = TelegramMessageMapper()
     private val diagnostics = TelegramDiagnostics(monitoredTopics)
@@ -210,26 +207,29 @@ class TelegramClientAdapter(
                 messages.map(TdApi.Message::id),
             )
             delay(repostDelayMillis)
+            logger.info(
+                "Telegram repost delay elapsed; message is ready for independent processing. chatId={}, messageIds={}",
+                messages.firstOrNull()?.chatId,
+                messages.map(TdApi.Message::id),
+            )
 
             repeat(DELIVERY_MAX_ATTEMPTS) { attempt ->
                 try {
-                    deliveryMutex.withLock {
-                        val telegramClient = client ?: return
-                        val latestMessages = messages.map { original ->
-                            fetchLatestMessage(telegramClient, original) ?: original.also { fallback ->
-                                pendingMessageContents[original.key()]?.let { latestContent ->
-                                    fallback.content = latestContent
-                                }
+                    val telegramClient = client ?: return
+                    val latestMessages = messages.map { original ->
+                        fetchLatestMessage(telegramClient, original) ?: original.also { fallback ->
+                            pendingMessageContents[original.key()]?.let { latestContent ->
+                                fallback.content = latestContent
                             }
                         }
-                        val message = messageMapper.map(telegramClient, latestMessages) ?: return
-                        var delivered = false
-                        try {
-                            messageChannel.send(message)
-                            delivered = true
-                        } finally {
-                            if (!delivered) message.closePhotos()
-                        }
+                    }
+                    val message = messageMapper.map(telegramClient, latestMessages) ?: return
+                    var delivered = false
+                    try {
+                        messageChannel.send(message)
+                        delivered = true
+                    } finally {
+                        if (!delivered) message.closePhotos()
                     }
                     return
                 } catch (error: CancellationException) {
@@ -320,7 +320,7 @@ class TelegramClientAdapter(
     private data class MessageKey(val chatId: Long, val messageId: Long)
 
     private companion object {
-        const val REPOST_DELAY_MILLIS = 30 * 60 * 1_000L
+        const val REPOST_DELAY_MILLIS = 10 * 60 * 1_000L
         const val ALBUM_SETTLE_DELAY_MILLIS = 2_000L
         const val TELEGRAM_MAX_ALBUM_SIZE = 10
         const val STARTUP_MONITORING_LOG_DELAY_MILLIS = 500L

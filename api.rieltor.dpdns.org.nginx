@@ -44,7 +44,7 @@ server {
     # TikTok fetches a photo album with many concurrent and repeated requests.
     # Serve immutable media from disk without occupying the JVM/Ktor request pool.
     location ^~ /media/ {
-        alias /home/exxus/rieltorSite/media/;
+        alias /var/www/rieltor/media/;
         sendfile on;
         etag on;
         add_header Cache-Control "public, max-age=86400, immutable" always;
