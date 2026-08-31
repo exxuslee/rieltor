@@ -7,25 +7,11 @@ import com.rieltor.domain.model.TelegramPhotoMessage
 import it.tdlight.Init
 import it.tdlight.Log
 import it.tdlight.Slf4JLogMessageHandler
-import it.tdlight.client.APIToken
-import it.tdlight.client.AuthenticationSupplier
-import it.tdlight.client.SimpleTelegramClient
-import it.tdlight.client.SimpleTelegramClientFactory
-import it.tdlight.client.TDLibSettings
+import it.tdlight.client.*
 import it.tdlight.jni.TdApi
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.*
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.nio.file.Files
@@ -320,7 +306,7 @@ class TelegramClientAdapter(
     private data class MessageKey(val chatId: Long, val messageId: Long)
 
     private companion object {
-        const val REPOST_DELAY_MILLIS = 10 * 60 * 1_000L
+        const val REPOST_DELAY_MILLIS = 20 * 60 * 1_000L
         const val ALBUM_SETTLE_DELAY_MILLIS = 2_000L
         const val TELEGRAM_MAX_ALBUM_SIZE = 10
         const val STARTUP_MONITORING_LOG_DELAY_MILLIS = 500L

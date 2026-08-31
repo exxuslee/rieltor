@@ -50,7 +50,6 @@ private fun configurationModule(dotenv: Dotenv) = module {
     single {
         val secrets = get<SecretRepository>()
         bootstrapSecrets(secrets, get())
-        LegacyTokenMigration.migrateIfNeeded(get())
         ApplicationSettings.load(secrets, get())
     }
 }
