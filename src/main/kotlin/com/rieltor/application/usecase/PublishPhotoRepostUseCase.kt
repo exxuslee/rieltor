@@ -12,9 +12,11 @@ import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublicMediaStorage
 import com.rieltor.domain.service.ListingCaptionFormatter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.supervisorScope
+import org.slf4j.LoggerFactory
 
 class PublishPhotoRepostUseCase(
     private val repostTracker: TelegramRepostTracker,
@@ -24,6 +26,8 @@ class PublishPhotoRepostUseCase(
     private val allowedSources: Set<TelegramMonitoredTopic> = emptySet(),
     private val captionFormatter: ListingCaptionFormatter = ListingCaptionFormatter(),
 ) : PhotoRepostHandler {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
     override suspend fun handle(message: TelegramPhotoMessage): RepostResult {
         if (allowedSources.none { source -> source.matches(message.chatId, message.messageThreadId) }) {
             message.closePhotos()
@@ -52,10 +56,7 @@ class PublishPhotoRepostUseCase(
 
         var extraPhotos = emptyList<TelegramPhoto>()
         return try {
-            extraPhotos = externalPhotoSource?.downloadPhotos(
-                message.caption,
-                (activePublishers.maxOf { it.maxPhotoCount } - message.photos.size).coerceAtLeast(0),
-            ).orEmpty()
+            extraPhotos = loadExtraPhotos(message, activePublishers.maxOf { it.maxPhotoCount })
             val allPhotos = message.photos + extraPhotos
             require(allPhotos.isNotEmpty()) { "At least one Telegram or Google Drive photo is required." }
             val media = allPhotos.map { photo ->
@@ -102,6 +103,26 @@ class PublishPhotoRepostUseCase(
 
     private fun TelegramPhotoMessage.closePhotos() {
         photos.forEach { photo -> runCatching { photo.content.close() } }
+    }
+
+    private suspend fun loadExtraPhotos(message: TelegramPhotoMessage, photoLimit: Int): List<TelegramPhoto> {
+        val source = externalPhotoSource ?: return emptyList()
+        val remainingPhotoCount = (photoLimit - message.photos.size).coerceAtLeast(0)
+        if (remainingPhotoCount == 0 || !source.containsLink(message.caption)) return emptyList()
+
+        return try {
+            source.downloadPhotos(message.caption, remainingPhotoCount)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            if (message.photos.isEmpty()) throw error
+            logger.warn(
+                "Could not add Google Drive photos; continuing with Telegram media. updateId={}, reason={}",
+                message.updateId,
+                error.message ?: error.javaClass.simpleName,
+            )
+            emptyList()
+        }
     }
 
 }

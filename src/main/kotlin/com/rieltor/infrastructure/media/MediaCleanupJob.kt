@@ -29,8 +29,7 @@ class MediaCleanupJob(
         check(job == null) { "Media cleanup job is already started" }
         job = scope.launch {
             while (isActive) {
-                runCatching { cleanNow() }
-                    .onFailure { logger.error("Media cleanup failed", it) }
+                runCatching { cleanNow() }.onFailure { logger.error("Media cleanup failed", it) }
                 delay(interval.toMillis())
             }
         }

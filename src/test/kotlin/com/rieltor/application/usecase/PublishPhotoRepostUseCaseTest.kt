@@ -19,6 +19,7 @@ import java.io.ByteArrayInputStream
 import java.io.InputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -98,6 +99,49 @@ class PublishPhotoRepostUseCaseTest {
         assertIs<RepostResult.Published>(service.handle(message))
         assertEquals(3, publisher.publishedUrls.single().size)
         assertEquals(false, publisher.publishedCaptions.single()?.contains("drive.google.com"))
+    }
+
+    @Test
+    fun `publishes telegram photo when google drive contains no supported photos`() = runBlocking {
+        val publisher = FakePublisher()
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(FakeJobs()),
+            mediaStorage = FakeStorage(),
+            publishers = listOf(publisher),
+            externalPhotoSource = FailingExternalPhotoSource(),
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
+        )
+        val message = message(
+            updateId = 45,
+            caption = "Будинок\nhttps://drive.google.com/drive/folders/folder123456",
+        )
+
+        assertIs<RepostResult.Published>(service.handle(message))
+
+        assertEquals(1, publisher.calls)
+        assertEquals(1, publisher.publishedUrls.single().size)
+    }
+
+    @Test
+    fun `keeps google drive failure when message has no telegram photo`() = runBlocking {
+        val publisher = FakePublisher()
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(FakeJobs()),
+            mediaStorage = FakeStorage(),
+            publishers = listOf(publisher),
+            externalPhotoSource = FailingExternalPhotoSource(),
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
+        )
+        val message = TelegramPhotoMessage(
+            updateId = 46,
+            chatId = MONITORED_CHAT_ID,
+            messageThreadId = MONITORED_THREAD_ID,
+            caption = "Будинок\nhttps://drive.google.com/drive/folders/folder123456",
+            photos = emptyList(),
+        )
+
+        assertFailsWith<IllegalStateException> { service.handle(message) }
+        assertEquals(0, publisher.calls)
     }
 
     @Test
@@ -263,6 +307,13 @@ class PublishPhotoRepostUseCaseTest {
             TelegramPhoto("drive-one.jpg", ByteArrayInputStream(byteArrayOf(2))),
             TelegramPhoto("drive-two.jpg", ByteArrayInputStream(byteArrayOf(3))),
         ).take(limit)
+    }
+
+    private class FailingExternalPhotoSource : ExternalPhotoSource {
+        override fun containsLink(text: String?) = text?.contains("drive.google.com") == true
+
+        override suspend fun downloadPhotos(text: String?, limit: Int): List<TelegramPhoto> =
+            throw IllegalStateException("The Google Drive link contains no supported photos")
     }
 
     private class FakeJobs : TelegramRepostRepository {
