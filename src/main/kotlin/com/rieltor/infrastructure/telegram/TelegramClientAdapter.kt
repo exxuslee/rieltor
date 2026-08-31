@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
@@ -186,6 +187,13 @@ class TelegramClientAdapter(
                 deliverMessages(messages)
             } catch (error: CancellationException) {
                 throw error
+            } catch (error: IOException) {
+                logger.error(
+                    "Telegram message delivery abandoned after retries. chatId={}, messageIds={}, reason={}",
+                    messages.firstOrNull()?.chatId,
+                    messages.map(TdApi.Message::id),
+                    error.message,
+                )
             } catch (error: Throwable) {
                 logger.error("Could not convert or deliver Telegram message", error)
             }
@@ -203,22 +211,43 @@ class TelegramClientAdapter(
             )
             delay(repostDelayMillis)
 
-            deliveryMutex.withLock {
-                val telegramClient = client ?: return
-                val latestMessages = messages.map { original ->
-                    fetchLatestMessage(telegramClient, original) ?: original.also { fallback ->
-                        pendingMessageContents[original.key()]?.let { latestContent ->
-                            fallback.content = latestContent
+            repeat(DELIVERY_MAX_ATTEMPTS) { attempt ->
+                try {
+                    deliveryMutex.withLock {
+                        val telegramClient = client ?: return
+                        val latestMessages = messages.map { original ->
+                            fetchLatestMessage(telegramClient, original) ?: original.also { fallback ->
+                                pendingMessageContents[original.key()]?.let { latestContent ->
+                                    fallback.content = latestContent
+                                }
+                            }
+                        }
+                        val message = messageMapper.map(telegramClient, latestMessages) ?: return
+                        var delivered = false
+                        try {
+                            messageChannel.send(message)
+                            delivered = true
+                        } finally {
+                            if (!delivered) message.closePhotos()
                         }
                     }
-                }
-                val message = messageMapper.map(telegramClient, latestMessages) ?: return
-                var delivered = false
-                try {
-                    messageChannel.send(message)
-                    delivered = true
-                } finally {
-                    if (!delivered) message.closePhotos()
+                    return
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: IOException) {
+                    if (attempt + 1 >= DELIVERY_MAX_ATTEMPTS) throw error
+                    val retryDelay = DELIVERY_RETRY_DELAY_MILLIS * (attempt + 1)
+                    logger.warn(
+                        "Temporary Telegram media error; delivery will be retried. " +
+                            "chatId={}, messageIds={}, attempt={}/{}, retryInSeconds={}, reason={}",
+                        messages.firstOrNull()?.chatId,
+                        messages.map(TdApi.Message::id),
+                        attempt + 1,
+                        DELIVERY_MAX_ATTEMPTS,
+                        TimeUnit.MILLISECONDS.toSeconds(retryDelay),
+                        error.message,
+                    )
+                    delay(retryDelay)
                 }
             }
         } finally {
@@ -240,13 +269,22 @@ class TelegramClientAdapter(
                 if (attempt + 1 < GET_MESSAGE_MAX_ATTEMPTS) {
                     delay(GET_MESSAGE_RETRY_DELAY_MILLIS * (attempt + 1))
                 } else {
-                    logger.warn(
-                        "Could not refresh Telegram message before repost; using the latest content received via updates. " +
-                            "chatId={}, messageId={}",
-                        original.chatId,
-                        original.id,
-                        error,
-                    )
+                    if (error is java.util.concurrent.TimeoutException) {
+                        logger.warn(
+                            "Could not refresh Telegram message before repost; using content received via updates. " +
+                                "chatId={}, messageId={}, reason=timeout",
+                            original.chatId,
+                            original.id,
+                        )
+                    } else {
+                        logger.warn(
+                            "Could not refresh Telegram message before repost; using content received via updates. " +
+                                "chatId={}, messageId={}",
+                            original.chatId,
+                            original.id,
+                            error,
+                        )
+                    }
                 }
             }
         }
@@ -289,5 +327,7 @@ class TelegramClientAdapter(
         const val GET_MESSAGE_TIMEOUT_SECONDS = 30L
         const val GET_MESSAGE_MAX_ATTEMPTS = 2
         const val GET_MESSAGE_RETRY_DELAY_MILLIS = 1_000L
+        const val DELIVERY_MAX_ATTEMPTS = 3
+        const val DELIVERY_RETRY_DELAY_MILLIS = 60_000L
     }
 }

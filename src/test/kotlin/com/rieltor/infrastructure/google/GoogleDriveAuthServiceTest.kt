@@ -13,7 +13,9 @@ import io.ktor.http.headersOf
 import io.ktor.http.content.TextContent
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import java.io.IOException
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -70,7 +72,32 @@ class GoogleDriveAuthServiceTest {
         assertEquals("persistent-refresh", repository.load()?.refreshToken)
     }
 
-    private fun service(client: HttpClient, repository: GoogleDriveTokenRepository) = GoogleDriveAuthService(
+    @Test
+    fun `temporary token endpoint failures are retried`() = runBlocking {
+        val repository = InMemoryTokens(
+            StoredGoogleDriveTokens("expired", "persistent-refresh", Instant.now().epochSecond - 1)
+        )
+        val attempts = AtomicInteger()
+        val engine = MockEngine {
+            if (attempts.incrementAndGet() < 3) throw IOException("temporary network failure")
+            respond(
+                content = """{"access_token":"fresh","expires_in":3600}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+            )
+        }
+
+        val accessToken = service(HttpClient(engine), repository, retryDelayMillis = 0).validAccessToken()
+
+        assertEquals("fresh", accessToken)
+        assertEquals(3, attempts.get())
+    }
+
+    private fun service(
+        client: HttpClient,
+        repository: GoogleDriveTokenRepository,
+        retryDelayMillis: Long = 1_000,
+    ) = GoogleDriveAuthService(
         client,
         ApplicationSettings(
             mediaDirectory = java.nio.file.Path.of("media"),
@@ -87,6 +114,7 @@ class GoogleDriveAuthServiceTest {
         ),
         repository,
         Json { ignoreUnknownKeys = true },
+        retryDelayMillis,
     )
 
     private class InMemoryTokens(initial: StoredGoogleDriveTokens? = null) : GoogleDriveTokenRepository {

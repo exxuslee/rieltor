@@ -34,7 +34,7 @@ internal class TelegramMessageMapper {
                 val largestPhoto = photoContent.photo.sizes.maxByOrNull { size ->
                     size.photo.expectedSize.takeIf { it > 0 } ?: (size.width.toLong() * size.height.toLong())
                 } ?: error("Telegram photo has no downloadable sizes")
-                val downloaded = downloadPhoto(telegramClient, largestPhoto.photo.id)
+                val downloaded = downloadPhoto(telegramClient, largestPhoto.photo)
                 val localPath = downloaded.local?.path
                     ?.takeIf { it.isNotBlank() }
                     ?.let(Path::of)
@@ -58,11 +58,13 @@ internal class TelegramMessageMapper {
         }
     }
 
-    private suspend fun downloadPhoto(telegramClient: SimpleTelegramClient, fileId: Int): TdApi.File {
+    private suspend fun downloadPhoto(telegramClient: SimpleTelegramClient, file: TdApi.File): TdApi.File {
+        if (file.hasUsableLocalCopy()) return file
+
         var lastError: Throwable? = null
         repeat(DOWNLOAD_MAX_ATTEMPTS) { attempt ->
             try {
-                return telegramClient.send(TdApi.DownloadFile(fileId, 1, 0, 0, true))
+                return telegramClient.send(TdApi.DownloadFile(file.id, DOWNLOAD_PRIORITY, 0, 0, true))
                     .get(DOWNLOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             } catch (error: java.util.concurrent.TimeoutException) {
                 lastError = error
@@ -70,13 +72,19 @@ internal class TelegramMessageMapper {
             }
         }
         throw IOException(
-            "Telegram photo download timed out after $DOWNLOAD_MAX_ATTEMPTS attempts: " +
+            "Telegram photo ${file.id} download timed out after $DOWNLOAD_MAX_ATTEMPTS attempts: " +
                 (lastError?.message ?: "timeout"),
             lastError,
         )
     }
 
+    private fun TdApi.File.hasUsableLocalCopy(): Boolean =
+        local?.isDownloadingCompleted == true &&
+            local.path.isNotBlank() &&
+            runCatching { Files.isRegularFile(Path.of(local.path)) }.getOrDefault(false)
+
     private companion object {
+        const val DOWNLOAD_PRIORITY = 32
         const val DOWNLOAD_TIMEOUT_SECONDS = 120L
         const val DOWNLOAD_MAX_ATTEMPTS = 3
         const val DOWNLOAD_RETRY_DELAY_MILLIS = 1_000L
