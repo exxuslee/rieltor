@@ -10,6 +10,7 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
@@ -103,27 +104,49 @@ class GoogleDrivePhotoSource(
             targetFiles.forEach { file -> metadata.putIfAbsent(file.id, file) }
         }
 
+        val candidates = metadata.values.asSequence()
+            .filter { it.mimeType in SUPPORTED_IMAGE_MIME_TYPES }
+            .filter { it.capabilities?.canDownload != false }
+            .toList()
         val result = mutableListOf<TelegramPhoto>()
+        var lastDownloadError: Throwable? = null
+        var failedDownloadCount = 0
         try {
-            metadata.values.asSequence()
-                .filter { it.mimeType in SUPPORTED_IMAGE_MIME_TYPES }
-                .filter { it.capabilities?.canDownload != false }
-                .take(limit)
-                .forEach { file ->
+            for (file in candidates) {
+                if (result.size >= limit) break
+                try {
                     val bytes = downloadFile(file, token)
                     result += TelegramPhoto(safeFileName(file), ByteArrayInputStream(bytes))
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Throwable) {
+                    lastDownloadError = error
+                    failedDownloadCount++
+                    logger.warn(
+                        "Skipping Google Drive photo after download retries. fileId={}, fileName={}, reason={}",
+                        file.id,
+                        file.name,
+                        error.message ?: error.javaClass.simpleName,
+                    )
                 }
-            if (result.isEmpty()) {
-                throw GoogleDriveAuthException(
-                    "The Google Drive link contains no downloadable JPEG or WebP photos."
-                )
             }
-            if (metadata.size > result.size) {
-                logger.info(
-                    "Google Drive media selection: discovered={}, selected={}, TikTokLimit={}",
-                    metadata.size,
-                    result.size,
-                    limit,
+            val requestedPhotoCount = minOf(candidates.size, limit)
+            logger.info(
+                "Google Drive photo batch completed. downloaded={}/{}, failed={}, available={}, limit={}",
+                result.size,
+                requestedPhotoCount,
+                failedDownloadCount,
+                candidates.size,
+                limit,
+            )
+            if (result.isEmpty()) {
+                val reason = lastDownloadError?.let { "; last failure: ${it.message ?: it.javaClass.simpleName}" }.orEmpty()
+                throw GoogleDriveAuthException(
+                    if (candidates.isEmpty()) {
+                        "The Google Drive link contains no downloadable JPEG or WebP photos."
+                    } else {
+                        "Google Drive could not download any JPEG or WebP photos$reason"
+                    }
                 )
             }
             return result
@@ -239,7 +262,7 @@ class GoogleDrivePhotoSource(
         const val MAX_ERROR_BODY_LENGTH = 500
         const val MAX_CONCURRENT_DOWNLOAD_BATCHES = 2
         const val DOWNLOAD_MAX_ATTEMPTS = 3
-        const val DOWNLOAD_TIMEOUT_MILLIS = 120_000L
+        const val DOWNLOAD_TIMEOUT_MILLIS = 10_000L
         const val DOWNLOAD_RETRY_DELAY_MILLIS = 2_000L
         const val GOOGLE_DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
         val SUPPORTED_IMAGE_MIME_TYPES = setOf("image/jpeg", "image/webp")

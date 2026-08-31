@@ -16,6 +16,8 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class GoogleDrivePhotoSourceTest {
     @Test
@@ -113,6 +115,73 @@ class GoogleDrivePhotoSourceTest {
         assertEquals(listOf("one.jpg", "two.webp"), photos.map { it.fileName })
         assertContentEquals(byteArrayOf(1, 2, 3), photos[0].content.readBytes())
         assertContentEquals(byteArrayOf(4, 5), photos[1].content.readBytes())
+    }
+
+    @Test
+    fun `skips failed file after retries and continues with next photo`() = runBlocking {
+        var failedFileAttempts = 0
+        val engine = MockEngine { request ->
+            when {
+                request.url.encodedPath == "/drive/v3/files" -> respond(
+                    content = """{"files":[
+                        {"id":"broken-id","name":"broken.jpg","mimeType":"image/jpeg","size":"3"},
+                        {"id":"good-id","name":"good.jpg","mimeType":"image/jpeg","size":"2"}
+                    ]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                )
+                request.url.encodedPath.endsWith("/broken-id") -> {
+                    failedFileAttempts++
+                    respond("temporary failure", HttpStatusCode.ServiceUnavailable)
+                }
+                request.url.encodedPath.endsWith("/good-id") -> respond(
+                    byteArrayOf(7, 8),
+                    headers = headersOf(HttpHeaders.ContentType, "image/jpeg"),
+                )
+                else -> error("Unexpected request: ${request.url}")
+            }
+        }
+        val source = createSource(HttpClient(engine))
+
+        val photos = source.downloadPhotos(
+            "https://drive.google.com/drive/folders/folder-with-broken-photo",
+            limit = 1,
+        )
+
+        assertEquals(3, failedFileAttempts)
+        assertEquals(listOf("good.jpg"), photos.map { it.fileName })
+        assertContentEquals(byteArrayOf(7, 8), photos.single().content.readBytes())
+    }
+
+    @Test
+    fun `reports failure when every candidate photo fails`() = runBlocking {
+        val engine = MockEngine { request ->
+            when {
+                request.url.encodedPath == "/drive/v3/files" -> respond(
+                    content = """{"files":[
+                        {"id":"broken-id","name":"broken.jpg","mimeType":"image/jpeg","size":"3"}
+                    ]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                )
+                request.url.encodedPath.endsWith("/broken-id") -> respond(
+                    "temporary failure",
+                    HttpStatusCode.ServiceUnavailable,
+                )
+                else -> error("Unexpected request: ${request.url}")
+            }
+        }
+        val source = createSource(HttpClient(engine))
+
+        val error = assertFailsWith<GoogleDriveAuthException> {
+            source.downloadPhotos(
+                "https://drive.google.com/drive/folders/folder-with-only-broken-photo",
+                limit = 10,
+            )
+        }
+
+        assertTrue(error.message.orEmpty().contains("could not download any"))
+        assertTrue(error.message.orEmpty().contains("temporary failure"))
     }
 
     private fun createSource(client: HttpClient): GoogleDrivePhotoSource {

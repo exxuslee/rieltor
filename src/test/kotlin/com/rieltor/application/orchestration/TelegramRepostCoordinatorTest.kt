@@ -1,11 +1,16 @@
 package com.rieltor.application.orchestration
 
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.core.read.ListAppender
 import com.rieltor.application.model.RepostFlowState
 import com.rieltor.application.model.SkipReason
 import com.rieltor.application.model.TelegramSourceState
 import com.rieltor.application.port.PhotoRepostHandler
 import com.rieltor.application.port.TelegramMessageSource
+import com.rieltor.application.usecase.RepostPublishException
 import com.rieltor.domain.model.PublishReceipt
+import com.rieltor.domain.model.RepostDestination
+import com.rieltor.domain.model.RepostFailure
 import com.rieltor.domain.model.RepostResult
 import com.rieltor.domain.model.TelegramPhotoMessage
 import kotlinx.coroutines.CompletableDeferred
@@ -18,6 +23,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -91,6 +97,41 @@ class TelegramRepostCoordinatorTest {
             assertEquals(RepostFlowState.Failed(19, "TikTok unavailable"), state)
         } finally {
             coordinator.close()
+        }
+    }
+
+    @Test
+    fun `logs expected publish failure in one line without stack trace`() = runBlocking {
+        val source = FakeTelegramMessageSource()
+        val coordinator = TelegramRepostCoordinator(
+            source,
+            PhotoRepostHandler {
+                throw RepostPublishException(
+                    listOf(RepostFailure(RepostDestination.TIKTOK, "picture_size_check_failed"))
+                )
+            },
+        )
+        val logger = LoggerFactory.getLogger(TelegramRepostCoordinator::class.java) as Logger
+        val appender = ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>().apply { start() }
+        logger.addAppender(appender)
+
+        try {
+            coordinator.start()
+            source.emit(message(22))
+
+            withTimeout(1_000) {
+                coordinator.state.first { it is RepostFlowState.Failed }
+            }
+
+            val event = appender.list.first {
+                it.formattedMessage.startsWith("Failed to repost Telegram message.") &&
+                    it.formattedMessage.contains("updateId=22")
+            }
+            assertTrue(event.formattedMessage.contains("picture_size_check_failed"))
+            assertEquals(null, event.throwableProxy)
+        } finally {
+            coordinator.close()
+            logger.detachAppender(appender)
         }
     }
 

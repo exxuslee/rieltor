@@ -5,6 +5,7 @@ import com.rieltor.application.model.SkipReason
 import com.rieltor.application.model.TelegramSourceState
 import com.rieltor.application.port.PhotoRepostHandler
 import com.rieltor.application.port.TelegramMessageSource
+import com.rieltor.application.usecase.RepostPublishException
 import com.rieltor.domain.model.RepostResult
 import com.rieltor.domain.model.TelegramPhotoMessage
 import kotlinx.coroutines.CancellationException
@@ -101,6 +102,13 @@ class TelegramRepostCoordinator(
             }
         } catch (error: CancellationException) {
             throw error
+        } catch (error: RepostPublishException) {
+            logger.error(
+                "Failed to repost Telegram message. updateId={}, reason={}",
+                message.updateId,
+                error.failureReason(),
+            )
+            mutableState.value = RepostFlowState.Failed(message.updateId, error.failureReason())
         } catch (error: Throwable) {
             logger.error("Failed to repost Telegram message {}", message.updateId, error)
             mutableState.value = RepostFlowState.Failed(message.updateId, error.failureReason())

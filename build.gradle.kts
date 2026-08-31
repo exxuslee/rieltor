@@ -43,6 +43,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.dotenv.kotlin)
     implementation(libs.sqlite.jdbc)
+    implementation(libs.imageio.webp)
     implementation(platform(libs.koin.bom))
     implementation(libs.koin.ktor)
     implementation(libs.koin.logger.slf4j)

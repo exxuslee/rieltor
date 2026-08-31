@@ -61,27 +61,27 @@ internal class TelegramDiagnostics(
         }
 
         logger.info("Telegram available supergroup chats: count={}", supergroupChats.size)
-        supergroupChats.forEach { (chat, type) ->
-            val supergroup = runCatching {
-                telegramClient.send(TdApi.GetSupergroup(type.supergroupId))
-                    .get(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            }.getOrNull()
-            val membership = supergroup?.status?.javaClass?.simpleName
-                ?.removePrefix("ChatMemberStatus") ?: "unknown"
-            val kind = when {
-                supergroup?.isForum == true -> "forum"
-                type.isChannel -> "channel"
-                else -> "group"
-            }
-            logger.info(
-                "Telegram available chat: chatId={}, supergroupId={}, type={}, title='{}', membership={}",
-                chat.id,
-                type.supergroupId,
-                kind,
-                chat.title,
-                membership,
-            )
-        }
+//        supergroupChats.forEach { (chat, type) ->
+//            val supergroup = runCatching {
+//                telegramClient.send(TdApi.GetSupergroup(type.supergroupId))
+//                    .get(REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+//            }.getOrNull()
+//            val membership = supergroup?.status?.javaClass?.simpleName
+//                ?.removePrefix("ChatMemberStatus") ?: "unknown"
+//            val kind = when {
+//                supergroup?.isForum == true -> "forum"
+//                type.isChannel -> "channel"
+//                else -> "group"
+//            }
+//            logger.info(
+//                "Telegram available chat: chatId={}, supergroupId={}, type={}, title='{}', membership={}",
+//                chat.id,
+//                type.supergroupId,
+//                kind,
+//                chat.title,
+//                membership,
+//            )
+//        }
     }
 
     private fun logMonitoredTopics(telegramClient: SimpleTelegramClient) {

@@ -63,6 +63,9 @@ node scripts/check-seo.mjs
 - Если текст или подпись сообщения содержит ссылку на файл/папку Google Drive, backend получает доступ через OAuth 2.0
   со scope `drive.readonly`, скачивает JPEG/WebP из Drive и добавляет их в публикации TikTok и Threads с учётом лимита платформы.
   Access/refresh tokens Google хранятся в SQLite; client ID/secret всегда читаются из окружения или `.env`.
+  Скачивание одного файла ограничено 10 секундами на попытку; после трёх неудачных попыток проблемный файл пропускается,
+  а обработка остальных фотографий продолжается. После каждого пакета в журнал выводится итоговая статистика
+  `downloaded=скачано/запрошено`, количество ошибок и доступных фотографий.
 - Единая страница подключения Google Drive, TikTok и Threads: `docs/connect.html`. Старые адреса `google-connect.html` и
   `tiktok-connect.html` перенаправляют на неё. Google callback backend:
   `https://api.rieltor.dpdns.org/auth/google/callback`.
@@ -78,6 +81,8 @@ node scripts/check-seo.mjs
 - Публичные изображения отдаёт напрямую nginx из `/var/www/rieltor/media`, не занимая JVM и не требуя nginx-доступа
   к домашнему каталогу пользователя; TikTok-альбом по умолчанию
   ограничен 10 фотографиями через `REPOST_MAX_PHOTO_COUNT` для production VM с 1 OCPU/1 ГБ RAM.
+- Перед сохранением публичные изображения приводятся к JPEG и пропорционально уменьшаются до 1080 px по большей стороне,
+  чтобы соответствовать ограничениям TikTok Photo API и не завершаться с `picture_size_check_failed`.
 - Threads подключён отдельными OAuth, token repository и `ThreadsPhotoPublisher`. Одно фото публикуется как IMAGE,
   несколько — как карусель до 20 фото. TikTok и Threads резервируются и фиксируются раздельно в
   `repost_publications`; ошибка одного назначения не отменяет другое и допускает независимый повтор. Внутри одного объявления
@@ -87,4 +92,5 @@ node scripts/check-seo.mjs
   Developer Portal и развернуть runtime-файлы рядом с JAR.
 - Получение `publish_id` от TikTok считается только принятием задания. Backend опрашивает
   `/v2/post/publish/status/fetch/` до `PUBLISH_COMPLETE`, журналирует смену статуса и фиксирует публикацию в SQLite только
-  после подтверждения. При `FAILED` сохраняется точная причина отказа TikTok.
+  после подтверждения. При `FAILED` сохраняется точная причина отказа TikTok; ожидаемые отказы публикации выводятся в журнал
+  одной строкой без stack trace, а неожиданные ошибки сохраняют полный стек.
