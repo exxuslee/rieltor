@@ -1,14 +1,14 @@
 package com.rieltor.infrastructure.config
 
-import com.rieltor.domain.repository.SecretRepository
 import com.rieltor.domain.model.TelegramMonitoredTopic
+import com.rieltor.domain.repository.SecretRepository
 import io.github.cdimascio.dotenv.Dotenv
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class ApplicationSettingsTest {
     @Test
@@ -47,6 +47,32 @@ class ApplicationSettingsTest {
 
         assertFailsWith<IllegalStateException> {
             repostMaxPhotoCount(Dotenv.configure().directory(directory.toString()).load())
+        }
+    }
+
+    @Test
+    fun `tiktok mode defaults to post and accepts draft case insensitively`() {
+        val defaultDirectory = Files.createTempDirectory("rieltor-repost-mode-default-test")
+        val draftDirectory = Files.createTempDirectory("rieltor-repost-mode-draft-test")
+        Files.writeString(draftDirectory.resolve(".env"), "TIKTOK_MODE=draft")
+
+        assertEquals(
+            TikTokMode.POST,
+            tikTokMode(Dotenv.configure().directory(defaultDirectory.toString()).ignoreIfMissing().load()),
+        )
+        assertEquals(
+            TikTokMode.DRAFT,
+            tikTokMode(Dotenv.configure().directory(draftDirectory.toString()).load()),
+        )
+    }
+
+    @Test
+    fun `tiktok mode rejects unknown values`() {
+        val directory = Files.createTempDirectory("rieltor-repost-mode-invalid-test")
+        Files.writeString(directory.resolve(".env"), "TIKTOK_MODE=LATER")
+
+        assertFailsWith<IllegalStateException> {
+            tikTokMode(Dotenv.configure().directory(directory.toString()).load())
         }
     }
 

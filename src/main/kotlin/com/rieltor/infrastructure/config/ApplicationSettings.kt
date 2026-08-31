@@ -1,7 +1,7 @@
 package com.rieltor.infrastructure.config
 
-import com.rieltor.domain.repository.SecretRepository
 import com.rieltor.domain.model.TelegramMonitoredTopic
+import com.rieltor.domain.repository.SecretRepository
 import io.github.cdimascio.dotenv.Dotenv
 import java.net.URI
 import java.nio.file.Path
@@ -41,6 +41,7 @@ data class ApplicationSettings(
     val tikTokClientKey: String,
     val tikTokClientSecret: String,
     val tikTokRedirectUri: String,
+    val tikTokMode: TikTokMode = TikTokMode.POST,
     val repostMaxPhotoCount: Int = DEFAULT_REPOST_MAX_PHOTO_COUNT,
     val googleClientId: String = "",
     val googleClientSecret: String = "",
@@ -77,6 +78,7 @@ data class ApplicationSettings(
                 tikTokClientKey = requireEnvironmentOrDotenv(SecretNames.TIKTOK_CLIENT_KEY, dotenv),
                 tikTokClientSecret = requireEnvironmentOrDotenv(SecretNames.TIKTOK_CLIENT_SECRET, dotenv),
                 tikTokRedirectUri = redirectUri,
+                tikTokMode = tikTokMode(dotenv),
                 repostMaxPhotoCount = repostMaxPhotoCount(dotenv),
                 googleClientId = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_ID, dotenv),
                 googleClientSecret = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_SECRET, dotenv),
@@ -87,6 +89,11 @@ data class ApplicationSettings(
             )
         }
     }
+}
+
+enum class TikTokMode {
+    POST,
+    DRAFT,
 }
 
 fun databasePath(dotenv: Dotenv): Path =
@@ -105,6 +112,12 @@ fun repostMaxPhotoCount(dotenv: Dotenv): Int {
         ?: error(
             "Invalid REPOST_MAX_PHOTO_COUNT: expected a number from 1 to $TIKTOK_API_MAX_PHOTO_COUNT"
         )
+}
+
+fun tikTokMode(dotenv: Dotenv): TikTokMode {
+    val configured = environmentOrDotenv("TIKTOK_MODE", dotenv) ?: return TikTokMode.POST
+    return runCatching { TikTokMode.valueOf(configured.trim().uppercase()) }
+        .getOrElse { error("Invalid TIKTOK_MODE: expected POST or DRAFT") }
 }
 
 fun bootstrapSecrets(repository: SecretRepository, dotenv: Dotenv) {

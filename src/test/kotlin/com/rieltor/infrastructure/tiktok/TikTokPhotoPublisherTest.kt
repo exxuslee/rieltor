@@ -3,25 +3,16 @@ package com.rieltor.infrastructure.tiktok
 import com.rieltor.domain.model.StoredTokens
 import com.rieltor.domain.repository.TikTokTokenRepository
 import com.rieltor.infrastructure.config.ApplicationSettings
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.MockRequestHandleScope
-import io.ktor.client.engine.mock.respond
-import java.io.IOException
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpMethod
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.content.TextContent
-import io.ktor.http.headersOf
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import com.rieltor.infrastructure.config.TikTokMode
+import io.ktor.client.*
+import io.ktor.client.engine.mock.*
+import io.ktor.http.*
+import io.ktor.http.content.*
+import kotlinx.coroutines.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import java.io.IOException
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
@@ -244,6 +235,48 @@ class TikTokPhotoPublisherTest {
         assertEquals("publish-confirmed", receipt.publishId)
         assertEquals(2, statusChecks)
         assertEquals(listOf(5_000L), delays)
+    }
+
+    @Test
+    fun `draft mode uploads media for manual editing and stops after inbox delivery`() = runBlocking {
+        val json = Json { ignoreUnknownKeys = true }
+        var publishBody: String? = null
+        var statusChecks = 0
+        val engine = MockEngine { request ->
+            when {
+                request.method == HttpMethod.Head -> publicPhoto()
+                request.url.encodedPath.contains("creator_info") -> creatorInfo()
+                request.url.encodedPath.contains("status/fetch") -> {
+                    statusChecks++
+                    respond(
+                        content = """{"data":{"status":"SEND_TO_USER_INBOX"},"error":{"code":"ok","message":""}}""",
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                }
+                else -> {
+                    publishBody = (request.body as TextContent).text
+                    publishAccepted("draft-accepted")
+                }
+            }
+        }
+        val httpClient = HttpClient(engine)
+        val publisher = TikTokPhotoPublisher(
+            httpClient,
+            TikTokAuthService(httpClient, settings(), validTokens(), json),
+            json,
+            tikTokMode = TikTokMode.DRAFT,
+        )
+
+        val receipt = publisher.publish(listOf("https://api.example/media/photo.jpg"), "Чернетка")
+
+        val body = json.parseToJsonElement(requireNotNull(publishBody)).jsonObject
+        val postInfo = body.getValue("post_info").jsonObject
+        assertEquals("\"MEDIA_UPLOAD\"", body.getValue("post_mode").toString())
+        assertEquals(false, "privacy_level" in postInfo)
+        assertEquals(false, "auto_add_music" in postInfo)
+        assertEquals("DRAFT", receipt.privacyLevel)
+        assertEquals(1, statusChecks)
     }
 
     @Test

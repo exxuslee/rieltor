@@ -5,6 +5,7 @@ import com.rieltor.domain.model.RepostDestination
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.infrastructure.config.DEFAULT_REPOST_MAX_PHOTO_COUNT
 import com.rieltor.infrastructure.config.TIKTOK_API_MAX_PHOTO_COUNT
+import com.rieltor.infrastructure.config.TikTokMode
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -32,6 +33,7 @@ class TikTokPhotoPublisher(
     private val rateLimitMaxAttempts: Int = DEFAULT_RATE_LIMIT_MAX_ATTEMPTS,
     private val statusPollIntervalMillis: Long = DEFAULT_STATUS_POLL_INTERVAL_MILLIS,
     private val statusPollMaxAttempts: Int = DEFAULT_STATUS_POLL_MAX_ATTEMPTS,
+    private val tikTokMode: TikTokMode = TikTokMode.POST,
     override val maxPhotoCount: Int = DEFAULT_REPOST_MAX_PHOTO_COUNT,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val delayMillis: suspend (Long) -> Unit = { delay(it) },
@@ -93,26 +95,32 @@ class TikTokPhotoPublisher(
         val creator = queryCreator(accessToken)
         // TikTok blocks unaudited clients from publishing anything except a private post.
         // Never fall back to a more public option: it is rejected by the API and could expose a listing unexpectedly.
-        val privacy = creator.privacyLevelOptions.firstOrNull { it == "SELF_ONLY" }
-            ?: throw TikTokAuthException(
-                "TikTok did not allow SELF_ONLY privacy for this account. " +
-                    "Available options: ${creator.privacyLevelOptions.joinToString().ifBlank { "none" }}. " +
-                    "For an unaudited app, enable private posting for the authorized TikTok account or complete TikTok audit."
-            )
+        val privacy = if (tikTokMode == TikTokMode.POST) {
+            creator.privacyLevelOptions.firstOrNull { it == "SELF_ONLY" }
+                ?: throw TikTokAuthException(
+                    "TikTok did not allow SELF_ONLY privacy for this account. " +
+                        "Available options: ${creator.privacyLevelOptions.joinToString().ifBlank { "none" }}. " +
+                        "For an unaudited app, enable private posting for the authorized TikTok account or complete TikTok audit."
+                )
+        } else {
+            "DRAFT"
+        }
 
         val normalizedCaption = caption.orEmpty().trim()
         val title = normalizedCaption.lineSequence().firstOrNull().orEmpty().take(90)
         val body = buildJsonObject {
             put("media_type", "PHOTO")
-            put("post_mode", "DIRECT_POST")
+            put("post_mode", if (tikTokMode == TikTokMode.POST) "DIRECT_POST" else "MEDIA_UPLOAD")
             put("post_info", buildJsonObject {
                 if (title.isNotBlank()) put("title", title)
                 if (normalizedCaption.isNotBlank()) put("description", normalizedCaption.take(4000))
-                put("privacy_level", privacy)
-                put("disable_comment", false)
-                put("auto_add_music", true)
-                put("brand_content_toggle", false)
-                put("brand_organic_toggle", false)
+                if (tikTokMode == TikTokMode.POST) {
+                    put("privacy_level", privacy)
+                    put("disable_comment", false)
+                    put("auto_add_music", true)
+                    put("brand_content_toggle", false)
+                    put("brand_organic_toggle", false)
+                }
             })
             put("source_info", buildJsonObject {
                 put("source", "PULL_FROM_URL")
@@ -123,8 +131,9 @@ class TikTokPhotoPublisher(
             })
         }
         logger.info(
-            "TikTok photo post initialization started. creator={}, privacy={}, photoCount={}, photoHosts={}, captionChars={}",
+            "TikTok photo repost initialization started. creator={}, mode={}, privacy={}, photoCount={}, photoHosts={}, captionChars={}",
             creator.nickname,
+            tikTokMode,
             privacy,
             photoUrls.size,
             photoUrls.mapNotNull(::hostOf).distinct(),
@@ -139,8 +148,9 @@ class TikTokPhotoPublisher(
         val publishId = payload.data?.publishId
             ?: throw TikTokAuthException("TikTok photo publish response has no publish_id.")
         logger.info(
-            "TikTok photo post accepted for processing. publishId={}, httpStatus={}, logId={}",
+            "TikTok photo repost accepted for processing. publishId={}, mode={}, httpStatus={}, logId={}",
             publishId,
+            tikTokMode,
             response.status.value,
             payload.error?.logId,
         )
@@ -205,15 +215,18 @@ class TikTokPhotoPublisher(
                 )
             }
             lastStatus = statusData.status
-            when (statusData.status) {
-                "PUBLISH_COMPLETE" -> return
-                "FAILED" -> throw TikTokAuthException(
+            when {
+                tikTokMode == TikTokMode.POST && statusData.status == "PUBLISH_COMPLETE" -> return
+                tikTokMode == TikTokMode.DRAFT &&
+                    statusData.status in setOf("SEND_TO_USER_INBOX", "PUBLISH_COMPLETE") -> return
+                statusData.status == "FAILED" -> throw TikTokAuthException(
                     "TikTok photo post failed after initialization. publishId=$publishId, " +
                         "reason=${statusData.failReason ?: "unknown"}"
                 )
-                "PROCESSING_UPLOAD", "PROCESSING_DOWNLOAD", "SEND_TO_USER_INBOX" -> Unit
+                statusData.status in setOf("PROCESSING_UPLOAD", "PROCESSING_DOWNLOAD") -> Unit
                 else -> throw TikTokAuthException(
-                    "TikTok returned an unknown publish status. publishId=$publishId, status=${statusData.status}"
+                    "TikTok returned an unexpected publish status for $tikTokMode mode. " +
+                        "publishId=$publishId, status=${statusData.status}"
                 )
             }
         }

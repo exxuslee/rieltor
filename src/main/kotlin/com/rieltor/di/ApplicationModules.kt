@@ -5,41 +5,29 @@ import com.rieltor.application.port.PhotoRepostHandler
 import com.rieltor.application.port.TelegramMessageSource
 import com.rieltor.application.service.TelegramRepostTracker
 import com.rieltor.application.usecase.PublishPhotoRepostUseCase
-import com.rieltor.domain.repository.ExternalPhotoSource
-import com.rieltor.domain.repository.GoogleDriveTokenRepository
-import com.rieltor.domain.repository.PublicMediaStorage
-import com.rieltor.domain.repository.SecretRepository
-import com.rieltor.domain.repository.TelegramRepostRepository
-import com.rieltor.domain.repository.TikTokTokenRepository
-import com.rieltor.domain.repository.ThreadsTokenRepository
-import com.rieltor.domain.service.TelegramListingIdentityExtractor
+import com.rieltor.domain.repository.*
 import com.rieltor.domain.service.ListingCaptionFormatter
+import com.rieltor.domain.service.TelegramListingIdentityExtractor
 import com.rieltor.infrastructure.config.ApplicationSettings
 import com.rieltor.infrastructure.config.bootstrapSecrets
 import com.rieltor.infrastructure.config.databasePath
-import com.rieltor.infrastructure.database.LegacyTokenMigration
-import com.rieltor.infrastructure.database.SqliteDatabase
-import com.rieltor.infrastructure.database.GoogleDriveTokenRepositoryImpl
-import com.rieltor.infrastructure.database.SecretRepositoryImpl
-import com.rieltor.infrastructure.database.TelegramRepostRepositoryImpl
-import com.rieltor.infrastructure.database.TikTokTokenRepositoryImpl
-import com.rieltor.infrastructure.database.ThreadsTokenRepositoryImpl
+import com.rieltor.infrastructure.database.*
 import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.google.GoogleDrivePhotoSource
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import com.rieltor.infrastructure.media.MediaCleanupJob
 import com.rieltor.infrastructure.oauth.OAuthStateStore
 import com.rieltor.infrastructure.telegram.TelegramClientAdapter
-import com.rieltor.infrastructure.tiktok.TikTokAuthService
-import com.rieltor.infrastructure.tiktok.TikTokPhotoPublisher
 import com.rieltor.infrastructure.threads.ThreadsAuthService
 import com.rieltor.infrastructure.threads.ThreadsPhotoPublisher
+import com.rieltor.infrastructure.tiktok.TikTokAuthService
+import com.rieltor.infrastructure.tiktok.TikTokPhotoPublisher
 import io.github.cdimascio.dotenv.Dotenv
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.serialization.kotlinx.json.json
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
@@ -102,7 +90,9 @@ private val applicationModule = module {
             mediaStorage = get(),
             publishers = buildList {
                 add(get<TikTokPhotoPublisher>())
-                if (settings.threadsConfigured) add(get<ThreadsPhotoPublisher>())
+                if (settings.threadsConfigured) {
+                    add(get<ThreadsPhotoPublisher>())
+                }
             },
             externalPhotoSource = get(),
             captionFormatter = get(),
@@ -134,6 +124,7 @@ private val integrationModule = module {
             httpClient = get(),
             auth = get(),
             json = get(),
+            tikTokMode = get<ApplicationSettings>().tikTokMode,
             maxPhotoCount = get<ApplicationSettings>().repostMaxPhotoCount,
         )
     }
