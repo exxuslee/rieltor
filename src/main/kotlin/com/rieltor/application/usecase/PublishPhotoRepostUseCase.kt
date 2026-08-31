@@ -13,9 +13,6 @@ import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublicMediaStorage
 import com.rieltor.domain.service.ListingCaptionFormatter
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.supervisorScope
 import org.slf4j.LoggerFactory
 
 class PublishPhotoRepostUseCase(
@@ -25,6 +22,7 @@ class PublishPhotoRepostUseCase(
     private val externalPhotoSource: ExternalPhotoSource? = null,
     private val allowedSources: Set<TelegramMonitoredTopic> = emptySet(),
     private val captionFormatter: ListingCaptionFormatter = ListingCaptionFormatter(),
+    private val maxPhotoCount: Int = Int.MAX_VALUE,
 ) : PhotoRepostHandler {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -56,30 +54,31 @@ class PublishPhotoRepostUseCase(
 
         var extraPhotos = emptyList<TelegramPhoto>()
         return try {
-            extraPhotos = loadExtraPhotos(message, activePublishers.maxOf { it.maxPhotoCount })
-            val allPhotos = message.photos + extraPhotos
+            require(maxPhotoCount > 0) { "Repost photo limit must be positive." }
+            val effectivePhotoLimit = minOf(activePublishers.maxOf { it.maxPhotoCount }, maxPhotoCount)
+            extraPhotos = loadExtraPhotos(message, effectivePhotoLimit)
+            val allPhotos = (message.photos + extraPhotos).take(effectivePhotoLimit)
             require(allPhotos.isNotEmpty()) { "At least one Telegram or Google Drive photo is required." }
             val media = allPhotos.map { photo ->
                 photo.content.use { mediaStorage.store(photo.fileName, it) }
             }
             val caption = captionFormatter.filter(message.caption)
-            val outcomes = supervisorScope {
-                activePublishers.map { publisher ->
-                    async {
-                        runCatching {
-                            val receipt = publisher.publish(
-                                media.map { it.publicUrl }.take(publisher.maxPhotoCount),
-                                caption,
-                            )
-                            repostTracker.markPublished(message.updateId, publisher.destination, receipt.publishId)
-                            receipt
-                        }.onFailure { error ->
-                            runCatching {
-                                repostTracker.markFailed(message.updateId, publisher.destination, error)
-                            }.onFailure(error::addSuppressed)
-                        }.let { publisher.destination to it }
-                    }
-                }.awaitAll()
+            // The production VM has one OCPU and 1 GB RAM. Running TikTok and Threads
+            // requests concurrently only increases peak memory/connection pressure there.
+            // Keep destinations failure-isolated, but publish them one at a time.
+            val outcomes = activePublishers.map { publisher ->
+                runCatching {
+                    val receipt = publisher.publish(
+                        media.map { it.publicUrl }.take(minOf(publisher.maxPhotoCount, maxPhotoCount)),
+                        caption,
+                    )
+                    repostTracker.markPublished(message.updateId, publisher.destination, receipt.publishId)
+                    receipt
+                }.onFailure { error ->
+                    runCatching {
+                        repostTracker.markFailed(message.updateId, publisher.destination, error)
+                    }.onFailure(error::addSuppressed)
+                }.let { publisher.destination to it }
             }
             val receipts = outcomes.mapNotNull { it.second.getOrNull() }
             val failures = reservationFailures + outcomes.mapNotNull { (destination, result) ->

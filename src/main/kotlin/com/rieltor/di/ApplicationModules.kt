@@ -106,6 +106,7 @@ private val applicationModule = module {
             },
             externalPhotoSource = get(),
             captionFormatter = get(),
+            maxPhotoCount = settings.repostMaxPhotoCount,
         )
     }
     single<PhotoRepostHandler> { get<PublishPhotoRepostUseCase>() }
@@ -128,7 +129,14 @@ private val integrationModule = module {
     }
     single<PublicMediaStorage> { get<LocalPublicMediaStorage>() }
     single { MediaCleanupJob(get<ApplicationSettings>().mediaDirectory) }
-    single { TikTokPhotoPublisher(get(), get(), get()) }
+    single {
+        TikTokPhotoPublisher(
+            httpClient = get(),
+            auth = get(),
+            json = get(),
+            maxPhotoCount = get<ApplicationSettings>().repostMaxPhotoCount,
+        )
+    }
     single { ThreadsPhotoPublisher(get(), get(), get()) }
     single<TelegramMessageSource> {
         val settings = get<ApplicationSettings>()

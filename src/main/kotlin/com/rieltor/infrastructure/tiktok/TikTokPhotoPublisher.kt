@@ -3,6 +3,8 @@ package com.rieltor.infrastructure.tiktok
 import com.rieltor.domain.model.PublishReceipt
 import com.rieltor.domain.model.RepostDestination
 import com.rieltor.domain.repository.PhotoPublisher
+import com.rieltor.infrastructure.config.DEFAULT_REPOST_MAX_PHOTO_COUNT
+import com.rieltor.infrastructure.config.TIKTOK_API_MAX_PHOTO_COUNT
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -26,17 +28,22 @@ class TikTokPhotoPublisher(
     private val minPublishIntervalMillis: Long = DEFAULT_MIN_PUBLISH_INTERVAL_MILLIS,
     private val rateLimitRetryDelayMillis: Long = DEFAULT_RATE_LIMIT_RETRY_DELAY_MILLIS,
     private val rateLimitMaxAttempts: Int = DEFAULT_RATE_LIMIT_MAX_ATTEMPTS,
+    override val maxPhotoCount: Int = DEFAULT_REPOST_MAX_PHOTO_COUNT,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val delayMillis: suspend (Long) -> Unit = { delay(it) },
 ) : PhotoPublisher {
     override val destination = RepostDestination.TIKTOK
-    override val maxPhotoCount = MAX_PHOTO_COUNT
     private val publishMutex = Mutex()
     private var lastPublishAttemptAtMillis: Long? = null
 
     override suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt {
         require(photoUrls.isNotEmpty()) { "At least one photo URL is required." }
-        require(photoUrls.size <= MAX_PHOTO_COUNT) { "TikTok accepts at most $MAX_PHOTO_COUNT photos per post." }
+        require(maxPhotoCount in 1..TIKTOK_API_MAX_PHOTO_COUNT) {
+            "TikTok photo limit must be between 1 and $TIKTOK_API_MAX_PHOTO_COUNT."
+        }
+        require(photoUrls.size <= maxPhotoCount) {
+            "This TikTok publisher accepts at most $maxPhotoCount photos per post."
+        }
         require(minPublishIntervalMillis >= 0) { "Minimum publish interval must not be negative." }
         require(rateLimitRetryDelayMillis >= 0) { "Rate limit retry delay must not be negative." }
         require(rateLimitMaxAttempts > 0) { "Rate limit max attempts must be positive." }
@@ -153,7 +160,6 @@ class TikTokPhotoPublisher(
     companion object {
         private const val CREATOR_INFO_URL = "https://open.tiktokapis.com/v2/post/publish/creator_info/query/"
         private const val PHOTO_POST_URL = "https://open.tiktokapis.com/v2/post/publish/content/init/"
-        private const val MAX_PHOTO_COUNT = 35
         private const val CREATOR_INFO_MAX_ATTEMPTS = 3
         private const val DEFAULT_MIN_PUBLISH_INTERVAL_MILLIS = 11_000L
         private const val DEFAULT_RATE_LIMIT_RETRY_DELAY_MILLIS = 60_000L

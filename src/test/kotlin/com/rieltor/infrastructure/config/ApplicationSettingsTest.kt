@@ -8,6 +8,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertFailsWith
 
 class ApplicationSettingsTest {
     @Test
@@ -18,6 +19,35 @@ class ApplicationSettingsTest {
         val port = serverPort(Dotenv.configure().directory(directory.toString()).load())
 
         assertEquals(9484, port)
+    }
+
+    @Test
+    fun `tiktok photo count defaults to a safe value for a small VM`() {
+        val directory = Files.createTempDirectory("rieltor-tiktok-limit-default-test")
+
+        val limit = repostMaxPhotoCount(Dotenv.configure().directory(directory.toString()).ignoreIfMissing().load())
+
+        assertEquals(10, limit)
+    }
+
+    @Test
+    fun `tiktok photo count is configurable within api limits`() {
+        val directory = Files.createTempDirectory("rieltor-tiktok-limit-test")
+        Files.writeString(directory.resolve(".env"), "REPOST_MAX_PHOTO_COUNT=12")
+
+        val limit = repostMaxPhotoCount(Dotenv.configure().directory(directory.toString()).load())
+
+        assertEquals(12, limit)
+    }
+
+    @Test
+    fun `tiktok photo count rejects unsafe values`() {
+        val directory = Files.createTempDirectory("rieltor-tiktok-limit-invalid-test")
+        Files.writeString(directory.resolve(".env"), "REPOST_MAX_PHOTO_COUNT=36")
+
+        assertFailsWith<IllegalStateException> {
+            repostMaxPhotoCount(Dotenv.configure().directory(directory.toString()).load())
+        }
     }
 
     @Test

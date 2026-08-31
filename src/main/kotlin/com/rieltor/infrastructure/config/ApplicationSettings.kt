@@ -41,6 +41,7 @@ data class ApplicationSettings(
     val tikTokClientKey: String,
     val tikTokClientSecret: String,
     val tikTokRedirectUri: String,
+    val repostMaxPhotoCount: Int = DEFAULT_REPOST_MAX_PHOTO_COUNT,
     val googleClientId: String = "",
     val googleClientSecret: String = "",
     val googleRedirectUri: String = "",
@@ -76,6 +77,7 @@ data class ApplicationSettings(
                 tikTokClientKey = requireEnvironmentOrDotenv(SecretNames.TIKTOK_CLIENT_KEY, dotenv),
                 tikTokClientSecret = requireEnvironmentOrDotenv(SecretNames.TIKTOK_CLIENT_SECRET, dotenv),
                 tikTokRedirectUri = redirectUri,
+                repostMaxPhotoCount = repostMaxPhotoCount(dotenv),
                 googleClientId = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_ID, dotenv),
                 googleClientSecret = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_SECRET, dotenv),
                 googleRedirectUri = secrets.require(SecretNames.GOOGLE_REDIRECT_URI),
@@ -94,6 +96,15 @@ fun serverPort(dotenv: Dotenv): Int {
     val configured = environmentOrDotenv("PORT", dotenv) ?: return DEFAULT_SERVER_PORT
     return configured.toIntOrNull()?.takeIf { it in 1..65535 }
         ?: error("Invalid PORT: expected a number from 1 to 65535")
+}
+
+fun repostMaxPhotoCount(dotenv: Dotenv): Int {
+    val configured = environmentOrDotenv("REPOST_MAX_PHOTO_COUNT", dotenv)
+        ?: return DEFAULT_REPOST_MAX_PHOTO_COUNT
+    return configured.toIntOrNull()?.takeIf { it in 1..TIKTOK_API_MAX_PHOTO_COUNT }
+        ?: error(
+            "Invalid REPOST_MAX_PHOTO_COUNT: expected a number from 1 to $TIKTOK_API_MAX_PHOTO_COUNT"
+        )
 }
 
 fun bootstrapSecrets(repository: SecretRepository, dotenv: Dotenv) {
@@ -161,3 +172,5 @@ private fun parseTelegramMonitoredTopics(
 }
 
 private const val DEFAULT_SERVER_PORT = 8383
+const val DEFAULT_REPOST_MAX_PHOTO_COUNT = 10
+const val TIKTOK_API_MAX_PHOTO_COUNT = 35

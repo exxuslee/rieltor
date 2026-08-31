@@ -14,9 +14,11 @@ import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublicMediaStorage
 import com.rieltor.domain.repository.TelegramRepostRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayInputStream
 import java.io.InputStream
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -99,6 +101,28 @@ class PublishPhotoRepostUseCaseTest {
         assertIs<RepostResult.Published>(service.handle(message))
         assertEquals(3, publisher.publishedUrls.single().size)
         assertEquals(false, publisher.publishedCaptions.single()?.contains("drive.google.com"))
+    }
+
+    @Test
+    fun `caps drive downloads and publication for a small VM`() = runBlocking {
+        val publisher = FakePublisher(maxPhotoCount = 35)
+        val externalPhotos = CapturingExternalPhotoSource()
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(FakeJobs()),
+            mediaStorage = FakeStorage(),
+            publishers = listOf(publisher),
+            externalPhotoSource = externalPhotos,
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
+            maxPhotoCount = 10,
+        )
+
+        assertIs<RepostResult.Published>(service.handle(message(
+            updateId = 441,
+            caption = "Будинок\nhttps://drive.google.com/drive/folders/folder123456",
+        )))
+
+        assertEquals(9, externalPhotos.requestedLimit)
+        assertEquals(10, publisher.publishedUrls.single().size)
     }
 
     @Test
@@ -260,6 +284,38 @@ class PublishPhotoRepostUseCaseTest {
         assertEquals(1, threads.calls)
     }
 
+    @Test
+    fun `publishes destinations sequentially to limit resource pressure`() = runBlocking {
+        val jobs = FakeJobs()
+        val activeCalls = AtomicInteger(0)
+        val maxActiveCalls = AtomicInteger(0)
+        val publishers = listOf(RepostDestination.TIKTOK, RepostDestination.THREADS).map { destination ->
+            object : PhotoPublisher {
+                override val destination = destination
+                override val maxPhotoCount = 20
+
+                override suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt {
+                    val active = activeCalls.incrementAndGet()
+                    maxActiveCalls.updateAndGet { previous -> maxOf(previous, active) }
+                    delay(10)
+                    activeCalls.decrementAndGet()
+                    return PublishReceipt("publish-$destination", "Ірина", "SELF_ONLY", destination)
+                }
+            }
+        }
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(jobs),
+            mediaStorage = FakeStorage(),
+            publishers = publishers,
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
+        )
+
+        val result = assertIs<RepostResult.Published>(service.handle(message(21)))
+
+        assertEquals(2, result.receipts.size)
+        assertEquals(1, maxActiveCalls.get())
+    }
+
     private fun message(
         updateId: Long,
         chatId: Long = MONITORED_CHAT_ID,
@@ -314,6 +370,19 @@ class PublishPhotoRepostUseCaseTest {
 
         override suspend fun downloadPhotos(text: String?, limit: Int): List<TelegramPhoto> =
             throw IllegalStateException("The Google Drive link contains no supported photos")
+    }
+
+    private class CapturingExternalPhotoSource : ExternalPhotoSource {
+        var requestedLimit: Int? = null
+
+        override fun containsLink(text: String?) = text?.contains("drive.google.com") == true
+
+        override suspend fun downloadPhotos(text: String?, limit: Int): List<TelegramPhoto> {
+            requestedLimit = limit
+            return (1..limit).map { index ->
+                TelegramPhoto("drive-$index.jpg", ByteArrayInputStream(byteArrayOf(index.toByte())))
+            }
+        }
     }
 
     private class FakeJobs : TelegramRepostRepository {

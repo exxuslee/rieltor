@@ -74,8 +74,11 @@ node scripts/check-seo.mjs
 - Старый `tiktok-tokens.json` автоматически переносится в SQLite при первом запуске.
 - Папка TDLib-сессии `tdlib-session-id<TELEGRAM_USER_ID>` находится рядом с JAR и не публикуется в Git.
 - Фоновая очистка запускается при старте backend и затем каждый час, удаляя из `media` изображения старше 24 часов.
+- Публичные изображения отдаёт напрямую nginx из каталога `media`, не занимая JVM; TikTok-альбом по умолчанию
+  ограничен 10 фотографиями через `REPOST_MAX_PHOTO_COUNT` для production VM с 1 OCPU/1 ГБ RAM.
 - Threads подключён отдельными OAuth, token repository и `ThreadsPhotoPublisher`. Одно фото публикуется как IMAGE,
   несколько — как карусель до 20 фото. TikTok и Threads резервируются и фиксируются раздельно в
-  `repost_publications`; ошибка одного назначения не отменяет другое и допускает независимый повтор.
+  `repost_publications`; ошибка одного назначения не отменяет другое и допускает независимый повтор. На малой production VM
+  назначения выполняются последовательно, чтобы ограничить пиковую нагрузку.
 - Для Photo API необходимо добавить Content Posting API, подтвердить домен `https://api.rieltor.dpdns.org` в TikTok
   Developer Portal и развернуть runtime-файлы рядом с JAR.

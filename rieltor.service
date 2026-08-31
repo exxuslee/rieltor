@@ -7,9 +7,10 @@ Type=simple
 User=exxus
 Group=exxus
 WorkingDirectory=/home/exxus/rieltorSite
-ExecStart=/usr/bin/java -jar /home/exxus/rieltorSite/rieltorSite-all.jar
+ExecStart=/usr/bin/java -Xms64m -Xmx384m -XX:MaxDirectMemorySize=128m -XX:ActiveProcessorCount=1 -Dkotlinx.coroutines.io.parallelism=2 -jar /home/exxus/rieltorSite/rieltorSite-all.jar
 Restart=always
 RestartSec=5
+TasksMax=64
 StandardOutput=append:/home/exxus/rieltorSite/app.log
 StandardError=append:/home/exxus/rieltorSite/error.log
 

@@ -74,8 +74,10 @@ Post; caption перед публикацией очищается от внут
 TDLib-адаптер только получает сообщения, собирает альбомы и передаёт подготовленные сообщения через
 `TelegramMessageSource`. Новое сообщение передаётся в repost-конвейер через 30 минут; перед передачей backend повторно
 получает его из TDLib, поэтому в публикацию попадает актуальный отредактированный текст или подпись.
-`TelegramRepostCoordinator` наблюдает поток последовательно, поэтому две публикации не запускаются
-параллельно. Google Drive, TikTok и Threads подключены к application use case через отдельные интерфейсы и не импортируются в
+`TelegramRepostCoordinator` наблюдает поток последовательно, поэтому два сообщения не обрабатываются
+параллельно. Назначения одного сообщения также публикуются по очереди (сначала TikTok, затем Threads), чтобы не создавать
+пики CPU, памяти и сетевых соединений на VM с 1 OCPU/1 ГБ RAM. Количество загружаемых из Drive и передаваемых в один
+сервис фотографий задаётся через `REPOST_MAX_PHOTO_COUNT` и по умолчанию ограничено 10. Google Drive, TikTok и Threads подключены к application use case через отдельные интерфейсы и не импортируются в
 Telegram transport. Состояние TDLib-соединения и состояние repost-конвейера публикуются раздельными `StateFlow`, а их
 изменения записываются в журнал.
 
@@ -140,7 +142,16 @@ Copy-Item `
 
 Команду нужно выполнять от того же пользователя, которому доступны `rieltor.db` и папка сессии
 `tdlib-session-id<TELEGRAM_USER_ID>`. Для работы в фоне используйте уже настроенный сервис `rieltor.service`,
-а после замены JAR перезапускайте его командой `sudo systemctl restart rieltor.service`.
+который ограничивает JVM одним процессором, heap до 384 МБ, direct memory до 128 МБ и IO-пул двумя потоками.
+После замены JAR и unit-файла выполните `sudo systemctl daemon-reload && sudo systemctl restart rieltor.service`.
+
+Конфигурация `api.rieltor.dpdns.org.nginx` отдаёт `/media/` напрямую из
+`/home/exxus/rieltorSite/media/`, минуя JVM и общий API rate limit. После её замены проверьте и перезагрузите nginx:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
 
 TikTok и Threads получают фотографии по `https://api.rieltor.dpdns.org/media/...`, поэтому в настройках Content Posting API нужно
 подтвердить владение доменом `https://api.rieltor.dpdns.org`. Для неаудированного TikTok-клиента публикации ограничены
