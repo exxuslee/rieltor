@@ -69,7 +69,7 @@ class ListingCaptionFormatter {
             .map { it.removePrefix(ITEM_PREFIX).trim() }
             .firstOrNull(priceLine::containsMatchIn)
 
-        return MediaTextOverlay(title, price, PUBLIC_CONTACT)
+        return MediaTextOverlay(title, price, PUBLIC_CONTACT.substringAfter(' '))
     }
 
     private fun cleanLine(source: String): String {

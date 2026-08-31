@@ -75,7 +75,7 @@ class LocalPublicMediaStorageTest {
             val stored = storage.store(
                 "photo.jpeg",
                 ByteArrayInputStream(input),
-                MediaTextOverlay("Квартира в Ірпені", "Ціна 22 000 $", "🤙 066-372-71-02 Ірина"),
+                MediaTextOverlay("Квартира в Ірпені", "Ціна 22 000 $", "066-372-71-02 Ірина"),
             )
             val output = ImageIO.read(Path.of(stored.localPath).toFile())
             val lightPixels = (0 until output.width / 2).sumOf { x ->

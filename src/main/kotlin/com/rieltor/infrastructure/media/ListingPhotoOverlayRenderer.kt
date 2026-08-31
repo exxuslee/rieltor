@@ -82,9 +82,9 @@ internal object ListingPhotoOverlayRenderer {
     private const val HORIZONTAL_PADDING_RATIO = 0.025
     private const val VERTICAL_PADDING_RATIO = 0.012
     private const val BLOCK_GAP_RATIO = 0.014
-    private const val FONT_RATIO = 0.047
+    private const val FONT_RATIO = 0.0235
     private const val CORNER_RADIUS_RATIO = 0.28
-    private const val MIN_FONT_SIZE = 22
-    private const val MAX_FONT_SIZE = 52
+    private const val MIN_FONT_SIZE = 11
+    private const val MAX_FONT_SIZE = 26
     private const val BACKGROUND_ALPHA = 218
 }

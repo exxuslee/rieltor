@@ -114,6 +114,6 @@ class ListingCaptionFormatterTest {
 
         assertEquals("Квартира в Ірпені", overlay.title)
         assertEquals("Ціна 22 000${'$'}", overlay.price)
-        assertEquals("🤙 066-372-71-02 Ірина", overlay.contact)
+        assertEquals("066-372-71-02 Ірина", overlay.contact)
     }
 }

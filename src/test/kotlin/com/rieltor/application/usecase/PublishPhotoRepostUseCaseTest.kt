@@ -60,7 +60,7 @@ class PublishPhotoRepostUseCaseTest {
         assertEquals(1, publisher.calls)
         assertEquals(3, publisher.publishedUrls.single().size)
         assertEquals("Альбом квартири", storage.textOverlays[0]?.title)
-        assertEquals("🤙 066-372-71-02 Ірина", storage.textOverlays[0]?.contact)
+        assertEquals("066-372-71-02 Ірина", storage.textOverlays[0]?.contact)
         assertEquals(listOf(false, true, true), storage.textOverlays.map { it == null })
         assertEquals(
             """🏠 Альбом квартири
