@@ -57,11 +57,13 @@ class PublishPhotoRepostUseCase(
             extraPhotos = loadExtraPhotos(message, effectivePhotoLimit)
             val allPhotos = (message.photos + extraPhotos).take(effectivePhotoLimit)
             require(allPhotos.isNotEmpty()) { "At least one Telegram or Google Drive photo is required." }
-            val caption = captionFormatter.filter(message.caption)
-            val textOverlay = captionFormatter.photoOverlay(caption)
+            val listing = captionFormatter.filter(message.caption)
+            val caption = captionFormatter.forTikTok(listing)
+            val textOverlay = captionFormatter.photoOverlay(listing)
             val media = allPhotos.mapIndexed { index, photo ->
                 photo.content.use {
-                    mediaStorage.store(photo.fileName, it, textOverlay.takeIf { index == 0 })
+//                    mediaStorage.store(photo.fileName, it, textOverlay.takeIf { index == 0 })
+                    mediaStorage.store(photo.fileName, it, null)
                 }
             }
             // The production VM has one OCPU and 1 GB RAM. Running TikTok and Threads

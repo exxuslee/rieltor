@@ -77,6 +77,23 @@ data class MediaTextOverlay(
     val contact: String,
 )
 
+/**
+ * Public, destination-independent representation of a property listing.
+ *
+ * Source contacts and internal commercial notes must be removed before this model is built.
+ */
+data class ListingMessage(
+    val title: String,
+    val price: String,
+    val address: String?,
+    val keyParameters: List<String>,
+    val additionalParameters: List<String>,
+    val governmentPrograms: String?,
+    val registration: String?,
+    val hashtags: List<String>,
+    val phone: String,
+)
+
 data class StoredMedia(
     val publicUrl: String,
     val localPath: String,

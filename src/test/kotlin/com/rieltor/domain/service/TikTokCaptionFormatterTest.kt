@@ -1,9 +1,6 @@
 package com.rieltor.domain.service
 
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
+import kotlin.test.*
 
 class ListingCaptionFormatterTest {
     private val filter = ListingCaptionFormatter()
@@ -25,22 +22,19 @@ class ListingCaptionFormatterTest {
             https://drive.google.com/drive/folders/example
         """.trimIndent()
 
-        val result = requireNotNull(filter.filter(source))
+        val listing = requireNotNull(filter.filter(source))
+        val result = requireNotNull(filter.forTikTok(listing))
 
-        assertEquals(
-            """🏠 Таунхаус з ремонтом — Ірпінь
-
-• Вул Мечнікова
-• Три кімнати
-• 84 кв.м
-• ГАЗ
-• Ціна. 175000${'$'}
-
-🤙 066-372-71-02 Ірина
-
-#нерухомість #продажнерухомості #таунхаус #Ірпінь #ІринаЛіннік""",
-            result,
-        )
+        assertEquals("Таунхаус з ремонтом — Ірпінь", listing.title)
+        assertEquals("175000${'$'}", listing.price)
+        assertEquals("Вул Мечнікова", listing.address)
+        assertEquals(listOf("Три кімнати", "84 кв.м", "ГАЗ"), listing.keyParameters)
+        assertEquals(emptyList(), listing.additionalParameters)
+        assertEquals("066-372-71-02", listing.phone)
+        assertEquals(5, listing.hashtags.size)
+        assertContains(result, "📍 Вул Мечнікова")
+        assertContains(result, "💰 175000${'$'}")
+        assertContains(result, "🤙 066-372-71-02 Ірина")
     }
 
     @Test
@@ -57,10 +51,12 @@ class ListingCaptionFormatterTest {
             https://docs.google.com/document/d/example/edit
         """.trimIndent()
 
-        val result = requireNotNull(filter.filter(source))
+        val listing = requireNotNull(filter.filter(source))
+        val result = requireNotNull(filter.forTikTok(listing))
 
         assertContains(result, "• Площа дуплекса: 93 м2")
         assertContains(result, "не введений в експлуатацію")
+        assertEquals(5, listing.hashtags.size)
         assertContains(result, "#дуплекс #Буча")
         assertFalse(result.contains("5000${'$'}/2"))
         assertFalse(result.contains("Вячеслав"))
@@ -69,8 +65,8 @@ class ListingCaptionFormatterTest {
 
     @Test
     fun `returns null for an empty caption`() {
-        assertEquals(null, filter.filter(null))
-        assertEquals(null, filter.filter("  \n "))
+        assertNull(filter.filter(null))
+        assertNull(filter.filter("  \n "))
     }
 
     @Test
@@ -84,9 +80,11 @@ class ListingCaptionFormatterTest {
             АН «Novator»
         """.trimIndent()
 
-        val result = requireNotNull(filter.filter(source))
+        val listing = requireNotNull(filter.filter(source))
+        val result = requireNotNull(filter.forTikTok(listing))
 
-        assertContains(result, "• Ціна 45000${'$'}")
+        assertEquals("45000${'$'}", listing.price)
+        assertContains(result, "💰 45000${'$'}")
         assertFalse(result.contains("5%/2"))
         assertFalse(result.contains("Сергій"))
         assertFalse(result.contains("Novator", ignoreCase = true))
@@ -100,20 +98,53 @@ class ListingCaptionFormatterTest {
             Ціна 22 000${'$'} ( 2000/2)
         """.trimIndent()
 
-        val result = requireNotNull(filter.filter(source))
+        val listing = requireNotNull(filter.filter(source))
+        val result = requireNotNull(filter.forTikTok(listing))
 
-        assertContains(result, "Ціна 22 000${'$'}")
+        assertEquals("22 000${'$'}", listing.price)
+        assertContains(result, "💰 22 000${'$'}")
         assertFalse(result.contains("( 2000/2)"))
     }
 
     @Test
     fun `extracts title price and public contact for the first photo`() {
-        val caption = requireNotNull(filter.filter("Квартира в Ірпені\nЦіна 22 000${'$'}"))
+        val listing = requireNotNull(filter.filter("Квартира в Ірпені\nЦіна 22 000${'$'}"))
 
-        val overlay = requireNotNull(filter.photoOverlay(caption))
+        val overlay = requireNotNull(filter.photoOverlay(listing))
 
         assertEquals("Квартира в Ірпені", overlay.title)
-        assertEquals("Ціна 22 000${'$'}", overlay.price)
+        assertEquals("22 000${'$'}", overlay.price)
         assertEquals("066-372-71-02 Ірина", overlay.contact)
+    }
+
+    @Test
+    fun `extracts programs registration and renders the replaced phone`() {
+        val source = """
+            Гостомель
+            Квартира в ЖК На Прорізній
+            вул. Прорізна, 2
+            Площа 44,3 м2
+            Поверх 4/8
+            Новий якісний ремонт
+            Ціна 56000 ${'$'}
+            Комісія 5%/2
+            Оформлення - 12%
+            Держ. програми - Так
+            0961733824 Віта, АН Новатор
+        """.trimIndent()
+
+        val listing = requireNotNull(filter.filter(source))
+        val tiktok = requireNotNull(filter.forTikTok(listing))
+
+        assertEquals("Квартира в ЖК На Прорізній — Гостомель", listing.title)
+        assertEquals("вул. Прорізна, 2", listing.address)
+        assertEquals("Оформлення: 12%", listing.registration)
+        assertEquals("Держ. програми: Так", listing.governmentPrograms)
+        assertEquals(listOf("Площа 44,3 м2", "Поверх 4/8"), listing.keyParameters)
+        assertEquals(listOf("Новий якісний ремонт"), listing.additionalParameters)
+        assertEquals(5, listing.hashtags.size)
+        assertContains(tiktok, "🤙 066-372-71-02 Ірина")
+        assertFalse(tiktok.contains("0961733824"))
+        assertFalse(tiktok.contains("Комісія"))
     }
 }

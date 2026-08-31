@@ -64,10 +64,11 @@ class PublishPhotoRepostUseCaseTest {
         assertEquals(listOf(false, true, true), storage.textOverlays.map { it == null })
         assertEquals(
             """🏠 Альбом квартири
+💰 Ціна за запитом
 
 🤙 066-372-71-02 Ірина
 
-#нерухомість #продажнерухомості #квартира #ІринаЛіннік""",
+#нерухомість #продажнерухомості #квартира #рієлтор #нерухомістьУкраїни""",
             publisher.publishedCaptions.single(),
         )
     }
