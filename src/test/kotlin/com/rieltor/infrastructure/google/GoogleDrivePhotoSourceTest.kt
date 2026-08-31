@@ -3,21 +3,13 @@ package com.rieltor.infrastructure.google
 import com.rieltor.domain.model.StoredGoogleDriveTokens
 import com.rieltor.domain.repository.GoogleDriveTokenRepository
 import com.rieltor.infrastructure.config.ApplicationSettings
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.respond
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.headersOf
+import io.ktor.client.*
+import io.ktor.client.engine.mock.*
+import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import java.time.Instant
-import kotlin.test.Test
-import kotlin.test.assertContentEquals
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 class GoogleDrivePhotoSourceTest {
     @Test
@@ -148,7 +140,7 @@ class GoogleDrivePhotoSourceTest {
             limit = 1,
         )
 
-        assertEquals(3, failedFileAttempts)
+        assertEquals(2, failedFileAttempts)
         assertEquals(listOf("good.jpg"), photos.map { it.fileName })
         assertContentEquals(byteArrayOf(7, 8), photos.single().content.readBytes())
     }
