@@ -37,11 +37,16 @@ class TikTokPhotoPublisher(
     override val maxPhotoCount: Int = DEFAULT_REPOST_MAX_PHOTO_COUNT,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val delayMillis: suspend (Long) -> Unit = { delay(it) },
+    private val dispatcher: TikTokPublishDispatcher? = null,
 ) : PhotoPublisher {
     private val logger = LoggerFactory.getLogger(javaClass)
     override val destination = RepostDestination.TIKTOK
     private val publishMutex = Mutex()
     private var lastPublishAttemptAtMillis: Long? = null
+
+    override suspend fun awaitPublishSlot() {
+        dispatcher?.awaitSlot()
+    }
 
     override suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt {
         require(photoUrls.isNotEmpty()) { "At least one photo URL is required." }
@@ -64,6 +69,9 @@ class TikTokPhotoPublisher(
                 waitForPublishSlot()
                 try {
                     return@withLock initializePublish(photoUrls, caption)
+                } catch (error: TikTokDailyPostLimitException) {
+                    dispatcher?.registerDailyLimit()
+                    throw error
                 } catch (error: TikTokRateLimitException) {
                     lastRateLimitError = error
                     if (attempt + 1 < rateLimitMaxAttempts) {
@@ -219,10 +227,15 @@ class TikTokPhotoPublisher(
                 tikTokMode == TikTokMode.POST && statusData.status == "PUBLISH_COMPLETE" -> return
                 tikTokMode == TikTokMode.DRAFT &&
                     statusData.status in setOf("SEND_TO_USER_INBOX", "PUBLISH_COMPLETE") -> return
-                statusData.status == "FAILED" -> throw TikTokAuthException(
-                    "TikTok photo post failed after initialization. publishId=$publishId, " +
+                statusData.status == "FAILED" -> {
+                    val message = "TikTok photo post failed after initialization. publishId=$publishId, " +
                         "reason=${statusData.failReason ?: "unknown"}"
-                )
+                    if (statusData.failReason == DAILY_POST_LIMIT_CODE) {
+                        dispatcher?.registerDailyLimit()
+                        throw TikTokDailyPostLimitException(message)
+                    }
+                    throw TikTokAuthException(message)
+                }
                 statusData.status in setOf("PROCESSING_UPLOAD", "PROCESSING_DOWNLOAD") -> Unit
                 else -> throw TikTokAuthException(
                     "TikTok returned an unexpected publish status for $tikTokMode mode. " +
@@ -280,6 +293,7 @@ class TikTokPhotoPublisher(
     private fun TikTokApiError?.ensureOk(operation: String) {
         if (this != null && code != "ok") {
             val errorMessage = "TikTok $operation failed: $code - $message (log_id=$logId)"
+            if (code == DAILY_POST_LIMIT_CODE) throw TikTokDailyPostLimitException(errorMessage)
             if (code == "rate_limit_exceeded") throw TikTokRateLimitException(errorMessage)
             throw TikTokAuthException(errorMessage)
         }
@@ -302,7 +316,9 @@ class TikTokPhotoPublisher(
         private const val DEFAULT_RATE_LIMIT_MAX_ATTEMPTS = 3
         private const val DEFAULT_STATUS_POLL_INTERVAL_MILLIS = 5_000L
         private const val DEFAULT_STATUS_POLL_MAX_ATTEMPTS = 60
+        private const val DAILY_POST_LIMIT_CODE = "spam_risk_too_many_posts"
     }
 }
 
 private class TikTokRateLimitException(message: String) : TikTokAuthException(message)
+private class TikTokDailyPostLimitException(message: String) : TikTokAuthException(message)

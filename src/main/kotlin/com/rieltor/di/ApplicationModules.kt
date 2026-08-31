@@ -22,6 +22,7 @@ import com.rieltor.infrastructure.threads.ThreadsAuthService
 import com.rieltor.infrastructure.threads.ThreadsPhotoPublisher
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
 import com.rieltor.infrastructure.tiktok.TikTokPhotoPublisher
+import com.rieltor.infrastructure.tiktok.TikTokPublishDispatcher
 import io.github.cdimascio.dotenv.Dotenv
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
@@ -58,6 +59,7 @@ private val persistenceModule = module {
     single { SqliteDatabase(databasePath(get())) }
     single<SecretRepository> { SecretRepositoryImpl(get()) }
     single<TikTokTokenRepository> { TikTokTokenRepositoryImpl(get()) }
+    single<TikTokPublishThrottleRepository> { TikTokPublishThrottleRepositoryImpl(get()) }
     single<GoogleDriveTokenRepository> { GoogleDriveTokenRepositoryImpl(get()) }
     single<ThreadsTokenRepository> { ThreadsTokenRepositoryImpl(get()) }
     single<TelegramRepostRepository> { TelegramRepostRepositoryImpl(get()) }
@@ -119,12 +121,22 @@ private val integrationModule = module {
     single<PublicMediaStorage> { get<LocalPublicMediaStorage>() }
     single { MediaCleanupJob(get<ApplicationSettings>().mediaDirectory) }
     single {
+        val settings = get<ApplicationSettings>()
+        TikTokPublishDispatcher(
+            repository = get(),
+            maxPostsPer24Hours = settings.tikTokMaxPostsPer24Hours,
+            minPostIntervalMillis = settings.tikTokMinPostIntervalMinutes * 60_000L,
+            dailyLimitCooldownMillis = settings.tikTokDailyLimitCooldownHours * 3_600_000L,
+        )
+    }
+    single {
         TikTokPhotoPublisher(
             httpClient = get(),
             auth = get(),
             json = get(),
             tikTokMode = get<ApplicationSettings>().tikTokMode,
             maxPhotoCount = get<ApplicationSettings>().repostMaxPhotoCount,
+            dispatcher = get(),
         )
     }
     single { ThreadsPhotoPublisher(get(), get(), get()) }

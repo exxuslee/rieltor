@@ -50,6 +50,9 @@ class PublishPhotoRepostUseCase(
         var extraPhotos = emptyList<TelegramPhoto>()
         return try {
             require(maxPhotoCount > 0) { "Repost photo limit must be positive." }
+            // Acquire long-running destination quotas before downloading Drive media or creating public files.
+            // This prevents queued posts from pointing at files removed by the media cleanup job.
+            activePublishers.forEach { it.awaitPublishSlot() }
             val effectivePhotoLimit = minOf(activePublishers.maxOf { it.maxPhotoCount }, maxPhotoCount)
             extraPhotos = loadExtraPhotos(message, effectivePhotoLimit)
             val allPhotos = (message.photos + extraPhotos).take(effectivePhotoLimit)

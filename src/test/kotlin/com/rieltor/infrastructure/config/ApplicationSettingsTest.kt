@@ -77,6 +77,30 @@ class ApplicationSettingsTest {
     }
 
     @Test
+    fun `tiktok dispatcher has conservative defaults and accepts overrides`() {
+        val defaultDirectory = Files.createTempDirectory("rieltor-tiktok-dispatcher-default-test")
+        val configuredDirectory = Files.createTempDirectory("rieltor-tiktok-dispatcher-configured-test")
+        Files.writeString(
+            configuredDirectory.resolve(".env"),
+            """
+            TIKTOK_MAX_POSTS_PER_24_HOURS=8
+            TIKTOK_MIN_POST_INTERVAL_MINUTES=150
+            TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS=30
+            """.trimIndent(),
+        )
+
+        val defaults = Dotenv.configure().directory(defaultDirectory.toString()).ignoreIfMissing().load()
+        val configured = Dotenv.configure().directory(configuredDirectory.toString()).load()
+
+        assertEquals(10, tikTokMaxPostsPer24Hours(defaults))
+        assertEquals(120L, tikTokMinPostIntervalMinutes(defaults))
+        assertEquals(24L, tikTokDailyLimitCooldownHours(defaults))
+        assertEquals(8, tikTokMaxPostsPer24Hours(configured))
+        assertEquals(150L, tikTokMinPostIntervalMinutes(configured))
+        assertEquals(30L, tikTokDailyLimitCooldownHours(configured))
+    }
+
+    @Test
     fun `bootstrap persists neither oauth credentials nor telegram user id`() {
         val directory = Files.createTempDirectory("rieltor-bootstrap-test")
         Files.writeString(

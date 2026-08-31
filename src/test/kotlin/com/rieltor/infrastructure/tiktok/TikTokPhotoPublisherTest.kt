@@ -1,6 +1,7 @@
 package com.rieltor.infrastructure.tiktok
 
 import com.rieltor.domain.model.StoredTokens
+import com.rieltor.domain.repository.TikTokPublishThrottleRepository
 import com.rieltor.domain.repository.TikTokTokenRepository
 import com.rieltor.infrastructure.config.ApplicationSettings
 import com.rieltor.infrastructure.config.TikTokMode
@@ -112,6 +113,43 @@ class TikTokPhotoPublisherTest {
         assertEquals("publish-after-wait", receipt.publishId)
         assertEquals(2, publishAttempts)
         assertEquals(listOf(60_000L), delays)
+    }
+
+    @Test
+    fun `daily post limit pauses persistent dispatcher`() = runBlocking {
+        val json = Json { ignoreUnknownKeys = true }
+        val throttle = CapturingThrottleRepository()
+        val engine = MockEngine { request ->
+            when {
+                request.method == HttpMethod.Head -> publicPhoto()
+                request.url.encodedPath.contains("creator_info") -> creatorInfo()
+                else -> respond(
+                    content = """{"data":{},"error":{"code":"spam_risk_too_many_posts","message":"Daily limit"}}""",
+                    status = HttpStatusCode.Forbidden,
+                    headers = jsonHeaders(),
+                )
+            }
+        }
+        val httpClient = HttpClient(engine)
+        val publisher = TikTokPhotoPublisher(
+            httpClient = httpClient,
+            auth = TikTokAuthService(httpClient, settings(), validTokens(), json),
+            json = json,
+            dispatcher = TikTokPublishDispatcher(
+                repository = throttle,
+                maxPostsPer24Hours = 10,
+                minPostIntervalMillis = 0,
+                dailyLimitCooldownMillis = 24 * 60 * 60 * 1_000L,
+                nowMillis = { 1_000L },
+            ),
+        )
+
+        val error = kotlin.test.assertFailsWith<TikTokAuthException> {
+            publisher.publish(listOf("https://api.example/media/photo.jpg"), null)
+        }
+
+        assertTrue(error.message.orEmpty().contains("spam_risk_too_many_posts"))
+        assertEquals(24 * 60 * 60 * 1_000L + 1_000L, throttle.blockedUntil)
     }
 
     @Test
@@ -446,5 +484,20 @@ class TikTokPhotoPublisherTest {
         override fun find(openId: String): StoredTokens? = tokens.takeIf { it.openId == openId }
 
         override fun latest(): StoredTokens = tokens
+    }
+
+    private class CapturingThrottleRepository : TikTokPublishThrottleRepository {
+        var blockedUntil: Long? = null
+
+        override fun reserveSlot(
+            nowMillis: Long,
+            windowMillis: Long,
+            maxPostsPerWindow: Int,
+            minIntervalMillis: Long,
+        ): Long = 0
+
+        override fun blockUntil(blockedUntilMillis: Long) {
+            blockedUntil = blockedUntilMillis
+        }
     }
 }

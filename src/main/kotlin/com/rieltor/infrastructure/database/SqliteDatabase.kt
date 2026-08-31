@@ -127,6 +127,25 @@ class SqliteDatabase(private val path: Path) {
                       AND status IN ('PROCESSING', 'PUBLISHED')
                     """.trimIndent()
                 )
+                statement.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS tiktok_publish_attempts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        attempted_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                statement.execute(
+                    "CREATE INDEX IF NOT EXISTS ix_tiktok_publish_attempts_time ON tiktok_publish_attempts(attempted_at)"
+                )
+                statement.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS tiktok_publish_throttle (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        blocked_until INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent()
+                )
                 val schemaVersion = statement.executeQuery("PRAGMA user_version").use { result ->
                     if (result.next()) result.getInt(1) else 0
                 }

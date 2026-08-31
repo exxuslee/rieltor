@@ -42,6 +42,9 @@ data class ApplicationSettings(
     val tikTokClientSecret: String,
     val tikTokRedirectUri: String,
     val tikTokMode: TikTokMode = TikTokMode.POST,
+    val tikTokMaxPostsPer24Hours: Int = DEFAULT_TIKTOK_MAX_POSTS_PER_24_HOURS,
+    val tikTokMinPostIntervalMinutes: Long = DEFAULT_TIKTOK_MIN_POST_INTERVAL_MINUTES,
+    val tikTokDailyLimitCooldownHours: Long = DEFAULT_TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS,
     val repostMaxPhotoCount: Int = DEFAULT_REPOST_MAX_PHOTO_COUNT,
     val googleClientId: String = "",
     val googleClientSecret: String = "",
@@ -79,6 +82,9 @@ data class ApplicationSettings(
                 tikTokClientSecret = requireEnvironmentOrDotenv(SecretNames.TIKTOK_CLIENT_SECRET, dotenv),
                 tikTokRedirectUri = redirectUri,
                 tikTokMode = tikTokMode(dotenv),
+                tikTokMaxPostsPer24Hours = tikTokMaxPostsPer24Hours(dotenv),
+                tikTokMinPostIntervalMinutes = tikTokMinPostIntervalMinutes(dotenv),
+                tikTokDailyLimitCooldownHours = tikTokDailyLimitCooldownHours(dotenv),
                 repostMaxPhotoCount = repostMaxPhotoCount(dotenv),
                 googleClientId = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_ID, dotenv),
                 googleClientSecret = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_SECRET, dotenv),
@@ -118,6 +124,27 @@ fun tikTokMode(dotenv: Dotenv): TikTokMode {
     val configured = environmentOrDotenv("TIKTOK_MODE", dotenv) ?: return TikTokMode.POST
     return runCatching { TikTokMode.valueOf(configured.trim().uppercase()) }
         .getOrElse { error("Invalid TIKTOK_MODE: expected POST or DRAFT") }
+}
+
+fun tikTokMaxPostsPer24Hours(dotenv: Dotenv): Int =
+    positiveInt(dotenv, "TIKTOK_MAX_POSTS_PER_24_HOURS", DEFAULT_TIKTOK_MAX_POSTS_PER_24_HOURS, 1..100)
+
+fun tikTokMinPostIntervalMinutes(dotenv: Dotenv): Long =
+    positiveLong(dotenv, "TIKTOK_MIN_POST_INTERVAL_MINUTES", DEFAULT_TIKTOK_MIN_POST_INTERVAL_MINUTES, 1L..1_440L)
+
+fun tikTokDailyLimitCooldownHours(dotenv: Dotenv): Long =
+    positiveLong(dotenv, "TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS", DEFAULT_TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS, 1L..48L)
+
+private fun positiveInt(dotenv: Dotenv, name: String, default: Int, range: IntRange): Int {
+    val configured = environmentOrDotenv(name, dotenv) ?: return default
+    return configured.toIntOrNull()?.takeIf { it in range }
+        ?: error("Invalid $name: expected a number from ${range.first} to ${range.last}")
+}
+
+private fun positiveLong(dotenv: Dotenv, name: String, default: Long, range: LongRange): Long {
+    val configured = environmentOrDotenv(name, dotenv) ?: return default
+    return configured.toLongOrNull()?.takeIf { it in range }
+        ?: error("Invalid $name: expected a number from ${range.first} to ${range.last}")
 }
 
 fun bootstrapSecrets(repository: SecretRepository, dotenv: Dotenv) {
@@ -187,3 +214,6 @@ private fun parseTelegramMonitoredTopics(
 private const val DEFAULT_SERVER_PORT = 8383
 const val DEFAULT_REPOST_MAX_PHOTO_COUNT = 10
 const val TIKTOK_API_MAX_PHOTO_COUNT = 35
+const val DEFAULT_TIKTOK_MAX_POSTS_PER_24_HOURS = 10
+const val DEFAULT_TIKTOK_MIN_POST_INTERVAL_MINUTES = 120L
+const val DEFAULT_TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS = 24L
