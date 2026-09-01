@@ -76,9 +76,8 @@ class TelegramClientAdapter(
             factory = clientFactory
             client = builder.build(AuthenticationSupplier.qrCode())
             logger.info(
-                "Telegram TDLib client started. session={}, monitoredTopics={}",
+                "Telegram TDLib client started. session={}",
                 sessionDirectory.toAbsolutePath(),
-                monitoredTopics,
             )
         } catch (error: Throwable) {
             mutableState.value = TelegramSourceState.Failed(error.failureReason())
