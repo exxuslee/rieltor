@@ -44,22 +44,24 @@ class ListingCaptionFormatter {
         val content = lines.filterIndexed { index, _ ->
             index != titleIndex && index != locationIndex && index != addressIndex
         }
-        val priceIndex = content.indexOfFirst(priceLine::containsMatchIn)
-        val price = content.getOrNull(priceIndex)?.let(::extractPrice) ?: PRICE_ON_REQUEST
-        val governmentPrograms = content.firstOrNull(governmentProgramsLine::containsMatchIn)
-            ?.let(::normalizeGovernmentPrograms)
         val registration = content.firstOrNull { line ->
             registrationLine.containsMatchIn(line) && !registrationCostLine.containsMatchIn(line)
         }?.let(::normalizeRegistration)
+        val publicContent = content
+            .filterNot(registrationLine::containsMatchIn)
+            .filterNot(boilerCostLine::containsMatchIn)
+        val priceIndex = publicContent.indexOfFirst(priceLine::containsMatchIn)
+        val price = publicContent.getOrNull(priceIndex)?.let(::extractPrice) ?: PRICE_ON_REQUEST
+        val governmentPrograms = publicContent.firstOrNull(governmentProgramsLine::containsMatchIn)
+            ?.let(::normalizeGovernmentPrograms)
         val excluded = setOfNotNull(
             priceIndex.takeIf { it >= 0 },
-            content.indexOfFirst(governmentProgramsLine::containsMatchIn).takeIf { it >= 0 },
+            publicContent.indexOfFirst(governmentProgramsLine::containsMatchIn).takeIf { it >= 0 },
         )
         val fullText = lines.joinToString(" ")
         val isApartment = apartmentListing.containsMatchIn(fullText)
-        val details = content
+        val details = publicContent
             .filterIndexed { index, _ -> index !in excluded }
-            .filterNot(registrationLine::containsMatchIn)
             .filterNot { isApartment && isTopFloor(it) }
             .filterNot(electricHeatingLine::containsMatchIn)
         val (parameters, description) = details.partition(::looksLikeParameter)
@@ -216,6 +218,9 @@ class ListingCaptionFormatter {
         val registrationLine = Regex("""(?iu)(?:оформлення|оф\.?(?=\s)|переуступка)""")
         val registrationCostLine = Regex(
             """(?iu)(?:оформлення|оф\.?(?=\s)|переуступка).*(?:\d|%|[$€₴]|грн\.?|мінімальн\p{L}*|минимальн\p{L}*)"""
+        )
+        val boilerCostLine = Regex(
+            """(?iu)кот[её]л\p{L}*.*\d[\d\s.,]*(?:[$€₴]|грн\.?|usd|eur|євро|евро)"""
         )
         val apartmentListing = Regex("""(?iu)(?:квартир\p{L}*|студі\p{L}*|\b\d\s*-?\s*к(?:\.?\s*квартир\p{L}*|\.?\s*к\.?\b)?)""")
         val floorFraction = Regex("""(?iu)(?:поверх|этаж)\D{0,12}(\d{1,3})\s*(?:/|з|із|из)\s*(\d{1,3})""")

@@ -110,6 +110,34 @@ class GoogleDrivePhotoSourceTest {
     }
 
     @Test
+    fun `prefers portrait photos before applying download limit`() = runBlocking {
+        val engine = MockEngine { request ->
+            when {
+                request.url.encodedPath == "/drive/v3/files" -> respond(
+                    content = """{"files":[
+                        {"id":"landscape-id","name":"01-landscape.jpg","mimeType":"image/jpeg","imageMediaMetadata":{"width":1600,"height":900}},
+                        {"id":"rotated-id","name":"02-rotated.jpg","mimeType":"image/jpeg","imageMediaMetadata":{"width":1600,"height":900,"rotation":1}},
+                        {"id":"portrait-id","name":"03-portrait.jpg","mimeType":"image/jpeg","imageMediaMetadata":{"width":900,"height":1600}}
+                    ]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                )
+                request.url.encodedPath.endsWith("/rotated-id") -> respond(byteArrayOf(2))
+                request.url.encodedPath.endsWith("/portrait-id") -> respond(byteArrayOf(3))
+                else -> error("Unexpected request: ${request.url}")
+            }
+        }
+        val source = createSource(HttpClient(engine))
+
+        val photos = source.downloadPhotos(
+            "https://drive.google.com/drive/folders/folder-with-mixed-orientations",
+            limit = 2,
+        )
+
+        assertEquals(listOf("02-rotated.jpg", "03-portrait.jpg"), photos.map { it.fileName })
+    }
+
+    @Test
     fun `skips failed file after retries and continues with next photo`() = runBlocking {
         var failedFileAttempts = 0
         val engine = MockEngine { request ->

@@ -206,4 +206,24 @@ class ListingCaptionFormatterTest {
         assertEquals("Оформлення на першого власника", listing.registration)
         assertContains(tiktok, "Оформлення на першого власника")
     }
+
+    @Test
+    fun `omits assignment fees and boiler cost without treating them as listing price`() {
+        val source = """
+            Квартира в ЖК Бургундія
+            Площа 44,59 м2
+            Котел 690€
+            Оф переуступка 5% + 500 грн / мкВ + додаткові метри
+            Ціна 52500${'$'}
+        """.trimIndent()
+
+        val listing = requireNotNull(filter.filter(source))
+        val tiktok = requireNotNull(filter.forTikTok(listing))
+
+        assertEquals("52500${'$'}", listing.price)
+        assertNull(listing.registration)
+        assertFalse(tiktok.contains("Котел", ignoreCase = true))
+        assertFalse(tiktok.contains("переуступка", ignoreCase = true))
+        assertFalse(tiktok.contains("500 грн", ignoreCase = true))
+    }
 }

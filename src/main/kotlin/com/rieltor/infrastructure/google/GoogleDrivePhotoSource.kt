@@ -106,6 +106,7 @@ class GoogleDrivePhotoSource(
         val candidates = metadata.values.asSequence()
             .filter { it.mimeType in SUPPORTED_IMAGE_MIME_TYPES }
             .filter { it.capabilities?.canDownload != false }
+            .sortedBy { it.orientationPriority() }
             .toList()
         val result = mutableListOf<TelegramPhoto>()
         var lastDownloadError: Throwable? = null
@@ -265,13 +266,29 @@ class GoogleDrivePhotoSource(
         return "${base.ifBlank { file.id }}.$extension"
     }
 
+    private fun DriveFileMetadata.orientationPriority(): Int {
+        val image = imageMediaMetadata ?: return ORIENTATION_UNKNOWN
+        val width = image.width ?: return ORIENTATION_UNKNOWN
+        val height = image.height ?: return ORIENTATION_UNKNOWN
+        val rotation = image.rotation ?: 0
+        val quarterTurns = if (kotlin.math.abs(rotation) > 3) rotation / 90 else rotation
+        val swapsDimensions = Math.floorMod(quarterTurns, 2) == 1
+        val displayedWidth = if (swapsDimensions) height else width
+        val displayedHeight = if (swapsDimensions) width else height
+        return when {
+            displayedHeight > displayedWidth -> ORIENTATION_PORTRAIT
+            displayedHeight == displayedWidth -> ORIENTATION_UNKNOWN
+            else -> ORIENTATION_LANDSCAPE
+        }
+    }
+
     private fun driveApiError(action: String, body: String) = GoogleDriveAuthException(
         "Google Drive could not $action: ${body.take(MAX_ERROR_BODY_LENGTH)}"
     )
 
     private companion object {
         const val FILES_URL = "https://www.googleapis.com/drive/v3/files"
-        const val FILE_FIELDS = "id,name,mimeType,size,capabilities(canDownload)"
+        const val FILE_FIELDS = "id,name,mimeType,size,capabilities(canDownload),imageMediaMetadata(width,height,rotation)"
         const val MAX_DISCOVERED_FILES = 1000
         const val MAX_DOWNLOAD_BYTES = 20L * 1024 * 1024
         const val MAX_ERROR_BODY_LENGTH = 500
@@ -280,6 +297,9 @@ class GoogleDrivePhotoSource(
         const val DOWNLOAD_TIMEOUT_MILLIS = 120_000L
         const val DOWNLOAD_RETRY_DELAY_MILLIS = 2_000L
         const val GOOGLE_DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
+        const val ORIENTATION_PORTRAIT = 0
+        const val ORIENTATION_UNKNOWN = 1
+        const val ORIENTATION_LANDSCAPE = 2
         val SUPPORTED_IMAGE_MIME_TYPES = setOf("image/jpeg", "image/webp")
     }
 

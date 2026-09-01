@@ -19,6 +19,14 @@ data class DriveFileMetadata(
     val mimeType: String,
     val size: String? = null,
     val capabilities: DriveCapabilities? = null,
+    val imageMediaMetadata: DriveImageMediaMetadata? = null,
+)
+
+@Serializable
+data class DriveImageMediaMetadata(
+    val width: Int? = null,
+    val height: Int? = null,
+    val rotation: Int? = null,
 )
 
 @Serializable
