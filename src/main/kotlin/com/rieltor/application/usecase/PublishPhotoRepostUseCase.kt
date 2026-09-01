@@ -21,6 +21,8 @@ class PublishPhotoRepostUseCase(
 ) : PhotoRepostHandler {
     private val logger = LoggerFactory.getLogger(javaClass)
 
+    override suspend fun pendingDiagnostics() = publishers.mapNotNull { it.pendingDiagnostics() }
+
     override suspend fun handle(listing: TelegramListing): RepostResult {
         if (allowedSources.none { source -> source.matches(listing.chatId, listing.messageThreadId) }) {
             listing.closePhotos()
@@ -50,6 +52,8 @@ class PublishPhotoRepostUseCase(
         var extraPhotos = emptyList<TelegramPhoto>()
         return try {
             require(maxPhotoCount > 0) { "Repost photo limit must be positive." }
+            // Check persistent destination limits before downloading and converting a large photo batch.
+            activePublishers.forEach { it.awaitPublishSlot() }
             val effectivePhotoLimit = minOf(activePublishers.maxOf { it.maxPhotoCount }, maxPhotoCount)
             extraPhotos = loadExtraPhotos(listing, effectivePhotoLimit)
             val allPhotos = (listing.photos + extraPhotos).take(effectivePhotoLimit)

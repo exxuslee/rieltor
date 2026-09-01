@@ -76,9 +76,9 @@ class ApplicationSettingsTest {
     }
 
     @Test
-    fun `tiktok dispatcher has conservative defaults and accepts overrides`() {
-        val defaultDirectory = Files.createTempDirectory("rieltor-tiktok-dispatcher-default-test")
-        val configuredDirectory = Files.createTempDirectory("rieltor-tiktok-dispatcher-configured-test")
+    fun `master limiter has conservative defaults and accepts legacy TikTok overrides`() {
+        val defaultDirectory = Files.createTempDirectory("rieltor-master-limiter-default-test")
+        val configuredDirectory = Files.createTempDirectory("rieltor-master-limiter-configured-test")
         Files.writeString(
             configuredDirectory.resolve(".env"),
             """
@@ -93,7 +93,7 @@ class ApplicationSettingsTest {
 
         assertEquals(36, tikTokMaxPostsPer24Hours(defaults))
         assertEquals(20L, tikTokMinPostIntervalMinutes(defaults))
-        assertEquals(24L, tikTokDailyLimitCooldownHours(defaults))
+        assertEquals(8L, tikTokDailyLimitCooldownHours(defaults))
         assertEquals(8, tikTokMaxPostsPer24Hours(configured))
         assertEquals(150L, tikTokMinPostIntervalMinutes(configured))
         assertEquals(30L, tikTokDailyLimitCooldownHours(configured))

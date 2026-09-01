@@ -8,5 +8,13 @@ interface PhotoPublisher {
     val maxPhotoCount: Int
     /** Waits until this destination is ready before expensive media preparation starts. */
     suspend fun awaitPublishSlot() = Unit
+    suspend fun pendingDiagnostics(): PublisherPendingDiagnostics? = null
     suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt
 }
+
+data class PublisherPendingDiagnostics(
+    val destination: RepostDestination,
+    val trackedCount: Int,
+    val pendingCount: Int,
+    val statuses: List<String>,
+)

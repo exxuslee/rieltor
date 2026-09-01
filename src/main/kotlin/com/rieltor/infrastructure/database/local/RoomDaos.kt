@@ -1,10 +1,7 @@
 package com.rieltor.infrastructure.database.local
 
 import androidx.room.*
-import com.rieltor.infrastructure.database.model.ReceivedTelegramMessageEntity
-import com.rieltor.infrastructure.database.model.TelegramListingRecord
-import com.rieltor.infrastructure.database.model.TelegramRepostQueueEntity
-import com.rieltor.infrastructure.database.model.TikTokPublishAttemptEntity
+import com.rieltor.infrastructure.database.model.*
 
 internal data class PublicationState(
     val status: String,
@@ -308,6 +305,30 @@ internal abstract class TikTokThrottleDao {
         ON CONFLICT(id) DO UPDATE SET blocked_until = MAX(blocked_until, excluded.blocked_until)"""
     )
     abstract suspend fun blockUntil(blockedUntil: Long)
+
+    @Upsert
+    abstract suspend fun trackPublish(entity: TikTokTrackedPublishEntity)
+
+    @Query("DELETE FROM tiktok_tracked_publishes WHERE created_at < :cutoff")
+    protected abstract suspend fun deleteTrackedBefore(cutoff: Long)
+
+    @Query("SELECT * FROM tiktok_tracked_publishes ORDER BY created_at, publish_id")
+    protected abstract suspend fun trackedPublishes(): List<TikTokTrackedPublishEntity>
+
+    @Query(
+        "UPDATE tiktok_tracked_publishes SET last_status=:status, updated_at=:nowMillis " +
+            "WHERE publish_id=:publishId"
+    )
+    abstract suspend fun updateTrackedStatus(publishId: String, status: String, nowMillis: Long)
+
+    @Query("DELETE FROM tiktok_tracked_publishes WHERE publish_id=:publishId")
+    abstract suspend fun removeTrackedPublish(publishId: String)
+
+    @Transaction
+    open suspend fun activeTrackedPublishes(nowMillis: Long, retentionMillis: Long): List<TikTokTrackedPublishEntity> {
+        deleteTrackedBefore(nowMillis - retentionMillis)
+        return trackedPublishes()
+    }
 
     @Transaction
     open suspend fun reserveSlot(

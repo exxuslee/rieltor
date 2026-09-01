@@ -80,3 +80,15 @@ internal data class TikTokPublishThrottleEntity(
     @PrimaryKey val id: Long = 1,
     @ColumnInfo(name = "blocked_until", defaultValue = "0") val blockedUntil: Long,
 )
+
+@Entity(
+    tableName = "tiktok_tracked_publishes",
+    indices = [Index(value = ["created_at"], name = "ix_tiktok_tracked_publishes_created_at")],
+)
+internal data class TikTokTrackedPublishEntity(
+    @PrimaryKey @ColumnInfo(name = "publish_id") val publishId: String,
+    val mode: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "last_status") val lastStatus: String?,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+)

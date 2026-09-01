@@ -141,6 +141,8 @@ private val integrationModule = module {
             json = get(),
             tikTokMode = get<ApplicationSettings>().tikTokMode,
             maxPhotoCount = get<ApplicationSettings>().repostMaxPhotoCount,
+            publishRepository = get(),
+            globalCooldownMillis = get<ApplicationSettings>().tikTokDailyLimitCooldownHours * 3_600_000L,
         )
     }
     single { ThreadsPhotoPublisher(get(), get(), get()) }

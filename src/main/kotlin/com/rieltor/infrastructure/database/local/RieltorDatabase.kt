@@ -22,8 +22,9 @@ import java.nio.file.attribute.PosixFilePermission
         TelegramRepostQueueEntity::class,
         TikTokPublishAttemptEntity::class,
         TikTokPublishThrottleEntity::class,
+        TikTokTrackedPublishEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -109,6 +110,10 @@ private val LEGACY_MIGRATIONS = ((1..7).map { startVersion ->
     override fun migrate(connection: SQLiteConnection) {
         dropCredentialTables(connection)
     }
+} + object : Migration(10, 11) {
+    override fun migrate(connection: SQLiteConnection) {
+        createTikTokTrackedPublishesTable(connection)
+    }
 }).toTypedArray()
 
 private fun createCurrentTables(connection: SQLiteConnection) {
@@ -150,7 +155,21 @@ private fun createCurrentTables(connection: SQLiteConnection) {
             id INTEGER NOT NULL PRIMARY KEY, blocked_until INTEGER NOT NULL DEFAULT 0
         )"""
     )
+    createTikTokTrackedPublishesTable(connection)
     createRepostQueueTable(connection)
+}
+
+private fun createTikTokTrackedPublishesTable(connection: SQLiteConnection) {
+    connection.execSQL(
+        """CREATE TABLE IF NOT EXISTS tiktok_tracked_publishes (
+            publish_id TEXT NOT NULL PRIMARY KEY, mode TEXT NOT NULL, created_at INTEGER NOT NULL,
+            last_status TEXT, updated_at INTEGER NOT NULL
+        )"""
+    )
+    connection.execSQL(
+        "CREATE INDEX IF NOT EXISTS ix_tiktok_tracked_publishes_created_at " +
+            "ON tiktok_tracked_publishes(created_at)"
+    )
 }
 
 private fun createRepostQueueTable(connection: SQLiteConnection) {

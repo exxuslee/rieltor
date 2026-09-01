@@ -201,7 +201,7 @@ class TelegramRepostCoordinator(
 
     private fun Throwable.failureReason(): String = message?.takeIf(String::isNotBlank) ?: javaClass.simpleName
 
-    private fun logDiagnostics() {
+    private suspend fun logDiagnostics() {
         val queueSnapshot = queue.snapshot()
         val now = nowMillis()
         val retryRemainingMillis = retryUntilMillis.get().remainingMillis(now)
@@ -230,14 +230,26 @@ class TelegramRepostCoordinator(
                 remainingMillis = null
             }
         }
+        val destinationDiagnostics = runCatching { repostHandler.pendingDiagnostics() }
+            .onFailure { error ->
+                logger.warn(
+                    "Could not refresh destination pending diagnostics. reason={}",
+                    error.failureReason(),
+                )
+            }
+            .getOrDefault(emptyList())
         logger.info(
-            "Telegram repost coordinator status. state={}, queueSize={}, claimedUpdateId={}, pendingUpdateIds={}, waitingFor={}, remainingMinutes={}",
+            "Telegram repost coordinator status. state={}, queueSize={}, claimedUpdateId={}, pendingUpdateIds={}, waitingFor={}, remainingMinutes={}, destinationPending={}",
             mutableState.value,
             queueSnapshot.size,
             queueSnapshot.claimedUpdateId,
             queueSnapshot.pendingUpdateIds,
             waitingFor,
             remainingMillis?.let { (it + 59_999L) / 60_000L },
+            destinationDiagnostics.joinToString(prefix = "[", postfix = "]") { diagnostics ->
+                "${diagnostics.destination}:pending=${diagnostics.pendingCount}," +
+                    "tracked=${diagnostics.trackedCount},statuses=${diagnostics.statuses}"
+            },
         )
     }
 

@@ -9,6 +9,7 @@ import com.rieltor.application.port.PhotoRepostHandler
 import com.rieltor.application.port.TelegramMessageSource
 import com.rieltor.application.usecase.RepostPublishException
 import com.rieltor.domain.model.*
+import com.rieltor.domain.repository.PublisherPendingDiagnostics
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -147,6 +148,45 @@ class TelegramRepostCoordinatorTest {
                         event.formattedMessage.contains("claimedUpdateId=23") &&
                         event.formattedMessage.contains("waitingFor=retry delay") &&
                         event.formattedMessage.contains("remainingMinutes=1")
+                }) delay(10)
+            }
+        } finally {
+            coordinator.close()
+            logger.detachAppender(appender)
+        }
+    }
+
+    @Test
+    fun `logs refreshed destination pending publication count`() = runBlocking {
+        val source = FakeTelegramMessageSource()
+        val handler = object : PhotoRepostHandler {
+            override suspend fun handle(listing: TelegramListing) = RepostResult.Duplicate
+
+            override suspend fun pendingDiagnostics() = listOf(
+                PublisherPendingDiagnostics(
+                    destination = RepostDestination.TIKTOK,
+                    trackedCount = 3,
+                    pendingCount = 2,
+                    statuses = listOf("draft-1:SEND_TO_USER_INBOX", "post-2:PROCESSING_DOWNLOAD"),
+                )
+            )
+        }
+        val coordinator = TelegramRepostCoordinator(
+            source = source,
+            repostHandler = handler,
+            diagnosticsIntervalMillis = 10,
+        )
+        val logger = LoggerFactory.getLogger(TelegramRepostCoordinator::class.java) as Logger
+        val appender = ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>().apply { start() }
+        logger.addAppender(appender)
+
+        try {
+            coordinator.start()
+            withTimeout(1_000) {
+                while (appender.list.none { event ->
+                    event.formattedMessage.startsWith("Telegram repost coordinator status.") &&
+                        event.formattedMessage.contains("TIKTOK:pending=2,tracked=3") &&
+                        event.formattedMessage.contains("draft-1:SEND_TO_USER_INBOX")
                 }) delay(10)
             }
         } finally {

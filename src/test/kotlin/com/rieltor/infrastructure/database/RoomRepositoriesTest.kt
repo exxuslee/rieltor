@@ -5,6 +5,7 @@ import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.model.ReceivedTelegramMessageEntity
 import com.rieltor.infrastructure.database.repository.TelegramRepostQueueImpl
 import com.rieltor.infrastructure.database.repository.TelegramRepostRepositoryImpl
+import com.rieltor.infrastructure.database.repository.TikTokPublishThrottleRepositoryImpl
 import java.io.ByteArrayInputStream
 import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
@@ -13,6 +14,25 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.*
 
 class RoomPersistenceTest {
+    @Test
+    fun `tracked TikTok publish survives restart and expires after pending window`() {
+        val databasePath = Files.createTempDirectory("tiktok-publish-tracking-test").resolve("test.db")
+
+        RoomDatabaseStore(databasePath).use { database ->
+            val repository = TikTokPublishThrottleRepositoryImpl(database)
+            repository.trackPublish("publish-1", "DRAFT", 1_000L)
+            repository.updateTrackedStatus("publish-1", "SEND_TO_USER_INBOX", 2_000L)
+        }
+
+        RoomDatabaseStore(databasePath).use { database ->
+            val repository = TikTokPublishThrottleRepositoryImpl(database)
+            val restored = repository.trackedPublishes(3_000L, 86_400_000L).single()
+            assertEquals("publish-1", restored.publishId)
+            assertEquals("SEND_TO_USER_INBOX", restored.lastStatus)
+            assertTrue(repository.trackedPublishes(86_401_001L, 86_400_000L).isEmpty())
+        }
+    }
+
     @Test
     fun `persistent FIFO queue survives database restart with local photo paths`() {
         val directory = Files.createTempDirectory("rieltor-persistent-queue-test")
