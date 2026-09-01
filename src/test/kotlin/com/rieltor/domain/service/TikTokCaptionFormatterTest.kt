@@ -118,7 +118,7 @@ class ListingCaptionFormatterTest {
     }
 
     @Test
-    fun `extracts programs registration and renders the replaced phone`() {
+    fun `extracts programs excludes registration cost and renders the replaced phone`() {
         val source = """
             Гостомель
             Квартира в ЖК На Прорізній
@@ -138,7 +138,7 @@ class ListingCaptionFormatterTest {
 
         assertEquals("Квартира в ЖК На Прорізній — Гостомель", listing.title)
         assertEquals("вул. Прорізна, 2", listing.address)
-        assertEquals("Оформлення: 12%", listing.registration)
+        assertNull(listing.registration)
         assertEquals("Держ. програми: Так", listing.governmentPrograms)
         assertEquals(listOf("Площа 44,3 м2", "Поверх 4/8"), listing.keyParameters)
         assertEquals(listOf("Новий якісний ремонт"), listing.additionalParameters)
@@ -146,5 +146,64 @@ class ListingCaptionFormatterTest {
         assertContains(tiktok, "🤙 066-372-71-02 Ірина")
         assertFalse(tiktok.contains("0961733824"))
         assertFalse(tiktok.contains("Комісія"))
+        assertFalse(tiktok.contains("Оформлення"))
+    }
+
+    @Test
+    fun `omits top floor and electric heating using a real log caption`() {
+        val source = """
+            Ірпінь
+            ЖК Бургундія
+            Студія з ремонтом
+            Площа 24,5м2
+            Опалення електричне
+            Поверх 5/5
+            Тепла підлога, посудомийка, варильна поверхня
+            Ціна 45500${'$'}
+            Оформлення 12%
+            Готівка, сертифікат
+        """.trimIndent()
+
+        val listing = requireNotNull(filter.filter(source))
+        val tiktok = requireNotNull(filter.forTikTok(listing))
+
+        assertContains(listing.keyParameters, "Площа 24,5м2")
+        assertNull(listing.registration)
+        assertFalse(tiktok.contains("Поверх 5/5"))
+        assertFalse(tiktok.contains("Опалення електричне"))
+        assertFalse(tiktok.contains("Оформлення 12%"))
+        assertContains(tiktok, "Тепла підлога, посудомийка, варильна поверхня")
+    }
+
+    @Test
+    fun `keeps a non-top floor and non-electric heating`() {
+        val source = """
+            Квартира в Ірпені
+            Поверх 4/5
+            Газове опалення
+            Ціна 60000${'$'}
+        """.trimIndent()
+
+        val tiktok = requireNotNull(filter.forTikTok(filter.filter(source)))
+
+        assertContains(tiktok, "Поверх 4/5")
+        assertContains(tiktok, "Газове опалення")
+    }
+
+    @Test
+    fun `does not treat house storeys as an apartment top floor`() {
+        val source = """
+            Будинок в Ірпені
+            Поверх 2/2
+            Оформлення на першого власника
+            Ціна 120000${'$'}
+        """.trimIndent()
+
+        val listing = requireNotNull(filter.filter(source))
+        val tiktok = requireNotNull(filter.forTikTok(listing))
+
+        assertContains(tiktok, "Поверх 2/2")
+        assertEquals("Оформлення на першого власника", listing.registration)
+        assertContains(tiktok, "Оформлення на першого власника")
     }
 }

@@ -92,7 +92,7 @@ private val applicationModule = module {
             mediaStorage = get(),
             publishers = buildList {
                 add(get<TikTokPhotoPublisher>())
-                if (settings.threadsConfigured) {
+                if (settings.threadsEnabled && settings.threadsConfigured) {
                     add(get<ThreadsPhotoPublisher>())
                 }
             },

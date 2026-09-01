@@ -2,19 +2,17 @@ package com.rieltor.infrastructure.google
 
 import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.repository.ExternalPhotoSource
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.plugins.timeout
-import io.ktor.client.request.get
-import io.ktor.client.request.header
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.HttpHeaders
-import io.ktor.http.isSuccess
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.plugins.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import kotlinx.coroutines.CancellationException
-import kotlinx.serialization.json.Json
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayInputStream
 import java.io.IOException
@@ -87,7 +85,7 @@ class GoogleDrivePhotoSource(
     }
 
     private suspend fun downloadPhotoBatch(targets: List<DriveTarget>, limit: Int): List<TelegramPhoto> {
-        val token = auth.validAccessToken()
+        val token = AccessToken(auth.validAccessToken())
         val metadata = linkedMapOf<String, DriveFileMetadata>()
         targets.forEach { target ->
             val targetFiles = when (target) {
@@ -157,9 +155,8 @@ class GoogleDrivePhotoSource(
         }
     }
 
-    private suspend fun getFileMetadata(fileId: String, token: String): DriveFileMetadata {
-        val response = httpClient.get("$FILES_URL/$fileId") {
-            header(HttpHeaders.Authorization, "Bearer $token")
+    private suspend fun getFileMetadata(fileId: String, token: AccessToken): DriveFileMetadata {
+        val response = authorizedGet("$FILES_URL/$fileId", token) {
             url {
                 parameters.append("fields", FILE_FIELDS)
                 parameters.append("supportsAllDrives", "true")
@@ -169,12 +166,11 @@ class GoogleDrivePhotoSource(
         return json.decodeFromString(response.bodyAsText())
     }
 
-    private suspend fun listFolderFiles(folderId: String, token: String): List<DriveFileMetadata> {
+    private suspend fun listFolderFiles(folderId: String, token: AccessToken): List<DriveFileMetadata> {
         val result = mutableListOf<DriveFileMetadata>()
         var pageToken: String? = null
         do {
-            val response = httpClient.get(FILES_URL) {
-                header(HttpHeaders.Authorization, "Bearer $token")
+            val response = authorizedGet(FILES_URL, token) {
                 url {
                     parameters.append("q", "'$folderId' in parents and trashed = false")
                     parameters.append("fields", "nextPageToken,files($FILE_FIELDS)")
@@ -193,7 +189,7 @@ class GoogleDrivePhotoSource(
         return result
     }
 
-    private suspend fun downloadFile(file: DriveFileMetadata, token: String): ByteArray {
+    private suspend fun downloadFile(file: DriveFileMetadata, token: AccessToken): ByteArray {
         val declaredSize = file.size?.toLongOrNull()
         require(declaredSize == null || declaredSize <= MAX_DOWNLOAD_BYTES) {
             "Google Drive photo '${file.name}' is larger than ${MAX_DOWNLOAD_BYTES / 1024 / 1024} MB."
@@ -201,8 +197,7 @@ class GoogleDrivePhotoSource(
         var lastError: Throwable? = null
         repeat(DOWNLOAD_MAX_ATTEMPTS) { attempt ->
             try {
-                val response = httpClient.get("$FILES_URL/${file.id}") {
-                    header(HttpHeaders.Authorization, "Bearer $token")
+                val response = authorizedGet("$FILES_URL/${file.id}", token) {
                     timeout {
                         requestTimeoutMillis = DOWNLOAD_TIMEOUT_MILLIS
                         socketTimeoutMillis = DOWNLOAD_TIMEOUT_MILLIS
@@ -242,6 +237,25 @@ class GoogleDrivePhotoSource(
         throw IOException("Google Drive photo download failed after retries", lastError)
     }
 
+    private suspend fun authorizedGet(
+        url: String,
+        token: AccessToken,
+        configure: HttpRequestBuilder.() -> Unit,
+    ): HttpResponse {
+        suspend fun request() = httpClient.get(url) {
+            header(HttpHeaders.Authorization, "Bearer ${token.value}")
+            configure()
+        }
+
+        var response = request()
+        if (response.status == HttpStatusCode.Unauthorized) {
+            response.bodyAsText()
+            token.value = auth.refreshRejectedAccessToken(token.value)
+            response = request()
+        }
+        return response
+    }
+
     private fun safeFileName(file: DriveFileMetadata): String {
         val extension = when (file.mimeType) {
             "image/webp" -> "webp"
@@ -268,4 +282,6 @@ class GoogleDrivePhotoSource(
         const val GOOGLE_DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
         val SUPPORTED_IMAGE_MIME_TYPES = setOf("image/jpeg", "image/webp")
     }
+
+    private data class AccessToken(var value: String)
 }

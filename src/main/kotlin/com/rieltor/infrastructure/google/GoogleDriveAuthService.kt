@@ -4,16 +4,18 @@ import com.rieltor.domain.model.StoredGoogleDriveTokens
 import com.rieltor.domain.repository.GoogleDriveTokenRepository
 import com.rieltor.infrastructure.config.ApplicationSettings
 import io.ktor.client.*
-import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.http.content.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
-import java.time.Instant
 import java.io.IOException
+import java.time.Instant
 
 class GoogleDriveAuthException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
@@ -24,6 +26,8 @@ class GoogleDriveAuthService(
     private val json: Json,
     private val tokenRetryDelayMillis: Long = TOKEN_RETRY_DELAY_MILLIS,
 ) {
+    private val refreshMutex = Mutex()
+
     fun buildAuthorizeUrl(state: String): String = URLBuilder(AUTHORIZE_URL).apply {
         parameters.append("client_id", settings.googleClientId)
         parameters.append("redirect_uri", settings.googleRedirectUri)
@@ -51,23 +55,41 @@ class GoogleDriveAuthService(
     }
 
     suspend fun validAccessToken(): String {
-        val current = tokens.load()
-            ?: throw GoogleDriveAuthException(
-                "Google Drive account is not connected. Open /auth/google/login first."
-            )
-        if (Instant.now().epochSecond < current.accessTokenExpiresAt - EXPIRY_SAFETY_SECONDS) {
-            return current.accessToken
+        val current = requireTokens()
+        if (isValid(current)) return current.accessToken
+        return refreshMutex.withLock {
+            val latest = requireTokens()
+            if (isValid(latest)) latest.accessToken else refresh(latest)
         }
-        return requestTokens(
-            Parameters.build {
-                append("client_id", settings.googleClientId)
-                append("client_secret", settings.googleClientSecret)
-                append("refresh_token", current.refreshToken)
-                append("grant_type", "refresh_token")
-            },
-            fallbackRefreshToken = current.refreshToken,
-        ).also(tokens::save).accessToken
     }
+
+    /** Refreshes a token rejected by Drive, unless another coroutine has already replaced it. */
+    suspend fun refreshRejectedAccessToken(rejectedAccessToken: String): String = refreshMutex.withLock {
+        val latest = requireTokens()
+        if (latest.accessToken != rejectedAccessToken && isValid(latest)) {
+            latest.accessToken
+        } else {
+            refresh(latest)
+        }
+    }
+
+    private suspend fun refresh(current: StoredGoogleDriveTokens): String = requestTokens(
+        Parameters.build {
+            append("client_id", settings.googleClientId)
+            append("client_secret", settings.googleClientSecret)
+            append("refresh_token", current.refreshToken)
+            append("grant_type", "refresh_token")
+        },
+        fallbackRefreshToken = current.refreshToken,
+    ).also(tokens::save).accessToken
+
+    private fun requireTokens(): StoredGoogleDriveTokens = tokens.load()
+        ?: throw GoogleDriveAuthException(
+            "Google Drive account is not connected. Open /auth/google/login first."
+        )
+
+    private fun isValid(tokens: StoredGoogleDriveTokens): Boolean =
+        Instant.now().epochSecond < tokens.accessTokenExpiresAt - EXPIRY_SAFETY_SECONDS
 
     private suspend fun requestTokens(
         parameters: Parameters,

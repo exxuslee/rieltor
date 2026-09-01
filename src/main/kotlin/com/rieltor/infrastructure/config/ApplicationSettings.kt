@@ -54,6 +54,7 @@ data class ApplicationSettings(
     val threadsAppId: String = "",
     val threadsAppSecret: String = "",
     val threadsRedirectUri: String = "",
+    val threadsEnabled: Boolean = false,
     val landingTelegramBotToken: String = "",
     val landingTelegramChatId: String = "",
 ) {
@@ -99,6 +100,7 @@ data class ApplicationSettings(
                 threadsAppId = environmentOrDotenv(SecretNames.THREADS_APP_ID, dotenv).orEmpty(),
                 threadsAppSecret = environmentOrDotenv(SecretNames.THREADS_APP_SECRET, dotenv).orEmpty(),
                 threadsRedirectUri = secrets.get(SecretNames.THREADS_REDIRECT_URI).orEmpty(),
+                threadsEnabled = booleanSetting(dotenv, "THREADS_ENABLED", false),
                 landingTelegramBotToken = environmentOrDotenv(SecretNames.LANDING_TELEGRAM_BOT_TOKEN, dotenv).orEmpty(),
                 landingTelegramChatId = environmentOrDotenv(SecretNames.LANDING_TELEGRAM_CHAT_ID, dotenv).orEmpty(),
             )
@@ -143,6 +145,17 @@ fun tikTokMinPostIntervalMinutes(dotenv: Dotenv): Long =
 
 fun tikTokDailyLimitCooldownHours(dotenv: Dotenv): Long =
     positiveLong(dotenv, "TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS", DEFAULT_TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS, 1L..48L)
+
+fun booleanSetting(dotenv: Dotenv, name: String, default: Boolean): Boolean {
+    val configured = environmentOrDotenv(name, dotenv) ?: return default
+    return configured.trim().lowercase().let { value ->
+        when (value) {
+            "true" -> true
+            "false" -> false
+            else -> error("Invalid $name: expected true or false")
+        }
+    }
+}
 
 private fun positiveInt(dotenv: Dotenv, name: String, default: Int, range: IntRange): Int {
     val configured = environmentOrDotenv(name, dotenv) ?: return default

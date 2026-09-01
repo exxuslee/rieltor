@@ -48,16 +48,21 @@ class ListingCaptionFormatter {
         val price = content.getOrNull(priceIndex)?.let(::extractPrice) ?: PRICE_ON_REQUEST
         val governmentPrograms = content.firstOrNull(governmentProgramsLine::containsMatchIn)
             ?.let(::normalizeGovernmentPrograms)
-        val registration = content.firstOrNull(registrationLine::containsMatchIn)
-            ?.let(::normalizeRegistration)
+        val registration = content.firstOrNull { line ->
+            registrationLine.containsMatchIn(line) && !registrationCostLine.containsMatchIn(line)
+        }?.let(::normalizeRegistration)
         val excluded = setOfNotNull(
             priceIndex.takeIf { it >= 0 },
             content.indexOfFirst(governmentProgramsLine::containsMatchIn).takeIf { it >= 0 },
-            content.indexOfFirst(registrationLine::containsMatchIn).takeIf { it >= 0 },
         )
-        val details = content.filterIndexed { index, _ -> index !in excluded }
-        val (parameters, description) = details.partition(::looksLikeParameter)
         val fullText = lines.joinToString(" ")
+        val isApartment = apartmentListing.containsMatchIn(fullText)
+        val details = content
+            .filterIndexed { index, _ -> index !in excluded }
+            .filterNot(registrationLine::containsMatchIn)
+            .filterNot { isApartment && isTopFloor(it) }
+            .filterNot(electricHeatingLine::containsMatchIn)
+        val (parameters, description) = details.partition(::looksLikeParameter)
 
         return ListingMessage(
             title = title,
@@ -133,6 +138,10 @@ class ListingCaptionFormatter {
 
     private fun looksLikeParameter(line: String): Boolean = parameterWords.containsMatchIn(line)
 
+    private fun isTopFloor(line: String): Boolean = floorFraction.find(line)?.let { match ->
+        match.groupValues[1].toIntOrNull() == match.groupValues[2].toIntOrNull()
+    } ?: false
+
     private fun extractPrice(line: String): String = priceValue.find(line)?.groupValues?.get(1)
         ?.replace(repeatedWhitespace, " ")
         ?.trim()
@@ -205,6 +214,14 @@ class ListingCaptionFormatter {
         )
         val governmentProgramsLine = Regex("""(?iu)(?:держ(?:авні|\.)?\s*програм\p{L}*|єосел\p{L}*|сертифікат|постанова)""")
         val registrationLine = Regex("""(?iu)(?:оформлення|оф\.?(?=\s)|переуступка)""")
+        val registrationCostLine = Regex(
+            """(?iu)(?:оформлення|оф\.?(?=\s)|переуступка).*(?:\d|%|[$€₴]|грн\.?|мінімальн\p{L}*|минимальн\p{L}*)"""
+        )
+        val apartmentListing = Regex("""(?iu)(?:квартир\p{L}*|студі\p{L}*|\b\d\s*-?\s*к(?:\.?\s*квартир\p{L}*|\.?\s*к\.?\b)?)""")
+        val floorFraction = Regex("""(?iu)(?:поверх|этаж)\D{0,12}(\d{1,3})\s*(?:/|з|із|из)\s*(\d{1,3})""")
+        val electricHeatingLine = Regex(
+            """(?iu)(?:(?:опален\p{L}*|отоплен\p{L}*)[^.!;,\r\n]{0,30}електр\p{L}*|електр\p{L}*[^.!;,\r\n]{0,30}(?:опален\p{L}*|отоплен\p{L}*))"""
+        )
         val fieldSeparator = Regex("""\s*[-–—:]\s*""")
 
         val propertyHashtags = listOf(

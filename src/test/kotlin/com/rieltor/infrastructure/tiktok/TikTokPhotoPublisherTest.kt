@@ -22,7 +22,7 @@ import kotlin.test.assertTrue
 
 class TikTokPhotoPublisherTest {
     @Test
-    fun `awaits dispatcher slot only for direct post mode`() = runBlocking {
+    fun `awaits dispatcher slot for post and draft modes`() = runBlocking {
         val json = Json { ignoreUnknownKeys = true }
         val postThrottle = CapturingThrottleRepository()
         val draftThrottle = CapturingThrottleRepository()
@@ -46,7 +46,7 @@ class TikTokPhotoPublisherTest {
         publisher(TikTokMode.DRAFT, draftThrottle).awaitPublishSlot()
 
         assertEquals(1, postThrottle.reserveSlotCalls)
-        assertEquals(0, draftThrottle.reserveSlotCalls)
+        assertEquals(1, draftThrottle.reserveSlotCalls)
     }
 
     @Test
@@ -306,6 +306,7 @@ class TikTokPhotoPublisherTest {
     @Test
     fun `draft mode uploads media for manual editing and stops after inbox delivery`() = runBlocking {
         val json = Json { ignoreUnknownKeys = true }
+        val throttle = CapturingThrottleRepository()
         var publishBody: String? = null
         var statusChecks = 0
         val engine = MockEngine { request ->
@@ -332,8 +333,15 @@ class TikTokPhotoPublisherTest {
             TikTokAuthService(httpClient, settings(), validTokens(), json),
             json,
             tikTokMode = TikTokMode.DRAFT,
+            dispatcher = TikTokPublishDispatcher(
+                repository = throttle,
+                maxPostsPer24Hours = 10,
+                minPostIntervalMillis = 0,
+                dailyLimitCooldownMillis = 24 * 60 * 60 * 1_000L,
+            ),
         )
 
+        publisher.awaitPublishSlot()
         val receipt = publisher.publish(listOf("https://api.example/media/photo.jpg"), "Чернетка")
 
         val body = json.parseToJsonElement(requireNotNull(publishBody)).jsonObject
@@ -343,6 +351,7 @@ class TikTokPhotoPublisherTest {
         assertEquals(false, "auto_add_music" in postInfo)
         assertEquals("DRAFT", receipt.privacyLevel)
         assertEquals(1, statusChecks)
+        assertEquals(1, throttle.reserveSlotCalls)
     }
 
     @Test

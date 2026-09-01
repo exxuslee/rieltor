@@ -146,6 +146,68 @@ class GoogleDrivePhotoSourceTest {
     }
 
     @Test
+    fun `refreshes rejected access token and retries request once`() = runBlocking {
+        val repository = InMemoryGoogleTokens(
+            StoredGoogleDriveTokens("rejected-access", "persistent-refresh", Instant.now().epochSecond + 3600)
+        )
+        var rejectedDownloadAttempts = 0
+        var refreshedDownloadAttempts = 0
+        var tokenRefreshAttempts = 0
+        val engine = MockEngine { request ->
+            when {
+                request.url.host == "oauth2.googleapis.com" -> {
+                    tokenRefreshAttempts++
+                    respond(
+                        content = """{"access_token":"fresh-access","expires_in":3600}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                    )
+                }
+                request.url.encodedPath == "/drive/v3/files" -> respond(
+                    content = """{"files":[
+                        {"id":"photo-id","name":"photo.jpg","mimeType":"image/jpeg","size":"3"}
+                    ]}""",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                )
+                request.url.encodedPath.endsWith("/photo-id") -> {
+                    when (request.headers[HttpHeaders.Authorization]) {
+                        "Bearer rejected-access" -> {
+                            rejectedDownloadAttempts++
+                            respond("unauthorized", HttpStatusCode.Unauthorized)
+                        }
+                        "Bearer fresh-access" -> {
+                            refreshedDownloadAttempts++
+                            respond(byteArrayOf(1, 2, 3), headers = headersOf(HttpHeaders.ContentType, "image/jpeg"))
+                        }
+                        else -> error("Unexpected authorization header")
+                    }
+                }
+                else -> error("Unexpected request: ${request.url}")
+            }
+        }
+        val client = HttpClient(engine)
+        val settings = googleSettings()
+        val json = Json { ignoreUnknownKeys = true }
+        val source = GoogleDrivePhotoSource(
+            client,
+            GoogleDriveAuthService(client, settings, repository, json, tokenRetryDelayMillis = 0),
+            json,
+        )
+
+        val photos = source.downloadPhotos(
+            "https://drive.google.com/drive/folders/folder-with-expired-token",
+            limit = 1,
+        )
+
+        assertContentEquals(byteArrayOf(1, 2, 3), photos.single().content.readBytes())
+        assertEquals(1, rejectedDownloadAttempts)
+        assertEquals(1, tokenRefreshAttempts)
+        assertEquals(1, refreshedDownloadAttempts)
+        assertEquals("fresh-access", repository.load()?.accessToken)
+    }
+
+    @Test
     fun `reports failure when every candidate photo fails`() = runBlocking {
         val engine = MockEngine { request ->
             when {
@@ -185,18 +247,31 @@ class GoogleDrivePhotoSourceTest {
                 Instant.now().epochSecond + 3600,
             )
         }
-        val settings = ApplicationSettings(
-            mediaDirectory = java.nio.file.Path.of("media"),
-            publicBaseUrl = "https://api.example",
-            telegramApiId = 1,
-            telegramApiHash = "hash",
-            telegramSessionDirectory = java.nio.file.Path.of("telegram"),
-            tikTokClientKey = "key",
-            tikTokClientSecret = "secret",
-            tikTokRedirectUri = "https://api.example/auth/tiktok/callback",
-        )
+        val settings = googleSettings()
         val json = Json { ignoreUnknownKeys = true }
         val auth = GoogleDriveAuthService(client, settings, repository, json)
         return GoogleDrivePhotoSource(client, auth, json)
+    }
+
+    private fun googleSettings() = ApplicationSettings(
+        mediaDirectory = java.nio.file.Path.of("media"),
+        publicBaseUrl = "https://api.example",
+        telegramApiId = 1,
+        telegramApiHash = "hash",
+        telegramSessionDirectory = java.nio.file.Path.of("telegram"),
+        tikTokClientKey = "key",
+        tikTokClientSecret = "secret",
+        tikTokRedirectUri = "https://api.example/auth/tiktok/callback",
+        googleClientId = "google-client-id",
+        googleClientSecret = "google-client-secret",
+        googleRedirectUri = "https://api.example/auth/google/callback",
+    )
+
+    private class InMemoryGoogleTokens(private var value: StoredGoogleDriveTokens?) : GoogleDriveTokenRepository {
+        override fun save(tokens: StoredGoogleDriveTokens) {
+            value = tokens
+        }
+
+        override fun load(): StoredGoogleDriveTokens? = value
     }
 }
