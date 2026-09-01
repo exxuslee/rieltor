@@ -1,19 +1,13 @@
 package com.rieltor.infrastructure.media
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 class MediaCleanupJob(
     private val directory: Path,
@@ -28,9 +22,10 @@ class MediaCleanupJob(
     fun start() {
         check(job == null) { "Media cleanup job is already started" }
         job = scope.launch {
+            delay(60_000L.milliseconds)
             while (isActive) {
                 runCatching { cleanNow() }.onFailure { logger.error("Media cleanup failed", it) }
-                delay(interval.toMillis())
+                delay(interval.toMillis().milliseconds)
             }
         }
     }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.time.Duration.Companion.milliseconds
 
 /** Persistent FIFO coordinator and the only owner of the cross-destination dispatch quota. */
 class TelegramRepostCoordinator(
@@ -59,11 +60,12 @@ class TelegramRepostCoordinator(
         }
         diagnosticsJob = scope.launch {
             while (isActive) {
-                delay(diagnosticsIntervalMillis)
+                delay(diagnosticsIntervalMillis.milliseconds)
                 if (!closing.get()) logDiagnostics()
             }
         }
         workerJob = scope.launch {
+            delay(60_000L.milliseconds)
             for (ignored in queueSignal) {
                 while (!closing.get()) {
                     val message = queue.peekOldest() ?: break

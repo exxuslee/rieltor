@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.time.Clock
 import java.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 class TelegramHistoryCleanupJob(
     private val queue: TelegramRepostQueue,
@@ -20,9 +21,10 @@ class TelegramHistoryCleanupJob(
     fun start() {
         check(job == null) { "Telegram history cleanup job is already started" }
         job = scope.launch {
+            delay(60_000L.milliseconds)
             while (isActive) {
                 runCatching { cleanNow() }.onFailure { logger.error("Telegram history cleanup failed", it) }
-                delay(interval.toMillis())
+                delay(interval.toMillis().milliseconds)
             }
         }
     }
