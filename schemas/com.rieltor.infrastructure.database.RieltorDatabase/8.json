@@ -1,0 +1,429 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 8,
+    "identityHash": "d0ecd6927df34f552a6ea4b507dde55c",
+    "entities": [
+      {
+        "tableName": "app_secrets",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`name` TEXT NOT NULL, `value` TEXT NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`name`))",
+        "fields": [
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "name"
+          ]
+        }
+      },
+      {
+        "tableName": "tiktok_tokens",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`open_id` TEXT NOT NULL, `access_token` TEXT NOT NULL, `refresh_token` TEXT NOT NULL, `access_token_expires_at` INTEGER NOT NULL, `refresh_token_expires_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`open_id`))",
+        "fields": [
+          {
+            "fieldPath": "openId",
+            "columnName": "open_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accessToken",
+            "columnName": "access_token",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refreshToken",
+            "columnName": "refresh_token",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accessTokenExpiresAt",
+            "columnName": "access_token_expires_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refreshTokenExpiresAt",
+            "columnName": "refresh_token_expires_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "open_id"
+          ]
+        }
+      },
+      {
+        "tableName": "google_drive_tokens",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `access_token` TEXT NOT NULL, `refresh_token` TEXT NOT NULL, `access_token_expires_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accessToken",
+            "columnName": "access_token",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refreshToken",
+            "columnName": "refresh_token",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accessTokenExpiresAt",
+            "columnName": "access_token_expires_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "threads_tokens",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `access_token` TEXT NOT NULL, `access_token_expires_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`user_id`))",
+        "fields": [
+          {
+            "fieldPath": "userId",
+            "columnName": "user_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accessToken",
+            "columnName": "access_token",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accessTokenExpiresAt",
+            "columnName": "access_token_expires_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "user_id"
+          ]
+        }
+      },
+      {
+        "tableName": "received_telegram_messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`telegram_update_id` INTEGER NOT NULL, `chat_id` INTEGER NOT NULL, `message_thread_id` INTEGER NOT NULL, `normalized_price` TEXT, `normalized_address` TEXT, `caption` TEXT, `google_drive_links` TEXT NOT NULL DEFAULT '[]', `status` TEXT NOT NULL, `duplicate_of_update_id` INTEGER, `error` TEXT, `received_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`telegram_update_id`))",
+        "fields": [
+          {
+            "fieldPath": "telegramUpdateId",
+            "columnName": "telegram_update_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chatId",
+            "columnName": "chat_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageThreadId",
+            "columnName": "message_thread_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalizedPrice",
+            "columnName": "normalized_price",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "normalizedAddress",
+            "columnName": "normalized_address",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "caption",
+            "columnName": "caption",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "googleDriveLinks",
+            "columnName": "google_drive_links",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'[]'"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "duplicateOfUpdateId",
+            "columnName": "duplicate_of_update_id",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "error",
+            "columnName": "error",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "receivedAt",
+            "columnName": "received_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "telegram_update_id"
+          ]
+        }
+      },
+      {
+        "tableName": "published_reposts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`telegram_update_id` INTEGER NOT NULL, `message_thread_id` INTEGER NOT NULL, `normalized_price` TEXT, `normalized_address` TEXT, `publish_id` TEXT NOT NULL, `published_at` INTEGER NOT NULL, PRIMARY KEY(`telegram_update_id`))",
+        "fields": [
+          {
+            "fieldPath": "telegramUpdateId",
+            "columnName": "telegram_update_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageThreadId",
+            "columnName": "message_thread_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalizedPrice",
+            "columnName": "normalized_price",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "normalizedAddress",
+            "columnName": "normalized_address",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "publishId",
+            "columnName": "publish_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "publishedAt",
+            "columnName": "published_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "telegram_update_id"
+          ]
+        }
+      },
+      {
+        "tableName": "repost_publications",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`telegram_update_id` INTEGER NOT NULL, `destination` TEXT NOT NULL, `message_thread_id` INTEGER NOT NULL, `normalized_price` TEXT, `normalized_address` TEXT, `status` TEXT NOT NULL, `duplicate_of_update_id` INTEGER, `publish_id` TEXT, `error` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`telegram_update_id`, `destination`))",
+        "fields": [
+          {
+            "fieldPath": "telegramUpdateId",
+            "columnName": "telegram_update_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "destination",
+            "columnName": "destination",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageThreadId",
+            "columnName": "message_thread_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalizedPrice",
+            "columnName": "normalized_price",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "normalizedAddress",
+            "columnName": "normalized_address",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "duplicateOfUpdateId",
+            "columnName": "duplicate_of_update_id",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "publishId",
+            "columnName": "publish_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "error",
+            "columnName": "error",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "telegram_update_id",
+            "destination"
+          ]
+        }
+      },
+      {
+        "tableName": "tiktok_publish_attempts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `attempted_at` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptedAt",
+            "columnName": "attempted_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "ix_tiktok_publish_attempts_time",
+            "unique": false,
+            "columnNames": [
+              "attempted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `ix_tiktok_publish_attempts_time` ON `${TABLE_NAME}` (`attempted_at`)"
+          }
+        ]
+      },
+      {
+        "tableName": "tiktok_publish_throttle",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `blocked_until` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "blockedUntil",
+            "columnName": "blocked_until",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd0ecd6927df34f552a6ea4b507dde55c')"
+    ]
+  }
+}

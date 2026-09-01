@@ -1,4 +1,4 @@
-package com.rieltor.infrastructure.database
+package com.rieltor.infrastructure.database.model
 
 import com.rieltor.domain.model.TelegramListing
 import com.rieltor.domain.model.TelegramRepostKey
@@ -28,7 +28,7 @@ internal data class TelegramListingRecord(
             messageThreadId = listing.messageThreadId,
             caption = listing.caption,
             googleDriveLinksJson = Json.encodeToString(listing.googleDriveLinks),
-            normalizedPrice = listing.repostKey?.price,
+            normalizedPrice = listing.normalizedPrice,
             normalizedAddress = listing.repostKey?.address,
         )
     }

@@ -20,6 +20,17 @@ class TelegramListingIdentityExtractor {
         return TelegramRepostKey(messageThreadId, price, address)
     }
 
+    fun extractNormalizedPrice(caption: String?): String? {
+        if (caption.isNullOrBlank()) return null
+        return caption
+            .replace('\r', '\n')
+            .replace('\u00A0', ' ')
+            .lineSequence()
+            .map(String::trim)
+            .mapNotNull(::extractPrice)
+            .firstOrNull()
+    }
+
     private fun extractPrice(line: String): String? {
         val match = labeledPrice.find(line) ?: return null
         val amount = match.groupValues[1].filter(Char::isDigit).trimStart('0').ifEmpty { "0" }

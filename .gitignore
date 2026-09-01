@@ -29,6 +29,8 @@ pnpm-debug.log*
 build/
 out/
 tiktok-tokens.json
+secrets.json
+secrets.json.tmp
 /*.db
 /*.db-shm
 /*.db-wal

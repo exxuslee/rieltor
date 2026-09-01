@@ -8,7 +8,6 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
 
 class ApplicationSettingsTest {
     @Test
@@ -92,8 +91,8 @@ class ApplicationSettingsTest {
         val defaults = Dotenv.configure().directory(defaultDirectory.toString()).ignoreIfMissing().load()
         val configured = Dotenv.configure().directory(configuredDirectory.toString()).load()
 
-        assertEquals(10, tikTokMaxPostsPer24Hours(defaults))
-        assertEquals(120L, tikTokMinPostIntervalMinutes(defaults))
+        assertEquals(36, tikTokMaxPostsPer24Hours(defaults))
+        assertEquals(20L, tikTokMinPostIntervalMinutes(defaults))
         assertEquals(24L, tikTokDailyLimitCooldownHours(defaults))
         assertEquals(8, tikTokMaxPostsPer24Hours(configured))
         assertEquals(150L, tikTokMinPostIntervalMinutes(configured))
@@ -101,7 +100,7 @@ class ApplicationSettingsTest {
     }
 
     @Test
-    fun `bootstrap persists neither oauth credentials nor telegram user id`() {
+    fun `bootstrap copies secrets from dotenv into credential store`() {
         val directory = Files.createTempDirectory("rieltor-bootstrap-test")
         Files.writeString(
             directory.resolve(".env"),
@@ -117,15 +116,15 @@ class ApplicationSettingsTest {
 
         bootstrapSecrets(secrets, Dotenv.configure().directory(directory.toString()).load())
 
-        assertNull(secrets.get(SecretNames.TIKTOK_CLIENT_KEY))
-        assertNull(secrets.get(SecretNames.TIKTOK_CLIENT_SECRET))
-        assertNull(secrets.get(SecretNames.GOOGLE_CLIENT_ID))
-        assertNull(secrets.get(SecretNames.GOOGLE_CLIENT_SECRET))
-        assertNull(secrets.get(SecretNames.TELEGRAM_USER_ID))
+        assertEquals("client-key", secrets.get(SecretNames.TIKTOK_CLIENT_KEY))
+        assertEquals("client-secret", secrets.get(SecretNames.TIKTOK_CLIENT_SECRET))
+        assertEquals("google-client-id", secrets.get(SecretNames.GOOGLE_CLIENT_ID))
+        assertEquals("google-client-secret", secrets.get(SecretNames.GOOGLE_CLIENT_SECRET))
+        assertEquals("530666333", secrets.get(SecretNames.TELEGRAM_USER_ID))
     }
 
     @Test
-    fun `telegram user id is read from dotenv`() {
+    fun `application settings read bootstrapped secrets from credential store`() {
         val directory = Files.createTempDirectory("rieltor-settings-test")
         Files.writeString(
             directory.resolve(".env"),
@@ -146,6 +145,7 @@ class ApplicationSettingsTest {
                 SecretNames.TELEGRAM_API_HASH to "api-hash",
             )
         )
+        bootstrapSecrets(secrets, dotenv)
 
         val settings = ApplicationSettings.load(secrets, dotenv)
 
@@ -182,10 +182,12 @@ class ApplicationSettingsTest {
                 SecretNames.TELEGRAM_API_HASH to "api-hash",
             )
         )
+        val dotenv = Dotenv.configure().directory(directory.toString()).load()
+        bootstrapSecrets(secrets, dotenv)
 
         val settings = ApplicationSettings.load(
             secrets,
-            Dotenv.configure().directory(directory.toString()).load(),
+            dotenv,
         )
 
         assertEquals(
@@ -220,10 +222,12 @@ class ApplicationSettingsTest {
                 SecretNames.TELEGRAM_API_HASH to "api-hash",
             )
         )
+        val dotenv = Dotenv.configure().directory(directory.toString()).load()
+        bootstrapSecrets(secrets, dotenv)
 
         val settings = ApplicationSettings.load(
             secrets,
-            Dotenv.configure().directory(directory.toString()).load(),
+            dotenv,
         )
 
         assertEquals(

@@ -11,11 +11,11 @@ import com.rieltor.application.usecase.RepostPublishException
 import com.rieltor.domain.model.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.slf4j.LoggerFactory
+import java.io.ByteArrayInputStream
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.*
 
@@ -124,20 +124,26 @@ class TelegramRepostCoordinatorTest {
     }
 
     @Test
-    fun `processes incoming messages independently`() = runBlocking {
+    fun `processes incoming messages in FIFO order`() = runBlocking {
         val source = FakeTelegramMessageSource()
+        val firstStarted = CompletableDeferred<Unit>()
+        val releaseFirst = CompletableDeferred<Unit>()
         val completed = CompletableDeferred<Unit>()
         val activeHandlers = AtomicInteger()
         val maximumActiveHandlers = AtomicInteger()
-        val processed = AtomicInteger()
+        val processed = mutableListOf<Long>()
         val coordinator = TelegramRepostCoordinator(
             source,
-            PhotoRepostHandler {
+            PhotoRepostHandler { listing ->
                 val active = activeHandlers.incrementAndGet()
                 maximumActiveHandlers.updateAndGet { maximum -> maxOf(maximum, active) }
-                delay(25)
+                if (listing.updateId == 20L) {
+                    firstStarted.complete(Unit)
+                    releaseFirst.await()
+                }
+                synchronized(processed) { processed += listing.updateId }
                 activeHandlers.decrementAndGet()
-                if (processed.incrementAndGet() == 2) completed.complete(Unit)
+                if (processed.size == 3) completed.complete(Unit)
                 RepostResult.Duplicate
             },
         )
@@ -145,11 +151,56 @@ class TelegramRepostCoordinatorTest {
         try {
             coordinator.start()
             source.emit(message(20))
+            withTimeout(1_000) { firstStarted.await() }
             source.emit(message(21))
+            source.emit(message(22))
+            releaseFirst.complete(Unit)
 
             withTimeout(1_000) { completed.await() }
 
-            assertEquals(2, maximumActiveHandlers.get())
+            assertEquals(listOf(20L, 21L, 22L), processed)
+            assertEquals(1, maximumActiveHandlers.get())
+        } finally {
+            coordinator.close()
+        }
+    }
+
+    @Test
+    fun `drops oldest pending message when FIFO queue is full`() = runBlocking {
+        val source = FakeTelegramMessageSource()
+        val firstStarted = CompletableDeferred<Unit>()
+        val releaseFirst = CompletableDeferred<Unit>()
+        val oldestClosed = CompletableDeferred<Unit>()
+        val completed = CompletableDeferred<Unit>()
+        val processed = mutableListOf<Long>()
+        val coordinator = TelegramRepostCoordinator(
+            source = source,
+            repostHandler = PhotoRepostHandler { listing ->
+                if (listing.updateId == 1L) {
+                    firstStarted.complete(Unit)
+                    releaseFirst.await()
+                }
+                synchronized(processed) { processed += listing.updateId }
+                listing.photos.forEach { it.content.close() }
+                if (processed.size == 3) completed.complete(Unit)
+                RepostResult.Duplicate
+            },
+            queueCapacity = 2,
+        )
+
+        try {
+            coordinator.start()
+            source.emit(message(1))
+            withTimeout(1_000) { firstStarted.await() }
+            source.emit(message(2, oldestClosed))
+            source.emit(message(3))
+            source.emit(message(4))
+
+            withTimeout(1_000) { oldestClosed.await() }
+            releaseFirst.complete(Unit)
+            withTimeout(1_000) { completed.await() }
+
+            assertEquals(listOf(1L, 3L, 4L), processed)
         } finally {
             coordinator.close()
         }
@@ -167,12 +218,21 @@ class TelegramRepostCoordinatorTest {
         assertEquals(RepostFlowState.Failed(null, "TDLib startup failed"), coordinator.state.value)
     }
 
-    private fun message(updateId: Long) = TelegramListing(
+    private fun message(updateId: Long, closed: CompletableDeferred<Unit>? = null) = TelegramListing(
         updateId = updateId,
         chatId = -1001,
         messageThreadId = 5,
-        caption = "Квартира",
-        photos = emptyList(),
+        caption = "Квартира\nАдреса: вул. Соборна 1\nЦіна: 90000${'$'}\nhttps://drive.google.com/drive/folders/example",
+        photos = closed?.let {
+            listOf(TelegramPhoto("photo.jpg", object : ByteArrayInputStream(byteArrayOf(1)) {
+                override fun close() {
+                    super.close()
+                    it.complete(Unit)
+                }
+            }))
+        }.orEmpty(),
+        googleDriveLinks = listOf("https://drive.google.com/drive/folders/example"),
+        normalizedPrice = "90000:USD",
     )
 
     private class FakeTelegramMessageSource(

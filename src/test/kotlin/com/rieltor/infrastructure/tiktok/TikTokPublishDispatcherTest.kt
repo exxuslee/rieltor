@@ -1,7 +1,7 @@
 package com.rieltor.infrastructure.tiktok
 
-import com.rieltor.infrastructure.database.SqliteDatabase
-import com.rieltor.infrastructure.database.TikTokPublishThrottleRepositoryImpl
+import com.rieltor.infrastructure.database.local.RoomDatabaseStore
+import com.rieltor.infrastructure.database.repository.TikTokPublishThrottleRepositoryImpl
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import kotlin.test.Test
@@ -52,6 +52,6 @@ class TikTokPublishDispatcherTest {
 
     private fun repository(): TikTokPublishThrottleRepositoryImpl {
         val path = Files.createTempDirectory("tiktok-dispatcher-test").resolve("rieltor.db")
-        return TikTokPublishThrottleRepositoryImpl(SqliteDatabase(path))
+        return TikTokPublishThrottleRepositoryImpl(RoomDatabaseStore(path))
     }
 }

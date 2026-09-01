@@ -6,6 +6,7 @@ import com.rieltor.di.googleOAuthState
 import com.rieltor.di.threadsOAuthState
 import com.rieltor.di.tikTokOAuthState
 import com.rieltor.infrastructure.config.serverPort
+import com.rieltor.infrastructure.database.TelegramHistoryCleanupJob
 import com.rieltor.infrastructure.google.GoogleDriveAuthException
 import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
@@ -57,6 +58,7 @@ fun Application.module(dotenv: Dotenv) {
     val threadsStates = get<OAuthStateStore>(threadsOAuthState)
     val mediaStorage = get<LocalPublicMediaStorage>()
     val mediaCleanupJob = get<MediaCleanupJob>()
+    val telegramHistoryCleanupJob = get<TelegramHistoryCleanupJob>()
     val repostCoordinator = get<TelegramRepostCoordinator>()
     val httpClient = get<HttpClient>()
     val landingLeadSender = get<LandingLeadSender>()
@@ -109,9 +111,11 @@ fun Application.module(dotenv: Dotenv) {
 
     repostCoordinator.start()
     mediaCleanupJob.start()
+    telegramHistoryCleanupJob.start()
 
     monitor.subscribe(ApplicationStopping) {
         mediaCleanupJob.close()
+        telegramHistoryCleanupJob.close()
         repostCoordinator.close()
         httpClient.close()
     }

@@ -50,9 +50,6 @@ class PublishPhotoRepostUseCase(
         var extraPhotos = emptyList<TelegramPhoto>()
         return try {
             require(maxPhotoCount > 0) { "Repost photo limit must be positive." }
-            // Acquire long-running destination quotas before downloading Drive media or creating public files.
-            // This prevents queued posts from pointing at files removed by the media cleanup job.
-            activePublishers.forEach { it.awaitPublishSlot() }
             val effectivePhotoLimit = minOf(activePublishers.maxOf { it.maxPhotoCount }, maxPhotoCount)
             extraPhotos = loadExtraPhotos(listing, effectivePhotoLimit)
             val allPhotos = (listing.photos + extraPhotos).take(effectivePhotoLimit)
@@ -69,8 +66,10 @@ class PublishPhotoRepostUseCase(
             // The production VM has one OCPU and 1 GB RAM. Running TikTok and Threads
             // requests concurrently only increases peak memory/connection pressure there.
             // Keep destinations failure-isolated, but publish them one at a time.
-            val outcomes = activePublishers.map { publisher ->
-                runCatching {
+            val outcomes = mutableListOf<Pair<RepostDestination, Result<PublishReceipt>>>()
+            val orderedPublishers = activePublishers.toList()
+            for ((index, publisher) in orderedPublishers.withIndex()) {
+                val outcome = runCatching {
                     val receipt = publisher.publish(
                         media.map { it.publicUrl }.take(minOf(publisher.maxPhotoCount, maxPhotoCount)),
                         caption,
@@ -81,7 +80,18 @@ class PublishPhotoRepostUseCase(
                     runCatching {
                         repostTracker.markFailed(listing.updateId, publisher.destination, error)
                     }.onFailure(error::addSuppressed)
-                }.let { publisher.destination to it }
+                    orderedPublishers.drop(index + 1).forEach { waitingPublisher ->
+                        runCatching {
+                            repostTracker.markFailed(
+                                listing.updateId,
+                                waitingPublisher.destination,
+                                IllegalStateException("Previous destination failed; sequential batch will be retried"),
+                            )
+                        }.onFailure(error::addSuppressed)
+                    }
+                }
+                outcomes += publisher.destination to outcome
+                if (outcome.isFailure) break
             }
             val receipts = outcomes.mapNotNull { it.second.getOrNull() }
             val failures = reservationFailures + outcomes.mapNotNull { (destination, result) ->

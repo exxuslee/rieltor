@@ -36,7 +36,7 @@ class TikTokPhotoPublisherTest {
             tikTokMode = mode,
             dispatcher = TikTokPublishDispatcher(
                 repository = throttle,
-                maxPostsPer24Hours = 10,
+                maxPostsPer24Hours = 12,
                 minPostIntervalMillis = 0,
                 dailyLimitCooldownMillis = TikTokPublishDispatcher.WINDOW_MILLIS,
             ),
@@ -165,7 +165,7 @@ class TikTokPhotoPublisherTest {
             json = json,
             dispatcher = TikTokPublishDispatcher(
                 repository = throttle,
-                maxPostsPer24Hours = 10,
+                maxPostsPer24Hours = 12,
                 minPostIntervalMillis = 0,
                 dailyLimitCooldownMillis = 24 * 60 * 60 * 1_000L,
                 nowMillis = { 1_000L },
@@ -335,7 +335,7 @@ class TikTokPhotoPublisherTest {
             tikTokMode = TikTokMode.DRAFT,
             dispatcher = TikTokPublishDispatcher(
                 repository = throttle,
-                maxPostsPer24Hours = 10,
+                maxPostsPer24Hours = 12,
                 minPostIntervalMillis = 0,
                 dailyLimitCooldownMillis = 24 * 60 * 60 * 1_000L,
             ),

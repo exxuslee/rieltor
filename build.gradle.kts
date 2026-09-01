@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ktor)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.androidx.room)
     application
 }
 
@@ -21,6 +23,7 @@ application {
 }
 
 repositories {
+    google()
     mavenCentral()
     maven { url = uri("https://mvn.mchv.eu/repository/mchv/") }
 }
@@ -43,7 +46,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.dotenv.kotlin)
-    implementation(libs.sqlite.jdbc)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.sqlite.bundled)
+    ksp(libs.androidx.room.compiler)
     implementation(libs.imageio.webp)
     implementation(libs.metadata.extractor)
     implementation(platform(libs.koin.bom))
@@ -62,4 +67,8 @@ dependencies {
 
 kotlin {
     jvmToolchain(21)
+}
+
+room {
+    schemaDirectory("$projectDir/schemas")
 }

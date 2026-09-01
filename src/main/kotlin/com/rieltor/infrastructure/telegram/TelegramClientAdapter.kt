@@ -201,10 +201,25 @@ class TelegramClientAdapter(
             repeat(DELIVERY_MAX_ATTEMPTS) { attempt ->
                 try {
                     val telegramClient = client ?: return
-                    val latestMessages = messages.map { original ->
-                        fetchLatestMessage(telegramClient, original) ?: original.also { fallback ->
-                            pendingMessageContents[original.key()]?.let { latestContent ->
-                                fallback.content = latestContent
+                    val latestMessages = buildList {
+                        for (original in messages) {
+                            when (val refreshed = fetchLatestMessage(telegramClient, original)) {
+                                is TelegramMessageRefresh.Found -> add(refreshed.message)
+                                TelegramMessageRefresh.NotFound -> {
+                                    logger.info(
+                                        "Telegram message was deleted before repost; skipping it. " +
+                                            "chatId={}, messageId={}",
+                                        original.chatId,
+                                        original.id,
+                                    )
+                                    return
+                                }
+
+                                TelegramMessageRefresh.Unavailable -> add(original.also { fallback ->
+                                    pendingMessageContents[original.key()]?.let { latestContent ->
+                                        fallback.content = latestContent
+                                    }
+                                })
                             }
                         }
                     }
@@ -243,18 +258,26 @@ class TelegramClientAdapter(
     private suspend fun fetchLatestMessage(
         telegramClient: SimpleTelegramClient,
         original: TdApi.Message,
-    ): TdApi.Message? {
+    ): TelegramMessageRefresh {
         repeat(GET_MESSAGE_MAX_ATTEMPTS) { attempt ->
             try {
-                return telegramClient.send(TdApi.GetMessage(original.chatId, original.id))
-                    .get(GET_MESSAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                return TelegramMessageRefresh.Found(
+                    telegramClient.send(TdApi.GetMessage(original.chatId, original.id))
+                        .get(GET_MESSAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS),
+                )
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
+                val refreshFailure = error.telegramRefreshFailure()
+                when (refreshFailure) {
+                    TelegramRefreshFailure.MESSAGE_NOT_FOUND -> return TelegramMessageRefresh.NotFound
+
+                    else -> Unit
+                }
                 if (attempt + 1 < GET_MESSAGE_MAX_ATTEMPTS) {
                     delay(GET_MESSAGE_RETRY_DELAY_MILLIS * (attempt + 1))
                 } else {
-                    if (error is java.util.concurrent.TimeoutException) {
+                    if (refreshFailure == TelegramRefreshFailure.TIMEOUT) {
                         logger.warn(
                             "Could not refresh Telegram message before repost; using content received via updates. " +
                                 "chatId={}, messageId={}, reason=timeout",
@@ -273,7 +296,7 @@ class TelegramClientAdapter(
                 }
             }
         }
-        return null
+        return TelegramMessageRefresh.Unavailable
     }
 
     private fun isMonitored(message: TdApi.Message): Boolean =
@@ -315,4 +338,31 @@ class TelegramClientAdapter(
         const val DELIVERY_MAX_ATTEMPTS = 3
         const val DELIVERY_RETRY_DELAY_MILLIS = 60_000L
     }
+}
+
+private sealed interface TelegramMessageRefresh {
+    data class Found(val message: TdApi.Message) : TelegramMessageRefresh
+    data object NotFound : TelegramMessageRefresh
+    data object Unavailable : TelegramMessageRefresh
+}
+
+internal enum class TelegramRefreshFailure {
+    MESSAGE_NOT_FOUND,
+    TIMEOUT,
+}
+
+internal fun Throwable.telegramRefreshFailure(): TelegramRefreshFailure? {
+    var current: Throwable? = this
+    val visited = HashSet<Throwable>()
+    while (current != null && visited.add(current)) {
+        when (current) {
+            is TelegramError -> if (current.errorCode == 404) {
+                return TelegramRefreshFailure.MESSAGE_NOT_FOUND
+            }
+
+            is java.util.concurrent.TimeoutException -> return TelegramRefreshFailure.TIMEOUT
+        }
+        current = current.cause
+    }
+    return null
 }

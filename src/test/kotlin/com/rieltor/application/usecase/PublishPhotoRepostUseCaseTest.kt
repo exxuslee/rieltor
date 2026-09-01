@@ -280,6 +280,24 @@ class PublishPhotoRepostUseCaseTest {
     }
 
     @Test
+    fun `first destination failure stops the sequential batch`() = runBlocking {
+        val jobs = FakeJobs()
+        val tikTok = FakePublisher(failure = IllegalStateException("TikTok unavailable"))
+        val threads = FakePublisher(destination = RepostDestination.THREADS, maxPhotoCount = 20)
+        val service = PublishPhotoRepostUseCase(
+            repostTracker = TelegramRepostTracker(jobs),
+            mediaStorage = FakeStorage(),
+            publishers = listOf(tikTok, threads),
+            allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
+        )
+
+        assertFailsWith<RepostPublishException> { service.handle(message(22)) }
+
+        assertEquals(1, tikTok.calls)
+        assertEquals(0, threads.calls)
+    }
+
+    @Test
     fun `publishes destinations sequentially to limit resource pressure`() = runBlocking {
         val jobs = FakeJobs()
         val activeCalls = AtomicInteger(0)

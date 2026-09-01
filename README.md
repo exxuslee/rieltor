@@ -12,7 +12,8 @@ rieltorSite/
 │   ├── css/, js/, images/
 │   └── scripts/           # Проверки и генерация SEO-страниц
 ├── src/main/kotlin/       # Слои domain/application/infrastructure/web
-├── rieltor.db             # Локальная SQLite рядом с JAR (не в Git)
+├── secrets.json           # Секреты и OAuth-токены (не в Git)
+├── rieltor.db             # Только накопительные данные Room/SQLite (не в Git)
 ├── media/                 # Временные публичные изображения (не в Git)
 ├── tdlib-session-id*/     # Telegram-сессия (не в Git)
 ├── src/main/resources/    # logback.xml
@@ -34,37 +35,23 @@ python -m http.server 4173
 
 ## Первичная настройка backend
 
-Telegram API-настройки и токены авторизации TikTok/Threads/Google Drive хранятся в `rieltor.db`. При первом запуске отсутствующие
-Telegram API-настройки импортируются из переменных окружения или `.env`. `TELEGRAM_USER_ID` в SQLite не сохраняется:
-он обязательно читается при каждом запуске из окружения/`.env` и выбирает папку
-`tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR. При обновлении старая строка `TELEGRAM_USER_ID` автоматически удаляется
-из `app_secrets`.
+Все секреты приложения и OAuth-токены TikTok/Threads/Google Drive хранятся в локальном `secrets.json`. Файл исключён
+из Git, а при обновлении токена приложение атомарно перезаписывает его. Пример структуры находится в
+`secrets.example.json`; путь можно изменить через `APP_SECRETS_PATH`. Room/SQLite содержит только накапливаемые данные:
+очередь, историю репостов и состояние лимитов.
 
-`TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `THREADS_APP_ID`, `THREADS_APP_SECRET`, `GOOGLE_CLIENT_ID` и
-`GOOGLE_CLIENT_SECRET` в SQLite не сохраняются и при
-каждом запуске обязательно читаются из переменных окружения или локального `.env`.
+При первом запуске отсутствующие поля `secrets` могут быть однократно импортированы из окружения или `.env`, после чего
+приложение читает их из JSON. Значения в секции `tokens` заполняются OAuth-подключениями автоматически.
 
-Запуск:
+Запуск после заполнения `secrets.json`:
 
 ```powershell
-$env:TIKTOK_CLIENT_KEY = "ваш_client_key"
-$env:TIKTOK_CLIENT_SECRET = "ваш_client_secret"
-$env:TIKTOK_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/tiktok/callback"
-$env:THREADS_APP_ID = "ваш_threads_app_id"
-$env:THREADS_APP_SECRET = "ваш_threads_app_secret"
-$env:THREADS_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/threads/callback"
-$env:GOOGLE_CLIENT_ID = "ваш_client_id.apps.googleusercontent.com"
-$env:GOOGLE_CLIENT_SECRET = "ваш_client_secret"
-$env:GOOGLE_REDIRECT_URI = "https://api.rieltor.dpdns.org/auth/google/callback"
-$env:TELEGRAM_USER_ID = "ваш_telegram_user_id"
-$env:LANDING_TELEGRAM_BOT_TOKEN = "токен_бота_для_форм"
-$env:LANDING_TELEGRAM_CHAT_ID = "ваш_chat_id"
 .\gradlew.bat run
 ```
 
 ### Заявки с лендинга
 
-Формы на `https://rieltor.dpdns.org` отправляют JSON на `POST /v1/landing/leads`; backend проверяет тип и поля формы, ограничивает частые запросы и передаёт сообщение в Telegram Bot API. Токен бота и chat ID хранятся только в окружении или `.env` через `LANDING_TELEGRAM_BOT_TOKEN` и `LANDING_TELEGRAM_CHAT_ID`. После их добавления перезапустите backend.
+Формы на `https://rieltor.dpdns.org` отправляют JSON на `POST /v1/landing/leads`; backend проверяет тип и поля формы, ограничивает частые запросы и передаёт сообщение в Telegram Bot API. Токен бота и chat ID находятся в секции `secrets` файла `secrets.json`.
 
 Сервер стартует на `http://localhost:8383`. Пользовательский Telegram-клиент TDLight открывает сессию из
 `tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR. Фото из настроенных Telegram-чатов независимо передаются через TikTok Photo Direct
@@ -78,10 +65,13 @@ Post; caption перед публикацией очищается от внут
 ### Поток обработки backend
 
 TDLib-адаптер только получает сообщения, собирает альбомы и передаёт подготовленные сообщения через
-`TelegramMessageSource`. Новое сообщение передаётся в repost-конвейер через 30 минут; перед передачей backend повторно
+`TelegramMessageSource`. Новое сообщение передаётся в repost-конвейер через 20 минут; перед передачей backend повторно
 получает его из TDLib, поэтому в публикацию попадает актуальный отредактированный текст или подпись.
-`TelegramRepostCoordinator` наблюдает поток последовательно, поэтому два сообщения не обрабатываются
-параллельно. Назначения одного сообщения также публикуются по очереди (сначала TikTok, затем Threads), чтобы не создавать
+Сообщение без распознанной цены или Google Drive-ссылки получает отдельный отказной статус и не ставится на публикацию.
+Остальные сообщения сохраняются в постоянной FIFO-очереди SQLite на 64 ожидающих позиции, поэтому очередь переживает
+перезапуск backend. `TelegramRepostCoordinator` обрабатывает только её голову, поэтому два сообщения не обрабатываются
+параллельно. Назначения одного сообщения также публикуются по очереди (сначала TikTok, затем Threads); ошибка TikTok
+останавливает пакет до повторной попытки и не позволяет Threads уйти вперёд. Это также не создаёт
 пики CPU, памяти и сетевых соединений на VM с 1 OCPU/1 ГБ RAM. Количество загружаемых из Drive и передаваемых в один
 сервис фотографий задаётся через `REPOST_MAX_PHOTO_COUNT` и по умолчанию ограничено 10. Google Drive, TikTok и Threads подключены к application use case через отдельные интерфейсы и не импортируются в
 Telegram transport. Состояние TDLib-соединения и состояние repost-конвейера публикуются раздельными `StateFlow`, а их
@@ -91,8 +81,9 @@ Telegram transport. Состояние TDLib-соединения и состо�
 темы использует как ключ объявления. Каждое входящее сообщение сохраняется в `received_telegram_messages`, а успешно
 результат каждого назначения — в `repost_publications`. Повтор с новым Telegram message ID, но тем же ключом
 `destination + messageThreadId + цена + адрес` не публикуется повторно именно в этом сервисе. Если TikTok уже успешен,
-а Threads временно упал, повтор затронет только Threads. Если цену или
-адрес извлечь невозможно, сохраняется только защита от повторной доставки того же Telegram update ID.
+а Threads временно упал, повтор затронет только Threads. Если адрес извлечь невозможно, сохраняется защита по Telegram
+update ID; отсутствие цены блокирует постановку в очередь. Завершённая история Telegram старше 30 дней удаляется
+фоновой задачей каждый час, незавершённая очередь не очищается.
 
 ### Подключение Google Drive
 
@@ -100,7 +91,7 @@ Telegram transport. Состояние TDLib-соединения и состо�
 redirect URIs добавьте `https://api.rieltor.dpdns.org/auth/google/callback`. Если приложение находится в режиме Testing,
 добавьте рабочий Google-аккаунт в Test users. После запуска backend откройте единую страницу подключений
 `https://rieltor.dpdns.org/connect.html`, войдите под аккаунтом с доступом к папкам и подтвердите read-only доступ.
-Refresh token сохранится в локальной SQLite-базе и будет обновлять доступ без повторного входа.
+Refresh token сохранится в `secrets.json` и будет обновлять доступ без повторного входа.
 OAuth-форма сразу подсказывает публичный аккаунт `irinalinnik.lee@gmail.com`; отдельная переменная
 `GOOGLE_ACCOUNT_HINT` не используется.
 
@@ -108,9 +99,9 @@ OAuth-форма сразу подсказывает публичный акка
 
 В Meta for Developers создайте приложение с Threads API, укажите callback
 `https://api.rieltor.dpdns.org/auth/threads/callback` и разрешения `threads_basic`, `threads_content_publish`.
-Добавьте `THREADS_APP_ID`, `THREADS_APP_SECRET` и `THREADS_REDIRECT_URI` в окружение или `.env`, перезапустите backend,
+Добавьте `THREADS_APP_ID`, `THREADS_APP_SECRET` и `THREADS_REDIRECT_URI` в `secrets.json`, перезапустите backend,
 затем откройте `https://rieltor.dpdns.org/connect.html` и подключите рабочий Threads-аккаунт. Долгоживущий пользовательский
-токен хранится в SQLite и обновляется отдельно от TikTok. Автоматическая публикация в Threads временно отключена по
+токен хранится в том же JSON и обновляется отдельно от TikTok. Автоматическая публикация в Threads временно отключена по
 умолчанию; для её возврата необходимо явно установить `THREADS_ENABLED=true`.
 
 Режим TikTok задаётся через `TIKTOK_MODE`: `POST` (значение по умолчанию) сразу публикует в TikTok, а `DRAFT` загружает
@@ -119,10 +110,11 @@ OAuth-форма сразу подсказывает публичный акка
 публикует сразу, если аккаунт подключён.
 Для `DRAFT` аккаунт должен заново выдать приложению scope `video.upload`, если он отсутствует в текущем токене.
 
-Публикации TikTok в режимах `POST` и `DRAFT` проходят через постоянный диспетчер в SQLite. По умолчанию он пропускает не более 10 попыток за
-скользящие 24 часа и выдерживает минимум 120 минут между ними. Настройки `TIKTOK_MAX_POSTS_PER_24_HOURS` и
-`TIKTOK_MIN_POST_INTERVAL_MINUTES` можно изменить в `.env`. После ответа `spam_risk_too_many_posts` диспетчер блокирует
-новые попытки на `TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS` (по умолчанию 24 часа); пауза сохраняется после перезапуска backend.
+Общий мастер-лимитер находится в `TelegramRepostCoordinator` и применяется к пакету TikTok + Threads до передачи
+сообщения репостерам. Он пропускает не более 36 сообщений за скользящие 24 часа и выдерживает минимум 20 минут между
+пакетами. Настройки `REPOST_MAX_MESSAGES_PER_24_HOURS` и `REPOST_MIN_INTERVAL_MINUTES` можно изменить в `.env`;
+состояние лимитера сохраняется в SQLite и переживает перезапуск backend. Старые переменные с префиксом `TIKTOK_`
+поддерживаются как резервные для обратной совместимости.
 
 ### Мониторинг форумных чатов Telegram
 
@@ -158,7 +150,7 @@ Copy-Item `
   -Force
 ``
 
-Команду нужно выполнять от того же пользователя, которому доступны `rieltor.db` и папка сессии
+Команду нужно выполнять от того же пользователя, которому доступны `secrets.json`, `rieltor.db` и папка сессии
 `tdlib-session-id<TELEGRAM_USER_ID>`. Для работы в фоне используйте уже настроенный сервис `rieltor.service`,
 который ограничивает JVM одним процессором, heap до 384 МБ, direct memory до 128 МБ и IO-пул двумя потоками.
 После замены JAR и unit-файла выполните `sudo systemctl daemon-reload && sudo systemctl restart rieltor.service`.

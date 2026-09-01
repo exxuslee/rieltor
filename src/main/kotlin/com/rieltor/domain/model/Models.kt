@@ -12,12 +12,14 @@ data class StoredTokens(
     val refreshTokenExpiresAt: Long,
 )
 
+@Serializable
 data class StoredGoogleDriveTokens(
     val accessToken: String,
     val refreshToken: String,
     val accessTokenExpiresAt: Long,
 )
 
+@Serializable
 data class StoredThreadsTokens(
     val userId: String,
     val accessToken: String,
@@ -43,6 +45,7 @@ data class TelegramListing(
     val photos: List<TelegramPhoto>,
     val googleDriveLinks: List<String> = emptyList(),
     val repostKey: TelegramRepostKey? = null,
+    val normalizedPrice: String? = repostKey?.price,
 )
 
 data class TelegramRepostKey(
@@ -69,6 +72,7 @@ data class TelegramMonitoredTopic(
 data class TelegramPhoto(
     val fileName: String,
     val content: InputStream,
+    val localPath: String? = null,
 )
 
 data class MediaTextOverlay(

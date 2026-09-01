@@ -47,6 +47,7 @@ internal class TelegramMessageMapper(
                 photos += TelegramPhoto(
                     fileName = localPath.fileName.toString(),
                     content = Files.newInputStream(localPath),
+                    localPath = localPath.toAbsolutePath().normalize().toString(),
                 )
             }
             val sourceId = firstMessage.mediaAlbumId.takeIf { it != 0L } ?: firstMessage.id
@@ -58,6 +59,7 @@ internal class TelegramMessageMapper(
                 photos = photos.toList(),
                 googleDriveLinks = driveLinkExtractor.extract(caption),
                 repostKey = identityExtractor.extract(firstMessage.messageThreadId, caption),
+                normalizedPrice = identityExtractor.extractNormalizedPrice(caption),
             )
         } catch (error: Throwable) {
             photos.forEach { photo -> runCatching { photo.content.close() } }

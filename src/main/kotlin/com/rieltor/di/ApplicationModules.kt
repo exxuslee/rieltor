@@ -1,5 +1,7 @@
 package com.rieltor.di
 
+import com.rieltor.application.orchestration.PersistentRepostMasterLimiter
+import com.rieltor.application.orchestration.RepostMasterLimiter
 import com.rieltor.application.orchestration.TelegramRepostCoordinator
 import com.rieltor.application.port.PhotoRepostHandler
 import com.rieltor.application.port.TelegramMessageSource
@@ -7,10 +9,12 @@ import com.rieltor.application.service.TelegramRepostTracker
 import com.rieltor.application.usecase.PublishPhotoRepostUseCase
 import com.rieltor.domain.repository.*
 import com.rieltor.domain.service.ListingCaptionFormatter
-import com.rieltor.infrastructure.config.ApplicationSettings
-import com.rieltor.infrastructure.config.bootstrapSecrets
-import com.rieltor.infrastructure.config.databasePath
-import com.rieltor.infrastructure.database.*
+import com.rieltor.infrastructure.config.*
+import com.rieltor.infrastructure.database.TelegramHistoryCleanupJob
+import com.rieltor.infrastructure.database.local.RoomDatabaseStore
+import com.rieltor.infrastructure.database.repository.TelegramRepostQueueImpl
+import com.rieltor.infrastructure.database.repository.TelegramRepostRepositoryImpl
+import com.rieltor.infrastructure.database.repository.TikTokPublishThrottleRepositoryImpl
 import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.google.GoogleDrivePhotoSource
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
@@ -21,7 +25,6 @@ import com.rieltor.infrastructure.threads.ThreadsAuthService
 import com.rieltor.infrastructure.threads.ThreadsPhotoPublisher
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
 import com.rieltor.infrastructure.tiktok.TikTokPhotoPublisher
-import com.rieltor.infrastructure.tiktok.TikTokPublishDispatcher
 import com.rieltor.web.LandingLeadSender
 import io.github.cdimascio.dotenv.Dotenv
 import io.ktor.client.*
@@ -56,13 +59,15 @@ private fun configurationModule(dotenv: Dotenv) = module {
 }
 
 private val persistenceModule = module {
-    single { SqliteDatabase(databasePath(get())) }
-    single<SecretRepository> { SecretRepositoryImpl(get()) }
-    single<TikTokTokenRepository> { TikTokTokenRepositoryImpl(get()) }
+    single { RoomDatabaseStore(databasePath(get())) }
+    single { JsonCredentialStore(credentialsPath(get())) }
+    single<SecretRepository> { get<JsonCredentialStore>() }
+    single<TikTokTokenRepository> { JsonTikTokTokenRepository(get()) }
     single<TikTokPublishThrottleRepository> { TikTokPublishThrottleRepositoryImpl(get()) }
-    single<GoogleDriveTokenRepository> { GoogleDriveTokenRepositoryImpl(get()) }
-    single<ThreadsTokenRepository> { ThreadsTokenRepositoryImpl(get()) }
+    single<GoogleDriveTokenRepository> { JsonGoogleDriveTokenRepository(get()) }
+    single<ThreadsTokenRepository> { JsonThreadsTokenRepository(get()) }
     single<TelegramRepostRepository> { TelegramRepostRepositoryImpl(get()) }
+    single<TelegramRepostQueue> { TelegramRepostQueueImpl(get()) }
 }
 
 private val networkModule = module {
@@ -100,7 +105,15 @@ private val applicationModule = module {
         )
     }
     single<PhotoRepostHandler> { get<PublishPhotoRepostUseCase>() }
-    single { TelegramRepostCoordinator(get(), get()) }
+    single<RepostMasterLimiter> {
+        val settings = get<ApplicationSettings>()
+        PersistentRepostMasterLimiter(
+            repository = get(),
+            maxMessagesPer24Hours = settings.repostMaxMessagesPer24Hours,
+            minIntervalMillis = settings.repostMinIntervalMinutes * 60_000L,
+        )
+    }
+    single { TelegramRepostCoordinator(get(), get(), get(), get()) }
 }
 
 private val integrationModule = module {
@@ -120,15 +133,7 @@ private val integrationModule = module {
     }
     single<PublicMediaStorage> { get<LocalPublicMediaStorage>() }
     single { MediaCleanupJob(get<ApplicationSettings>().mediaDirectory) }
-    single {
-        val settings = get<ApplicationSettings>()
-        TikTokPublishDispatcher(
-            repository = get(),
-            maxPostsPer24Hours = settings.tikTokMaxPostsPer24Hours,
-            minPostIntervalMillis = settings.tikTokMinPostIntervalMinutes * 60_000L,
-            dailyLimitCooldownMillis = settings.tikTokDailyLimitCooldownHours * 3_600_000L,
-        )
-    }
+    single { TelegramHistoryCleanupJob(get()) }
     single {
         TikTokPhotoPublisher(
             httpClient = get(),
@@ -136,7 +141,6 @@ private val integrationModule = module {
             json = get(),
             tikTokMode = get<ApplicationSettings>().tikTokMode,
             maxPhotoCount = get<ApplicationSettings>().repostMaxPhotoCount,
-            dispatcher = get(),
         )
     }
     single { ThreadsPhotoPublisher(get(), get(), get()) }

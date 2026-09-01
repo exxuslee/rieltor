@@ -23,12 +23,21 @@ object SecretNames {
     const val LANDING_TELEGRAM_CHAT_ID = "LANDING_TELEGRAM_CHAT_ID"
     const val PUBLIC_BASE_URL = "PUBLIC_BASE_URL"
 
-    val sqliteNames = listOf(
+    val fileNames = listOf(
+        TIKTOK_CLIENT_KEY,
+        TIKTOK_CLIENT_SECRET,
         TIKTOK_REDIRECT_URI,
+        GOOGLE_CLIENT_ID,
+        GOOGLE_CLIENT_SECRET,
         GOOGLE_REDIRECT_URI,
+        THREADS_APP_ID,
+        THREADS_APP_SECRET,
         THREADS_REDIRECT_URI,
         TELEGRAM_API_ID,
         TELEGRAM_API_HASH,
+        TELEGRAM_USER_ID,
+        LANDING_TELEGRAM_BOT_TOKEN,
+        LANDING_TELEGRAM_CHAT_ID,
         PUBLIC_BASE_URL,
     )
 }
@@ -44,8 +53,8 @@ data class ApplicationSettings(
     val tikTokClientSecret: String,
     val tikTokRedirectUri: String,
     val tikTokMode: TikTokMode = TikTokMode.POST,
-    val tikTokMaxPostsPer24Hours: Int = DEFAULT_TIKTOK_MAX_POSTS_PER_24_HOURS,
-    val tikTokMinPostIntervalMinutes: Long = DEFAULT_TIKTOK_MIN_POST_INTERVAL_MINUTES,
+    val repostMaxMessagesPer24Hours: Int = DEFAULT_REPOST_MAX_MESSAGES_PER_24_HOURS,
+    val repostMinIntervalMinutes: Long = DEFAULT_REPOST_MIN_INTERVAL_MINUTES,
     val tikTokDailyLimitCooldownHours: Long = DEFAULT_TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS,
     val repostMaxPhotoCount: Int = DEFAULT_REPOST_MAX_PHOTO_COUNT,
     val googleClientId: String = "",
@@ -69,7 +78,7 @@ data class ApplicationSettings(
             val redirectUri = secrets.require(SecretNames.TIKTOK_REDIRECT_URI)
             val redirect = URI(redirectUri)
             val inferredBaseUrl = "${redirect.scheme}://${redirect.authority}"
-            val telegramUserId = requireEnvironmentOrDotenv(SecretNames.TELEGRAM_USER_ID, dotenv)
+            val telegramUserId = secrets.require(SecretNames.TELEGRAM_USER_ID)
                 .toLongOrNull()
                 ?: error("Invalid ${SecretNames.TELEGRAM_USER_ID}: expected a numeric Telegram user ID")
             return ApplicationSettings(
@@ -86,23 +95,23 @@ data class ApplicationSettings(
                 telegramApiId = secrets.require(SecretNames.TELEGRAM_API_ID).toInt(),
                 telegramApiHash = secrets.require(SecretNames.TELEGRAM_API_HASH),
                 telegramSessionDirectory = Path.of("tdlib-session-id$telegramUserId"),
-                tikTokClientKey = requireEnvironmentOrDotenv(SecretNames.TIKTOK_CLIENT_KEY, dotenv),
-                tikTokClientSecret = requireEnvironmentOrDotenv(SecretNames.TIKTOK_CLIENT_SECRET, dotenv),
+                tikTokClientKey = secrets.require(SecretNames.TIKTOK_CLIENT_KEY),
+                tikTokClientSecret = secrets.require(SecretNames.TIKTOK_CLIENT_SECRET),
                 tikTokRedirectUri = redirectUri,
                 tikTokMode = tikTokMode(dotenv),
-                tikTokMaxPostsPer24Hours = tikTokMaxPostsPer24Hours(dotenv),
-                tikTokMinPostIntervalMinutes = tikTokMinPostIntervalMinutes(dotenv),
+                repostMaxMessagesPer24Hours = repostMaxMessagesPer24Hours(dotenv),
+                repostMinIntervalMinutes = repostMinIntervalMinutes(dotenv),
                 tikTokDailyLimitCooldownHours = tikTokDailyLimitCooldownHours(dotenv),
                 repostMaxPhotoCount = repostMaxPhotoCount(dotenv),
-                googleClientId = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_ID, dotenv),
-                googleClientSecret = requireEnvironmentOrDotenv(SecretNames.GOOGLE_CLIENT_SECRET, dotenv),
+                googleClientId = secrets.require(SecretNames.GOOGLE_CLIENT_ID),
+                googleClientSecret = secrets.require(SecretNames.GOOGLE_CLIENT_SECRET),
                 googleRedirectUri = secrets.require(SecretNames.GOOGLE_REDIRECT_URI),
-                threadsAppId = environmentOrDotenv(SecretNames.THREADS_APP_ID, dotenv).orEmpty(),
-                threadsAppSecret = environmentOrDotenv(SecretNames.THREADS_APP_SECRET, dotenv).orEmpty(),
+                threadsAppId = secrets.get(SecretNames.THREADS_APP_ID).orEmpty(),
+                threadsAppSecret = secrets.get(SecretNames.THREADS_APP_SECRET).orEmpty(),
                 threadsRedirectUri = secrets.get(SecretNames.THREADS_REDIRECT_URI).orEmpty(),
                 threadsEnabled = booleanSetting(dotenv, "THREADS_ENABLED", false),
-                landingTelegramBotToken = environmentOrDotenv(SecretNames.LANDING_TELEGRAM_BOT_TOKEN, dotenv).orEmpty(),
-                landingTelegramChatId = environmentOrDotenv(SecretNames.LANDING_TELEGRAM_CHAT_ID, dotenv).orEmpty(),
+                landingTelegramBotToken = secrets.get(SecretNames.LANDING_TELEGRAM_BOT_TOKEN).orEmpty(),
+                landingTelegramChatId = secrets.get(SecretNames.LANDING_TELEGRAM_CHAT_ID).orEmpty(),
             )
         }
     }
@@ -115,6 +124,9 @@ enum class TikTokMode {
 
 fun databasePath(dotenv: Dotenv): Path =
     Path.of(environmentOrDotenv("APP_DB_PATH", dotenv) ?: "rieltor.db")
+
+fun credentialsPath(dotenv: Dotenv): Path =
+    Path.of(environmentOrDotenv("APP_SECRETS_PATH", dotenv) ?: "secrets.json")
 
 fun serverPort(dotenv: Dotenv): Int {
     val configured = environmentOrDotenv("PORT", dotenv) ?: return DEFAULT_SERVER_PORT
@@ -138,10 +150,26 @@ fun tikTokMode(dotenv: Dotenv): TikTokMode {
 }
 
 fun tikTokMaxPostsPer24Hours(dotenv: Dotenv): Int =
-    positiveInt(dotenv, "TIKTOK_MAX_POSTS_PER_24_HOURS", DEFAULT_TIKTOK_MAX_POSTS_PER_24_HOURS, 1..100)
+    repostMaxMessagesPer24Hours(dotenv)
 
 fun tikTokMinPostIntervalMinutes(dotenv: Dotenv): Long =
-    positiveLong(dotenv, "TIKTOK_MIN_POST_INTERVAL_MINUTES", DEFAULT_TIKTOK_MIN_POST_INTERVAL_MINUTES, 1L..1_440L)
+    repostMinIntervalMinutes(dotenv)
+
+fun repostMaxMessagesPer24Hours(dotenv: Dotenv): Int {
+    val configured = environmentOrDotenv("REPOST_MAX_MESSAGES_PER_24_HOURS", dotenv)
+        ?: environmentOrDotenv("TIKTOK_MAX_POSTS_PER_24_HOURS", dotenv)
+        ?: return DEFAULT_REPOST_MAX_MESSAGES_PER_24_HOURS
+    return configured.toIntOrNull()?.takeIf { it in 1..100 }
+        ?: error("Invalid REPOST_MAX_MESSAGES_PER_24_HOURS: expected a number from 1 to 100")
+}
+
+fun repostMinIntervalMinutes(dotenv: Dotenv): Long {
+    val configured = environmentOrDotenv("REPOST_MIN_INTERVAL_MINUTES", dotenv)
+        ?: environmentOrDotenv("TIKTOK_MIN_POST_INTERVAL_MINUTES", dotenv)
+        ?: return DEFAULT_REPOST_MIN_INTERVAL_MINUTES
+    return configured.toLongOrNull()?.takeIf { it in 1L..1_440L }
+        ?: error("Invalid REPOST_MIN_INTERVAL_MINUTES: expected a number from 1 to 1440")
+}
 
 fun tikTokDailyLimitCooldownHours(dotenv: Dotenv): Long =
     positiveLong(dotenv, "TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS", DEFAULT_TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS, 1L..48L)
@@ -170,23 +198,19 @@ private fun positiveLong(dotenv: Dotenv, name: String, default: Long, range: Lon
 }
 
 fun bootstrapSecrets(repository: SecretRepository, dotenv: Dotenv) {
-    SecretNames.sqliteNames.forEach { name ->
+    SecretNames.fileNames.forEach { name ->
         environmentOrDotenv(name, dotenv)?.let { repository.putIfAbsent(name, it) }
     }
 }
 
 private fun SecretRepository.require(name: String): String =
     get(name) ?: error(
-        "Missing '$name' in the local SQLite database. " +
-            "Provide it once as an environment/.env value to bootstrap the database."
+        "Missing '$name' in the local secrets JSON file. " +
+            "Provide it once as an environment/.env value to bootstrap the file."
     )
 
 private fun environmentOrDotenv(name: String, dotenv: Dotenv): String? =
     (System.getenv(name) ?: dotenv.get(name))?.takeIf { it.isNotBlank() }
-
-private fun requireEnvironmentOrDotenv(name: String, dotenv: Dotenv): String =
-    environmentOrDotenv(name, dotenv)
-        ?: error("Missing '$name' in the process environment or .env file.")
 
 private fun parseTelegramMonitoredTopics(
     chatIdValue: String?,
@@ -236,6 +260,8 @@ private fun parseTelegramMonitoredTopics(
 private const val DEFAULT_SERVER_PORT = 8383
 const val DEFAULT_REPOST_MAX_PHOTO_COUNT = 10
 const val TIKTOK_API_MAX_PHOTO_COUNT = 35
-const val DEFAULT_TIKTOK_MAX_POSTS_PER_24_HOURS = 10
-const val DEFAULT_TIKTOK_MIN_POST_INTERVAL_MINUTES = 120L
+const val DEFAULT_REPOST_MAX_MESSAGES_PER_24_HOURS = 36
+const val DEFAULT_REPOST_MIN_INTERVAL_MINUTES = 20L
+const val DEFAULT_TIKTOK_MAX_POSTS_PER_24_HOURS = DEFAULT_REPOST_MAX_MESSAGES_PER_24_HOURS
+const val DEFAULT_TIKTOK_MIN_POST_INTERVAL_MINUTES = DEFAULT_REPOST_MIN_INTERVAL_MINUTES
 const val DEFAULT_TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS = 24L
