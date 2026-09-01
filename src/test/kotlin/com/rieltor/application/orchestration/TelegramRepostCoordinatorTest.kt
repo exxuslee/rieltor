@@ -8,28 +8,16 @@ import com.rieltor.application.model.TelegramSourceState
 import com.rieltor.application.port.PhotoRepostHandler
 import com.rieltor.application.port.TelegramMessageSource
 import com.rieltor.application.usecase.RepostPublishException
-import com.rieltor.domain.model.PublishReceipt
-import com.rieltor.domain.model.RepostDestination
-import com.rieltor.domain.model.RepostFailure
-import com.rieltor.domain.model.RepostResult
-import com.rieltor.domain.model.TelegramPhotoMessage
+import com.rieltor.domain.model.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 class TelegramRepostCoordinatorTest {
     @Test
@@ -179,7 +167,7 @@ class TelegramRepostCoordinatorTest {
         assertEquals(RepostFlowState.Failed(null, "TDLib startup failed"), coordinator.state.value)
     }
 
-    private fun message(updateId: Long) = TelegramPhotoMessage(
+    private fun message(updateId: Long) = TelegramListing(
         updateId = updateId,
         chatId = -1001,
         messageThreadId = 5,
@@ -190,10 +178,10 @@ class TelegramRepostCoordinatorTest {
     private class FakeTelegramMessageSource(
         private val failOnStart: Boolean = false,
     ) : TelegramMessageSource {
-        private val channel = Channel<TelegramPhotoMessage>(Channel.UNLIMITED)
+        private val channel = Channel<TelegramListing>(Channel.UNLIMITED)
         private val mutableState = MutableStateFlow<TelegramSourceState>(TelegramSourceState.Stopped)
 
-        override val messages: Flow<TelegramPhotoMessage> = channel.receiveAsFlow()
+        override val messages: Flow<TelegramListing> = channel.receiveAsFlow()
         override val state: StateFlow<TelegramSourceState> = mutableState
         var closed = false
             private set
@@ -203,7 +191,7 @@ class TelegramRepostCoordinatorTest {
             mutableState.value = TelegramSourceState.Ready
         }
 
-        suspend fun emit(message: TelegramPhotoMessage) {
+        suspend fun emit(message: TelegramListing) {
             channel.send(message)
         }
 

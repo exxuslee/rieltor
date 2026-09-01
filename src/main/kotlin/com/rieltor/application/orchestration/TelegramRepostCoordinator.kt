@@ -7,18 +7,11 @@ import com.rieltor.application.port.PhotoRepostHandler
 import com.rieltor.application.port.TelegramMessageSource
 import com.rieltor.application.usecase.RepostPublishException
 import com.rieltor.domain.model.RepostResult
-import com.rieltor.domain.model.TelegramPhotoMessage
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import com.rieltor.domain.model.TelegramListing
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -75,7 +68,7 @@ class TelegramRepostCoordinator(
         }
     }
 
-    private suspend fun process(message: TelegramPhotoMessage) {
+    private suspend fun process(message: TelegramListing) {
         logger.info("Independent repost processing started. updateId={}", message.updateId)
         mutableState.value = RepostFlowState.Processing(message.updateId)
         try {

@@ -55,6 +55,8 @@ object GoogleDriveLinkParser {
         }
         return matches.sortedBy { it.first }.map { it.second }.distinct()
     }
+
+    fun extract(links: List<String>): List<DriveTarget> = links.flatMap(::extract).distinct()
 }
 
 class GoogleDrivePhotoSource(
@@ -65,11 +67,9 @@ class GoogleDrivePhotoSource(
     private val logger = LoggerFactory.getLogger(javaClass)
     private val downloadSemaphore = Semaphore(MAX_CONCURRENT_DOWNLOAD_BATCHES)
 
-    override fun containsLink(text: String?): Boolean = GoogleDriveLinkParser.extract(text).isNotEmpty()
-
-    override suspend fun downloadPhotos(text: String?, limit: Int): List<TelegramPhoto> {
+    override suspend fun downloadPhotos(links: List<String>, limit: Int): List<TelegramPhoto> {
         if (limit <= 0) return emptyList()
-        val targets = GoogleDriveLinkParser.extract(text)
+        val targets = GoogleDriveLinkParser.extract(links)
         if (targets.isEmpty()) return emptyList()
 
         logger.info(

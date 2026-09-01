@@ -51,6 +51,11 @@ node scripts/check-seo.mjs
   `TelegramRepostCoordinator` наблюдает этот `Flow` и запускает отдельный application use case для каждого сообщения. Состояния
   соединения и repost-конвейера доступны отдельно через `StateFlow<TelegramSourceState>` и
   `StateFlow<RepostFlowState>`.
+- Весь repost-конвейер использует одну доменную сущность `TelegramListing`: она создаётся из Telegram-сообщения,
+  содержит исходную подпись, локальные фото, отдельно извлечённые Google Drive-ссылки и нормализованный ключ объявления,
+  а затем без промежуточной application-модели передаётся в репозиторий. SQLite-слой преобразует её только во внутренний
+  `TelegramListingRecord`, исключающий неперсистентные потоки фотографий; Drive-ссылки сохраняются в
+  `received_telegram_messages.google_drive_links`.
 - TDLib-маппинг/скачивание и startup-диагностика разделены на `TelegramMessageMapper` и `TelegramDiagnostics`.
   SQLite-доступ также разделён по системам: настройки, TikTok tokens, Threads tokens, Google Drive tokens и Telegram repost history имеют
   отдельные реализации репозиториев.

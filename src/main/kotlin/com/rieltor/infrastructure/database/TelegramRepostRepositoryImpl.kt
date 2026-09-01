@@ -1,16 +1,17 @@
 package com.rieltor.infrastructure.database
 
-import com.rieltor.domain.model.ReceivedTelegramMessage
 import com.rieltor.domain.model.RepostDestination
+import com.rieltor.domain.model.TelegramListing
 import com.rieltor.domain.model.TelegramMessageRegistration
 import com.rieltor.domain.repository.TelegramRepostRepository
 import java.sql.Connection
 import java.time.Instant
 
 class TelegramRepostRepositoryImpl(private val database: SqliteDatabase) : TelegramRepostRepository {
-    override fun register(message: ReceivedTelegramMessage, destination: RepostDestination) =
+    override fun register(listing: TelegramListing, destination: RepostDestination) =
         database.connection().use { connection ->
             connection.inTransaction {
+                val message = TelegramListingRecord.from(listing)
                 insertReceivedIfMissing(connection, message)
                 findPublication(connection, message.updateId, destination)?.let { current ->
                     if (current.status != "FAILED") return@inTransaction TelegramMessageRegistration.Duplicate(
@@ -75,22 +76,23 @@ class TelegramRepostRepositoryImpl(private val database: SqliteDatabase) : Teleg
         }
     }
 
-    private fun insertReceivedIfMissing(connection: Connection, message: ReceivedTelegramMessage) {
+    private fun insertReceivedIfMissing(connection: Connection, message: TelegramListingRecord) {
         connection.prepareStatement(
             """INSERT OR IGNORE INTO received_telegram_messages(
-               telegram_update_id,chat_id,message_thread_id,normalized_price,normalized_address,caption,status,
+               telegram_update_id,chat_id,message_thread_id,normalized_price,normalized_address,caption,google_drive_links,status,
                duplicate_of_update_id,error,received_at,updated_at)
-               VALUES(?,?,?,?,?,?,'RECEIVED',NULL,NULL,?,?)"""
+               VALUES(?,?,?,?,?,?,?,'RECEIVED',NULL,NULL,?,?)"""
         ).use { statement ->
             val time = now()
             statement.setLong(1, message.updateId)
             statement.setLong(2, message.chatId)
             statement.setLong(3, message.messageThreadId)
-            statement.setString(4, message.repostKey?.price)
-            statement.setString(5, message.repostKey?.address)
+            statement.setString(4, message.normalizedPrice)
+            statement.setString(5, message.normalizedAddress)
             statement.setString(6, message.caption)
-            statement.setLong(7, time)
+            statement.setString(7, message.googleDriveLinksJson)
             statement.setLong(8, time)
+            statement.setLong(9, time)
             statement.executeUpdate()
         }
     }
@@ -108,7 +110,7 @@ class TelegramRepostRepositoryImpl(private val database: SqliteDatabase) : Teleg
             }
         }
 
-    private fun findActive(connection: Connection, message: ReceivedTelegramMessage, destination: RepostDestination): Long? =
+    private fun findActive(connection: Connection, message: TelegramListingRecord, destination: RepostDestination): Long? =
         connection.prepareStatement(
             """SELECT telegram_update_id FROM repost_publications
                WHERE destination=? AND message_thread_id=? AND normalized_price=? AND normalized_address=?
@@ -125,7 +127,7 @@ class TelegramRepostRepositoryImpl(private val database: SqliteDatabase) : Teleg
 
     private fun upsertPublication(
         connection: Connection,
-        message: ReceivedTelegramMessage,
+        message: TelegramListingRecord,
         destination: RepostDestination,
         status: String,
         duplicateOf: Long? = null,

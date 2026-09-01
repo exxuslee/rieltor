@@ -66,6 +66,7 @@ class SqliteDatabase(private val path: Path) {
                         normalized_price TEXT,
                         normalized_address TEXT,
                         caption TEXT,
+                        google_drive_links TEXT NOT NULL DEFAULT '[]',
                         status TEXT NOT NULL CHECK (
                             status IN ('RECEIVED', 'PROCESSING', 'PUBLISHED', 'DUPLICATE', 'FAILED')
                         ),
@@ -149,7 +150,7 @@ class SqliteDatabase(private val path: Path) {
                 val schemaVersion = statement.executeQuery("PRAGMA user_version").use { result ->
                     if (result.next()) result.getInt(1) else 0
                 }
-                if (schemaVersion < 6) {
+                if (schemaVersion < 7) {
                     if (schemaVersion < 1) {
                         // Remove the retired Bot API credential and overwrite its SQLite cell.
                         statement.executeUpdate("DELETE FROM app_secrets WHERE name = 'TELEGRAM_BOT_TOKEN'")
@@ -186,7 +187,22 @@ class SqliteDatabase(private val path: Path) {
                             """.trimIndent()
                         )
                     }
-                    statement.execute("PRAGMA user_version=6")
+                    val hasGoogleDriveLinks = statement.executeQuery(
+                        "PRAGMA table_info(received_telegram_messages)"
+                    ).use { columns ->
+                        var found = false
+                        while (columns.next()) {
+                            if (columns.getString("name") == "google_drive_links") found = true
+                        }
+                        found
+                    }
+                    if (!hasGoogleDriveLinks) {
+                        statement.executeUpdate(
+                            "ALTER TABLE received_telegram_messages " +
+                                "ADD COLUMN google_drive_links TEXT NOT NULL DEFAULT '[]'"
+                        )
+                    }
+                    statement.execute("PRAGMA user_version=7")
                     statement.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                     statement.execute("VACUUM")
                 }

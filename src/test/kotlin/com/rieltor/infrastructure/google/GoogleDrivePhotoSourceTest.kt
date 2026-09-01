@@ -62,7 +62,7 @@ class GoogleDrivePhotoSourceTest {
         val source = createSource(HttpClient(engine))
 
         val photos = source.downloadPhotos(
-            "https://drive.google.com/open?id=legacy-folder-id&usp=drive_copy",
+            listOf("https://drive.google.com/open?id=legacy-folder-id&usp=drive_copy"),
             limit = 35,
         )
 
@@ -100,7 +100,7 @@ class GoogleDrivePhotoSourceTest {
         val source = createSource(client)
 
         val photos = source.downloadPhotos(
-            "https://drive.google.com/drive/folders/folder-123456",
+            listOf("https://drive.google.com/drive/folders/folder-123456"),
             limit = 35,
         )
 
@@ -130,7 +130,7 @@ class GoogleDrivePhotoSourceTest {
         val source = createSource(HttpClient(engine))
 
         val photos = source.downloadPhotos(
-            "https://drive.google.com/drive/folders/folder-with-mixed-orientations",
+            listOf("https://drive.google.com/drive/folders/folder-with-mixed-orientations"),
             limit = 2,
         )
 
@@ -164,7 +164,7 @@ class GoogleDrivePhotoSourceTest {
         val source = createSource(HttpClient(engine))
 
         val photos = source.downloadPhotos(
-            "https://drive.google.com/drive/folders/folder-with-broken-photo",
+            listOf("https://drive.google.com/drive/folders/folder-with-broken-photo"),
             limit = 1,
         )
 
@@ -224,7 +224,7 @@ class GoogleDrivePhotoSourceTest {
         )
 
         val photos = source.downloadPhotos(
-            "https://drive.google.com/drive/folders/folder-with-expired-token",
+            listOf("https://drive.google.com/drive/folders/folder-with-expired-token"),
             limit = 1,
         )
 
@@ -257,7 +257,7 @@ class GoogleDrivePhotoSourceTest {
 
         val error = assertFailsWith<GoogleDriveAuthException> {
             source.downloadPhotos(
-                "https://drive.google.com/drive/folders/folder-with-only-broken-photo",
+                listOf("https://drive.google.com/drive/folders/folder-with-only-broken-photo"),
                 limit = 10,
             )
         }

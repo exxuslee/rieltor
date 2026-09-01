@@ -1,7 +1,9 @@
 package com.rieltor.infrastructure.telegram
 
+import com.rieltor.domain.model.TelegramListing
 import com.rieltor.domain.model.TelegramPhoto
-import com.rieltor.domain.model.TelegramPhotoMessage
+import com.rieltor.domain.service.GoogleDriveLinkExtractor
+import com.rieltor.domain.service.TelegramListingIdentityExtractor
 import it.tdlight.client.SimpleTelegramClient
 import it.tdlight.jni.TdApi
 import kotlinx.coroutines.delay
@@ -10,11 +12,14 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
-internal class TelegramMessageMapper {
+internal class TelegramMessageMapper(
+    private val identityExtractor: TelegramListingIdentityExtractor = TelegramListingIdentityExtractor(),
+    private val driveLinkExtractor: GoogleDriveLinkExtractor = GoogleDriveLinkExtractor(),
+) {
     suspend fun map(
         telegramClient: SimpleTelegramClient,
         messages: List<TdApi.Message>,
-    ): TelegramPhotoMessage? {
+    ): TelegramListing? {
         val orderedMessages = messages.sortedBy { it.id }
         val firstMessage = orderedMessages.firstOrNull() ?: return null
         val caption = orderedMessages.asSequence()
@@ -45,12 +50,14 @@ internal class TelegramMessageMapper {
                 )
             }
             val sourceId = firstMessage.mediaAlbumId.takeIf { it != 0L } ?: firstMessage.id
-            return TelegramPhotoMessage(
+            return TelegramListing(
                 updateId = java.lang.Long.rotateLeft(firstMessage.chatId, 17) xor sourceId,
                 chatId = firstMessage.chatId,
                 messageThreadId = firstMessage.messageThreadId,
                 caption = caption,
                 photos = photos.toList(),
+                googleDriveLinks = driveLinkExtractor.extract(caption),
+                repostKey = identityExtractor.extract(firstMessage.messageThreadId, caption),
             )
         } catch (error: Throwable) {
             photos.forEach { photo -> runCatching { photo.content.close() } }

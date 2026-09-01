@@ -1,20 +1,11 @@
 package com.rieltor.infrastructure.database
 
-import com.rieltor.domain.model.StoredTokens
-import com.rieltor.domain.model.StoredGoogleDriveTokens
-import com.rieltor.domain.model.ReceivedTelegramMessage
-import com.rieltor.domain.model.TelegramMessageRegistration
-import com.rieltor.domain.model.TelegramRepostKey
-import com.rieltor.domain.model.RepostDestination
+import com.rieltor.domain.model.*
 import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
-import kotlin.test.assertIs
+import kotlin.test.*
 
 class SqlitePersistenceTest {
     @Test
@@ -60,7 +51,7 @@ class SqlitePersistenceTest {
             connection.createStatement().use { statement ->
                 statement.executeQuery("PRAGMA user_version").use { result ->
                     assertTrue(result.next())
-                    assertEquals(6, result.getInt(1))
+                    assertEquals(7, result.getInt(1))
                 }
             }
         }
@@ -110,12 +101,16 @@ class SqlitePersistenceTest {
                     assertEquals(2, result.getInt(1))
                 }
                 statement.executeQuery(
-                    "SELECT status, duplicate_of_update_id FROM received_telegram_messages " +
+                    "SELECT status, duplicate_of_update_id, google_drive_links FROM received_telegram_messages " +
                         "WHERE telegram_update_id = 102"
                 ).use { result ->
                     assertTrue(result.next())
                     assertEquals("DUPLICATE", result.getString("status"))
                     assertEquals(101, result.getLong("duplicate_of_update_id"))
+                    assertEquals(
+                        "[\"https://drive.google.com/drive/folders/example\"]",
+                        result.getString("google_drive_links"),
+                    )
                 }
                 statement.executeQuery(
                     "SELECT publish_id FROM repost_publications WHERE telegram_update_id = 101 AND destination = 'TIKTOK'"
@@ -204,11 +199,13 @@ class SqlitePersistenceTest {
         }
     }
 
-    private fun message(updateId: Long, key: TelegramRepostKey) = ReceivedTelegramMessage(
+    private fun message(updateId: Long, key: TelegramRepostKey) = TelegramListing(
         updateId = updateId,
         chatId = -1002681732909,
         messageThreadId = key.messageThreadId,
         caption = "Вул. Соборна 1\nЦіна 90000${'$'}",
+        photos = emptyList(),
+        googleDriveLinks = listOf("https://drive.google.com/drive/folders/example"),
         repostKey = key,
     )
 }

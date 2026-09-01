@@ -7,7 +7,6 @@ import com.rieltor.application.service.TelegramRepostTracker
 import com.rieltor.application.usecase.PublishPhotoRepostUseCase
 import com.rieltor.domain.repository.*
 import com.rieltor.domain.service.ListingCaptionFormatter
-import com.rieltor.domain.service.TelegramListingIdentityExtractor
 import com.rieltor.infrastructure.config.ApplicationSettings
 import com.rieltor.infrastructure.config.bootstrapSecrets
 import com.rieltor.infrastructure.config.databasePath
@@ -81,9 +80,8 @@ private val networkModule = module {
 }
 
 private val applicationModule = module {
-    single { TelegramListingIdentityExtractor() }
     single { ListingCaptionFormatter() }
-    single { TelegramRepostTracker(get(), get()) }
+    single { TelegramRepostTracker(get()) }
     single {
         val settings = get<ApplicationSettings>()
         PublishPhotoRepostUseCase(

@@ -21,17 +21,17 @@ class PublishPhotoRepostUseCase(
 ) : PhotoRepostHandler {
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    override suspend fun handle(message: TelegramPhotoMessage): RepostResult {
-        if (allowedSources.none { source -> source.matches(message.chatId, message.messageThreadId) }) {
-            message.closePhotos()
+    override suspend fun handle(listing: TelegramListing): RepostResult {
+        if (allowedSources.none { source -> source.matches(listing.chatId, listing.messageThreadId) }) {
+            listing.closePhotos()
             return RepostResult.IgnoredSource
         }
-        if (message.photos.isEmpty() && externalPhotoSource?.containsLink(message.caption) != true) {
-            message.closePhotos()
+        if (listing.photos.isEmpty() && listing.googleDriveLinks.isEmpty()) {
+            listing.closePhotos()
             return RepostResult.IgnoredContent
         }
         val registrations = publishers.associateWith { publisher ->
-            runCatching { repostTracker.reserve(message, publisher.destination) }
+            runCatching { repostTracker.reserve(listing, publisher.destination) }
         }
         val reservationFailures = registrations.mapNotNull { (publisher, result) ->
             result.exceptionOrNull()?.let { error ->
@@ -42,7 +42,7 @@ class PublishPhotoRepostUseCase(
             .filterValues { result -> result.getOrNull() is TelegramMessageRegistration.Accepted }
             .keys
         if (activePublishers.isEmpty()) {
-            message.closePhotos()
+            listing.closePhotos()
             if (reservationFailures.isNotEmpty()) throw RepostPublishException(reservationFailures)
             return RepostResult.Duplicate
         }
@@ -54,12 +54,12 @@ class PublishPhotoRepostUseCase(
             // This prevents queued posts from pointing at files removed by the media cleanup job.
             activePublishers.forEach { it.awaitPublishSlot() }
             val effectivePhotoLimit = minOf(activePublishers.maxOf { it.maxPhotoCount }, maxPhotoCount)
-            extraPhotos = loadExtraPhotos(message, effectivePhotoLimit)
-            val allPhotos = (message.photos + extraPhotos).take(effectivePhotoLimit)
+            extraPhotos = loadExtraPhotos(listing, effectivePhotoLimit)
+            val allPhotos = (listing.photos + extraPhotos).take(effectivePhotoLimit)
             require(allPhotos.isNotEmpty()) { "At least one Telegram or Google Drive photo is required." }
-            val listing = captionFormatter.filter(message.caption)
-            val caption = captionFormatter.forTikTok(listing)
-            val textOverlay = captionFormatter.photoOverlay(listing)
+            val publicListing = captionFormatter.filter(listing.caption)
+            val caption = captionFormatter.forTikTok(publicListing)
+            val textOverlay = captionFormatter.photoOverlay(publicListing)
             val media = allPhotos.mapIndexed { index, photo ->
                 photo.content.use {
 //                    mediaStorage.store(photo.fileName, it, textOverlay.takeIf { index == 0 })
@@ -75,11 +75,11 @@ class PublishPhotoRepostUseCase(
                         media.map { it.publicUrl }.take(minOf(publisher.maxPhotoCount, maxPhotoCount)),
                         caption,
                     )
-                    repostTracker.markPublished(message.updateId, publisher.destination, receipt.publishId)
+                    repostTracker.markPublished(listing.updateId, publisher.destination, receipt.publishId)
                     receipt
                 }.onFailure { error ->
                     runCatching {
-                        repostTracker.markFailed(message.updateId, publisher.destination, error)
+                        repostTracker.markFailed(listing.updateId, publisher.destination, error)
                     }.onFailure(error::addSuppressed)
                 }.let { publisher.destination to it }
             }
@@ -93,34 +93,34 @@ class PublishPhotoRepostUseCase(
             RepostResult.Published(receipts, failures)
         } catch (error: Throwable) {
             activePublishers.forEach { publisher ->
-                runCatching { repostTracker.markFailed(message.updateId, publisher.destination, error) }
+                runCatching { repostTracker.markFailed(listing.updateId, publisher.destination, error) }
                     .onFailure(error::addSuppressed)
             }
             throw error
         } finally {
-            message.closePhotos()
+            listing.closePhotos()
             extraPhotos.forEach { photo -> runCatching { photo.content.close() } }
         }
     }
 
-    private fun TelegramPhotoMessage.closePhotos() {
+    private fun TelegramListing.closePhotos() {
         photos.forEach { photo -> runCatching { photo.content.close() } }
     }
 
-    private suspend fun loadExtraPhotos(message: TelegramPhotoMessage, photoLimit: Int): List<TelegramPhoto> {
+    private suspend fun loadExtraPhotos(listing: TelegramListing, photoLimit: Int): List<TelegramPhoto> {
         val source = externalPhotoSource ?: return emptyList()
-        val remainingPhotoCount = (photoLimit - message.photos.size).coerceAtLeast(0)
-        if (remainingPhotoCount == 0 || !source.containsLink(message.caption)) return emptyList()
+        val remainingPhotoCount = (photoLimit - listing.photos.size).coerceAtLeast(0)
+        if (remainingPhotoCount == 0 || listing.googleDriveLinks.isEmpty()) return emptyList()
 
         return try {
-            source.downloadPhotos(message.caption, remainingPhotoCount)
+            source.downloadPhotos(listing.googleDriveLinks, remainingPhotoCount)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Throwable) {
-            if (message.photos.isEmpty()) throw error
+            if (listing.photos.isEmpty()) throw error
             logger.warn(
                 "Could not add Google Drive photos; continuing with Telegram media. updateId={}, reason={}",
-                message.updateId,
+                listing.updateId,
                 error.message ?: error.javaClass.simpleName,
             )
             emptyList()

@@ -2,8 +2,8 @@ package com.rieltor.infrastructure.telegram
 
 import com.rieltor.application.model.TelegramSourceState
 import com.rieltor.application.port.TelegramMessageSource
+import com.rieltor.domain.model.TelegramListing
 import com.rieltor.domain.model.TelegramMonitoredTopic
-import com.rieltor.domain.model.TelegramPhotoMessage
 import it.tdlight.Init
 import it.tdlight.Log
 import it.tdlight.Slf4JLogMessageHandler
@@ -30,7 +30,7 @@ class TelegramClientAdapter(
 ) : TelegramMessageSource {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val messageChannel = Channel<TelegramPhotoMessage>(Channel.BUFFERED)
+    private val messageChannel = Channel<TelegramListing>(Channel.BUFFERED)
     private val mutableState = MutableStateFlow<TelegramSourceState>(TelegramSourceState.Stopped)
     private val pendingMessageContents = ConcurrentHashMap<MessageKey, TdApi.MessageContent>()
     private val messageMapper = TelegramMessageMapper()
@@ -47,7 +47,7 @@ class TelegramClientAdapter(
     private var factory: SimpleTelegramClientFactory? = null
     private var client: SimpleTelegramClient? = null
 
-    override val messages: Flow<TelegramPhotoMessage> = messageChannel.receiveAsFlow()
+    override val messages: Flow<TelegramListing> = messageChannel.receiveAsFlow()
     override val state: StateFlow<TelegramSourceState> = mutableState.asStateFlow()
 
     override fun start() {
@@ -293,7 +293,7 @@ class TelegramClientAdapter(
         mutableState.value = TelegramSourceState.Stopped
     }
 
-    private fun TelegramPhotoMessage.closePhotos() {
+    private fun TelegramListing.closePhotos() {
         photos.forEach { photo -> runCatching { photo.content.close() } }
     }
 

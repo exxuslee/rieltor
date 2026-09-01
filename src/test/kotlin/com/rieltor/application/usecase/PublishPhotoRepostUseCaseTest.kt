@@ -6,6 +6,8 @@ import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublicMediaStorage
 import com.rieltor.domain.repository.TelegramRepostRepository
+import com.rieltor.domain.service.GoogleDriveLinkExtractor
+import com.rieltor.domain.service.TelegramListingIdentityExtractor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayInputStream
@@ -44,7 +46,7 @@ class PublishPhotoRepostUseCaseTest {
             publishers = listOf(publisher),
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
-        val message = TelegramPhotoMessage(
+        val message = TelegramListing(
             updateId = 43,
             chatId = MONITORED_CHAT_ID,
             messageThreadId = MONITORED_THREAD_ID,
@@ -81,12 +83,13 @@ class PublishPhotoRepostUseCaseTest {
             externalPhotoSource = FakeExternalPhotoSource(),
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
-        val message = TelegramPhotoMessage(
+        val message = TelegramListing(
             updateId = 44,
             chatId = MONITORED_CHAT_ID,
             messageThreadId = MONITORED_THREAD_ID,
             caption = "Будинок\nhttps://drive.google.com/drive/folders/folder123456",
             photos = listOf(TelegramPhoto("telegram.jpg", ByteArrayInputStream(byteArrayOf(1)))),
+            googleDriveLinks = listOf("https://drive.google.com/drive/folders/folder123456"),
         )
 
         assertIs<RepostResult.Published>(service.handle(message))
@@ -147,12 +150,13 @@ class PublishPhotoRepostUseCaseTest {
             externalPhotoSource = FailingExternalPhotoSource(),
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
-        val message = TelegramPhotoMessage(
+        val message = TelegramListing(
             updateId = 46,
             chatId = MONITORED_CHAT_ID,
             messageThreadId = MONITORED_THREAD_ID,
             caption = "Будинок\nhttps://drive.google.com/drive/folders/folder123456",
             photos = emptyList(),
+            googleDriveLinks = listOf("https://drive.google.com/drive/folders/folder123456"),
         )
 
         assertFailsWith<IllegalStateException> { service.handle(message) }
@@ -183,7 +187,7 @@ class PublishPhotoRepostUseCaseTest {
             externalPhotoSource = FakeExternalPhotoSource(),
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
-        val message = TelegramPhotoMessage(
+        val message = TelegramListing(
             updateId = 5,
             chatId = MONITORED_CHAT_ID,
             messageThreadId = MONITORED_THREAD_ID,
@@ -312,12 +316,14 @@ class PublishPhotoRepostUseCaseTest {
         chatId: Long = MONITORED_CHAT_ID,
         messageThreadId: Long = MONITORED_THREAD_ID,
         caption: String = "Квартира в Ірпені",
-    ) = TelegramPhotoMessage(
+    ) = TelegramListing(
         updateId = updateId,
         chatId = chatId,
         messageThreadId = messageThreadId,
         caption = caption,
         photos = listOf(TelegramPhoto("photo.jpg", ByteArrayInputStream(byteArrayOf(1, 2, 3)))),
+        googleDriveLinks = GoogleDriveLinkExtractor().extract(caption),
+        repostKey = TelegramListingIdentityExtractor().extract(messageThreadId, caption),
     )
 
     private companion object {
@@ -352,27 +358,21 @@ class PublishPhotoRepostUseCaseTest {
     }
 
     private class FakeExternalPhotoSource : ExternalPhotoSource {
-        override fun containsLink(text: String?) = text?.contains("drive.google.com") == true
-
-        override suspend fun downloadPhotos(text: String?, limit: Int): List<TelegramPhoto> = listOf(
+        override suspend fun downloadPhotos(links: List<String>, limit: Int): List<TelegramPhoto> = listOf(
             TelegramPhoto("drive-one.jpg", ByteArrayInputStream(byteArrayOf(2))),
             TelegramPhoto("drive-two.jpg", ByteArrayInputStream(byteArrayOf(3))),
         ).take(limit)
     }
 
     private class FailingExternalPhotoSource : ExternalPhotoSource {
-        override fun containsLink(text: String?) = text?.contains("drive.google.com") == true
-
-        override suspend fun downloadPhotos(text: String?, limit: Int): List<TelegramPhoto> =
+        override suspend fun downloadPhotos(links: List<String>, limit: Int): List<TelegramPhoto> =
             throw IllegalStateException("The Google Drive link contains no supported photos")
     }
 
     private class CapturingExternalPhotoSource : ExternalPhotoSource {
         var requestedLimit: Int? = null
 
-        override fun containsLink(text: String?) = text?.contains("drive.google.com") == true
-
-        override suspend fun downloadPhotos(text: String?, limit: Int): List<TelegramPhoto> {
+        override suspend fun downloadPhotos(links: List<String>, limit: Int): List<TelegramPhoto> {
             requestedLimit = limit
             return (1..limit).map { index ->
                 TelegramPhoto("drive-$index.jpg", ByteArrayInputStream(byteArrayOf(index.toByte())))
@@ -381,22 +381,22 @@ class PublishPhotoRepostUseCaseTest {
     }
 
     private class FakeJobs : TelegramRepostRepository {
-        private val messages = mutableMapOf<Long, ReceivedTelegramMessage>()
+        private val messages = mutableMapOf<Long, TelegramListing>()
         private val activeKeys = mutableMapOf<Pair<RepostDestination, com.rieltor.domain.model.TelegramRepostKey>, Long>()
         private val publications = mutableSetOf<Pair<Long, RepostDestination>>()
         var publishedId: String? = null
 
-        override fun register(message: ReceivedTelegramMessage, destination: RepostDestination): TelegramMessageRegistration {
-            if (message.updateId to destination in publications) {
-                return TelegramMessageRegistration.Duplicate(message.updateId)
+        override fun register(listing: TelegramListing, destination: RepostDestination): TelegramMessageRegistration {
+            if (listing.updateId to destination in publications) {
+                return TelegramMessageRegistration.Duplicate(listing.updateId)
             }
-            messages[message.updateId] = message
-            val key = message.repostKey
+            messages[listing.updateId] = listing
+            val key = listing.repostKey
             val destinationKey = key?.let { destination to it }
             val original = destinationKey?.let(activeKeys::get)
             if (original != null) return TelegramMessageRegistration.Duplicate(original)
-            if (destinationKey != null) activeKeys[destinationKey] = message.updateId
-            publications += message.updateId to destination
+            if (destinationKey != null) activeKeys[destinationKey] = listing.updateId
+            publications += listing.updateId to destination
             return TelegramMessageRegistration.Accepted(key)
         }
 
