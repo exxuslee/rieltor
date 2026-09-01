@@ -35,9 +35,11 @@ class RoomPersistenceTest {
         RoomDatabaseStore(databasePath).use { database ->
             val queue = TelegramRepostQueueImpl(database)
             queue.recoverInterrupted()
+            assertEquals(listOf(201L), queue.snapshot().pendingUpdateIds)
             val restored = assertNotNull(queue.peekOldest())
             assertEquals(201L, restored.updateId)
             assertEquals(photoPath.toString(), restored.photos.single().localPath)
+            assertEquals(201L, queue.snapshot().claimedUpdateId)
             restored.photos.single().content.close()
             queue.complete(201, "PUBLISHED")
             assertNull(queue.peekOldest())

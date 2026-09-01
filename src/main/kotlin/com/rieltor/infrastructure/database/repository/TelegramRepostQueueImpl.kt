@@ -5,6 +5,7 @@ import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.model.TelegramRepostKey
 import com.rieltor.domain.repository.QueueEnqueueResult
 import com.rieltor.domain.repository.TelegramRepostQueue
+import com.rieltor.domain.repository.TelegramRepostQueueSnapshot
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.model.ReceivedTelegramMessageEntity
 import com.rieltor.infrastructure.database.model.TelegramListingRecord
@@ -56,6 +57,14 @@ class TelegramRepostQueueImpl(
 
     override fun peekOldest(): TelegramListing? = database.blocking { room ->
         room.repostQueueDao().claimOldest()?.toListing()
+    }
+
+    override fun snapshot(): TelegramRepostQueueSnapshot = database.blocking { room ->
+        val entries = room.repostQueueDao().queueSnapshot()
+        TelegramRepostQueueSnapshot(
+            claimedUpdateId = entries.firstOrNull { it.claimed }?.telegramUpdateId,
+            pendingUpdateIds = entries.filterNot { it.claimed }.map { it.telegramUpdateId },
+        )
     }
 
     override fun complete(updateId: Long, status: String) = database.blocking {

@@ -11,6 +11,7 @@ import com.rieltor.application.usecase.RepostPublishException
 import com.rieltor.domain.model.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -117,6 +118,37 @@ class TelegramRepostCoordinatorTest {
             }
             assertTrue(event.formattedMessage.contains("picture_size_check_failed"))
             assertEquals(null, event.throwableProxy)
+        } finally {
+            coordinator.close()
+            logger.detachAppender(appender)
+        }
+    }
+
+    @Test
+    fun `logs queue and remaining retry delay in periodic diagnostics`() = runBlocking {
+        val source = FakeTelegramMessageSource()
+        val coordinator = TelegramRepostCoordinator(
+            source = source,
+            repostHandler = PhotoRepostHandler { error("TikTok unavailable") },
+            retryDelayMillis = 1_000,
+            diagnosticsIntervalMillis = 10,
+        )
+        val logger = LoggerFactory.getLogger(TelegramRepostCoordinator::class.java) as Logger
+        val appender = ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>().apply { start() }
+        logger.addAppender(appender)
+
+        try {
+            coordinator.start()
+            source.emit(message(23))
+
+            withTimeout(1_000) {
+                while (appender.list.none { event ->
+                    event.formattedMessage.startsWith("Telegram repost coordinator status.") &&
+                        event.formattedMessage.contains("claimedUpdateId=23") &&
+                        event.formattedMessage.contains("waitingFor=retry delay") &&
+                        event.formattedMessage.contains("remainingMinutes=1")
+                }) delay(10)
+            }
         } finally {
             coordinator.close()
             logger.detachAppender(appender)

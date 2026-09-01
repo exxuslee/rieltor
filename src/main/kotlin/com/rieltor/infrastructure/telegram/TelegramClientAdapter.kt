@@ -185,19 +185,7 @@ class TelegramClientAdapter(
     private suspend fun deliverMessages(messages: List<TdApi.Message>) {
         val messageKeys = messages.map { message -> message.key() }
         try {
-            logger.info(
-                "Telegram message scheduled for repost in {} minutes. chatId={}, messageIds={}",
-                TimeUnit.MILLISECONDS.toMinutes(repostDelayMillis),
-                messages.firstOrNull()?.chatId,
-                messages.map(TdApi.Message::id),
-            )
             delay(repostDelayMillis)
-            logger.info(
-                "Telegram repost delay elapsed; message is ready for independent processing. chatId={}, messageIds={}",
-                messages.firstOrNull()?.chatId,
-                messages.map(TdApi.Message::id),
-            )
-
             repeat(DELIVERY_MAX_ATTEMPTS) { attempt ->
                 try {
                     val telegramClient = client ?: return

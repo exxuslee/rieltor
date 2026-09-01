@@ -10,6 +10,7 @@ import com.rieltor.domain.model.RepostResult
 import com.rieltor.domain.model.TelegramListing
 import com.rieltor.domain.repository.QueueEnqueueResult
 import com.rieltor.domain.repository.TelegramRepostQueue
+import com.rieltor.domain.repository.TelegramRepostQueueSnapshot
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /** Persistent FIFO coordinator and the only owner of the cross-destination dispatch quota. */
 class TelegramRepostCoordinator(
@@ -26,6 +28,8 @@ class TelegramRepostCoordinator(
     private val masterLimiter: RepostMasterLimiter = RepostMasterLimiter { },
     private val queueCapacity: Int = DEFAULT_QUEUE_CAPACITY,
     private val retryDelayMillis: Long = DEFAULT_RETRY_DELAY_MILLIS,
+    private val diagnosticsIntervalMillis: Long = DEFAULT_DIAGNOSTICS_INTERVAL_MILLIS,
+    private val nowMillis: () -> Long = System::currentTimeMillis,
 ) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -33,9 +37,11 @@ class TelegramRepostCoordinator(
     private val closing = AtomicBoolean(false)
     private val mutableState = MutableStateFlow<RepostFlowState>(RepostFlowState.Stopped)
     private val queueSignal = Channel<Unit>(Channel.CONFLATED)
+    private val retryUntilMillis = AtomicLong(0L)
     private var observerJob: Job? = null
     private var sourceStateObserverJob: Job? = null
     private var workerJob: Job? = null
+    private var diagnosticsJob: Job? = null
 
     val state: StateFlow<RepostFlowState> = mutableState.asStateFlow()
     val sourceState: StateFlow<TelegramSourceState> = source.state
@@ -44,11 +50,18 @@ class TelegramRepostCoordinator(
         if (!started.compareAndSet(false, true)) return
         require(queueCapacity > 0) { "Repost queue capacity must be positive." }
         require(retryDelayMillis >= 0) { "Repost retry delay must not be negative." }
+        require(diagnosticsIntervalMillis > 0) { "Repost diagnostics interval must be positive." }
         mutableState.value = RepostFlowState.WaitingForMessage
         queue.recoverInterrupted()
 
         sourceStateObserverJob = scope.launch {
             source.state.collect { sourceState -> logger.info("Telegram source state changed: {}", sourceState) }
+        }
+        diagnosticsJob = scope.launch {
+            while (isActive) {
+                delay(diagnosticsIntervalMillis)
+                if (!closing.get()) logDiagnostics()
+            }
         }
         workerJob = scope.launch {
             for (ignored in queueSignal) {
@@ -79,6 +92,7 @@ class TelegramRepostCoordinator(
             observerJob?.cancel()
             sourceStateObserverJob?.cancel()
             workerJob?.cancel()
+            diagnosticsJob?.cancel()
             runCatching(source::close).onFailure(error::addSuppressed)
             scope.cancel()
             mutableState.value = RepostFlowState.Failed(null, error.failureReason())
@@ -112,6 +126,7 @@ class TelegramRepostCoordinator(
 
     /** Returns true when the FIFO head was finalized and the next row may start. */
     private suspend fun process(message: TelegramListing): Boolean {
+        retryUntilMillis.set(0L)
         logger.info("Persistent FIFO repost processing started. updateId={}", message.updateId)
         mutableState.value = RepostFlowState.Processing(message.updateId)
         return try {
@@ -164,6 +179,7 @@ class TelegramRepostCoordinator(
     private fun retry(updateId: Long, reason: String) {
         queue.markRetryPending(updateId, reason)
         mutableState.value = RepostFlowState.Failed(updateId, reason)
+        retryUntilMillis.set(nowMillis() + retryDelayMillis)
         scope.launch {
             delay(retryDelayMillis)
             queueSignal.trySend(Unit)
@@ -176,6 +192,7 @@ class TelegramRepostCoordinator(
         observerJob?.cancel()
         sourceStateObserverJob?.cancel()
         workerJob?.cancel()
+        diagnosticsJob?.cancel()
         queueSignal.close()
         scope.cancel()
         (queue as? AutoCloseable)?.let { runCatching(it::close) }
@@ -184,9 +201,54 @@ class TelegramRepostCoordinator(
 
     private fun Throwable.failureReason(): String = message?.takeIf(String::isNotBlank) ?: javaClass.simpleName
 
+    private fun logDiagnostics() {
+        val queueSnapshot = queue.snapshot()
+        val now = nowMillis()
+        val retryRemainingMillis = retryUntilMillis.get().remainingMillis(now)
+        val limiterRemainingMillis = masterLimiter.waitUntilMillis().remainingMillis(now)
+        val waitingFor: String
+        val remainingMillis: Long?
+        when {
+            retryRemainingMillis != null -> {
+                waitingFor = "retry delay"
+                remainingMillis = retryRemainingMillis
+            }
+            limiterRemainingMillis != null -> {
+                waitingFor = "master repost limiter"
+                remainingMillis = limiterRemainingMillis
+            }
+            queueSnapshot.size == 0 -> {
+                waitingFor = "a new Telegram message"
+                remainingMillis = null
+            }
+            mutableState.value is RepostFlowState.Processing -> {
+                waitingFor = "current repost completion"
+                remainingMillis = null
+            }
+            else -> {
+                waitingFor = "FIFO worker signal"
+                remainingMillis = null
+            }
+        }
+        logger.info(
+            "Telegram repost coordinator status. state={}, queueSize={}, claimedUpdateId={}, pendingUpdateIds={}, waitingFor={}, remainingMinutes={}",
+            mutableState.value,
+            queueSnapshot.size,
+            queueSnapshot.claimedUpdateId,
+            queueSnapshot.pendingUpdateIds,
+            waitingFor,
+            remainingMillis?.let { (it + 59_999L) / 60_000L },
+        )
+    }
+
+    private fun Long?.remainingMillis(now: Long): Long? = this?.let { deadline ->
+        (deadline - now).takeIf { it > 0L }
+    }
+
     companion object {
         const val DEFAULT_QUEUE_CAPACITY = 64
         const val DEFAULT_RETRY_DELAY_MILLIS = 60_000L
+        const val DEFAULT_DIAGNOSTICS_INTERVAL_MILLIS = 15 * 60_000L
         const val STATUS_REJECTED_NO_PRICE = "REJECTED_NO_PRICE"
         const val STATUS_REJECTED_NO_DRIVE = "REJECTED_NO_GOOGLE_DRIVE_LINK"
         const val STATUS_PUBLISHED = "PUBLISHED"
@@ -215,6 +277,13 @@ private class InMemoryTelegramRepostQueue : TelegramRepostQueue, AutoCloseable {
 
     override fun peekOldest(): TelegramListing? = synchronized(messages) {
         messages.firstOrNull()?.also { claimedUpdateId = it.updateId }
+    }
+
+    override fun snapshot(): TelegramRepostQueueSnapshot = synchronized(messages) {
+        TelegramRepostQueueSnapshot(
+            claimedUpdateId = claimedUpdateId,
+            pendingUpdateIds = messages.filter { it.updateId != claimedUpdateId }.map(TelegramListing::updateId),
+        )
     }
 
     override fun complete(updateId: Long, status: String) {

@@ -179,6 +179,9 @@ internal abstract class RepostQueueDao {
     @Query("SELECT * FROM telegram_repost_queue WHERE claimed = 0 ORDER BY enqueued_at, telegram_update_id LIMIT 1")
     protected abstract suspend fun oldestPending(): TelegramRepostQueueEntity?
 
+    @Query("SELECT * FROM telegram_repost_queue ORDER BY enqueued_at, telegram_update_id")
+    abstract suspend fun queueSnapshot(): List<TelegramRepostQueueEntity>
+
     @Query("UPDATE telegram_repost_queue SET claimed = 1 WHERE telegram_update_id = :updateId")
     protected abstract suspend fun claim(updateId: Long)
 
