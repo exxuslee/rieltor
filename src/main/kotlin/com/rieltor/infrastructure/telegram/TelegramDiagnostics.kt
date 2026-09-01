@@ -116,6 +116,15 @@ internal class TelegramDiagnostics(
                         selectedTopics.size,
                         forumTopics.totalCount,
                     )
+                    forumTopics.topics.forEach { topic ->
+                        logger.info(
+                            "Topic: chatId={}, threadId={}, name='{}', monitored={}",
+                            chatId,
+                            topic.info.messageThreadId,
+                            topic.info.name,
+                            isTopicMonitored(chatId, topic.info.messageThreadId),
+                        )
+                    }
                     val foundTopicIds = forumTopics.topics.map { it.info.messageThreadId }.toSet()
                     val missingTopicIds = monitoredTopics
                         .asSequence()
