@@ -59,6 +59,8 @@ dependencies {
     implementation("it.tdlight:tdlight-natives") {
         artifact { classifier = tdlightNativeClassifier.get() }
     }
+    implementation("org.telegram:telegrambots-longpolling:9.2.0")
+    implementation("org.telegram:telegrambots-client:9.2.0")
 
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.ktor.client.mock)

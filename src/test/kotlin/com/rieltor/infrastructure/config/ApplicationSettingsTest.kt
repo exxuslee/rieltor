@@ -50,6 +50,24 @@ class ApplicationSettingsTest {
     }
 
     @Test
+    fun `telegram listing bot photo limit is configurable independently from reposts`() {
+        val defaultDirectory = Files.createTempDirectory("rieltor-bot-photo-limit-default-test")
+        val configuredDirectory = Files.createTempDirectory("rieltor-bot-photo-limit-test")
+        Files.writeString(configuredDirectory.resolve(".env"), "TELEGRAM_LISTING_BOT_MAX_PHOTO_COUNT=123")
+
+        assertEquals(
+            100,
+            telegramListingBotMaxPhotoCount(
+                Dotenv.configure().directory(defaultDirectory.toString()).ignoreIfMissing().load(),
+            ),
+        )
+        assertEquals(
+            123,
+            telegramListingBotMaxPhotoCount(Dotenv.configure().directory(configuredDirectory.toString()).load()),
+        )
+    }
+
+    @Test
     fun `tiktok mode defaults to post and accepts draft case insensitively`() {
         val defaultDirectory = Files.createTempDirectory("rieltor-repost-mode-default-test")
         val draftDirectory = Files.createTempDirectory("rieltor-repost-mode-draft-test")

@@ -12,6 +12,7 @@ import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import com.rieltor.infrastructure.media.MediaCleanupJob
 import com.rieltor.infrastructure.oauth.OAuthStateStore
+import com.rieltor.infrastructure.telegram.TelegramListingBot
 import com.rieltor.infrastructure.threads.ThreadsAuthException
 import com.rieltor.infrastructure.threads.ThreadsAuthService
 import com.rieltor.infrastructure.tiktok.TikTokAuthException
@@ -60,6 +61,7 @@ fun Application.module(dotenv: Dotenv) {
     val mediaCleanupJob = get<MediaCleanupJob>()
     val telegramHistoryCleanupJob = get<TelegramHistoryCleanupJob>()
     val repostCoordinator = get<TelegramRepostCoordinator>()
+    val telegramListingBot = get<TelegramListingBot>()
     val httpClient = get<HttpClient>()
     val landingLeadSender = get<LandingLeadSender>()
 
@@ -110,6 +112,7 @@ fun Application.module(dotenv: Dotenv) {
     }
 
     repostCoordinator.start()
+    telegramListingBot.start()
     mediaCleanupJob.start()
     telegramHistoryCleanupJob.start()
 
@@ -117,6 +120,7 @@ fun Application.module(dotenv: Dotenv) {
         mediaCleanupJob.close()
         telegramHistoryCleanupJob.close()
         repostCoordinator.close()
+        telegramListingBot.close()
         httpClient.close()
     }
 

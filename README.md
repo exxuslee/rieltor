@@ -53,6 +53,14 @@ python -m http.server 4173
 
 Формы на `https://rieltor.dpdns.org` отправляют JSON на `POST /v1/landing/leads`; backend проверяет тип и поля формы, ограничивает частые запросы и передаёт сообщение в Telegram Bot API. Токен бота и chat ID находятся в секции `secrets` файла `secrets.json`.
 
+### Telegram-бот подготовки объявления
+
+Добавьте `TELEGRAM_LISTING_BOT_TOKEN` в секцию `secrets` файла `secrets.json` и перезапустите backend. Если отдельный
+токен не задан, используется `LANDING_TELEGRAM_BOT_TOKEN`. Бот принимает текст объявления с Google Drive-ссылкой,
+применяет тот же форматтер, что TikTok и Threads, скачивает фотографии и отвечает в исходный чат. Фотографии отправляются
+пакетами до 10; при количестве 11, 21 и т. п. последний одиночный файл отправляется отдельным сообщением. За один запрос
+скачивается до 100 фото; лимит можно изменить через `TELEGRAM_LISTING_BOT_MAX_PHOTO_COUNT` в диапазоне 1–1000.
+
 Сервер стартует на `http://localhost:8383`. Пользовательский Telegram-клиент TDLight открывает сессию из
 `tdlib-session-id<TELEGRAM_USER_ID>` рядом с JAR. Фото из настроенных Telegram-чатов независимо передаются через TikTok Photo Direct
 Post; caption перед публикацией очищается от внутренних контактов, комиссий, процентов оформления и Google Drive-ссылок,

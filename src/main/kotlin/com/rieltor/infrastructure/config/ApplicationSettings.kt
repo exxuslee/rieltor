@@ -19,6 +19,7 @@ object SecretNames {
     const val TELEGRAM_API_ID = "TELEGRAM_API_ID"
     const val TELEGRAM_API_HASH = "TELEGRAM_API_HASH"
     const val TELEGRAM_USER_ID = "TELEGRAM_USER_ID"
+    const val TELEGRAM_LISTING_BOT_TOKEN = "TELEGRAM_LISTING_BOT_TOKEN"
     const val LANDING_TELEGRAM_BOT_TOKEN = "LANDING_TELEGRAM_BOT_TOKEN"
     const val LANDING_TELEGRAM_CHAT_ID = "LANDING_TELEGRAM_CHAT_ID"
     const val PUBLIC_BASE_URL = "PUBLIC_BASE_URL"
@@ -36,6 +37,7 @@ object SecretNames {
         TELEGRAM_API_ID,
         TELEGRAM_API_HASH,
         TELEGRAM_USER_ID,
+        TELEGRAM_LISTING_BOT_TOKEN,
         LANDING_TELEGRAM_BOT_TOKEN,
         LANDING_TELEGRAM_CHAT_ID,
         PUBLIC_BASE_URL,
@@ -64,6 +66,8 @@ data class ApplicationSettings(
     val threadsAppSecret: String = "",
     val threadsRedirectUri: String = "",
     val threadsEnabled: Boolean = false,
+    val telegramListingBotToken: String = "",
+    val telegramListingBotMaxPhotoCount: Int = DEFAULT_TELEGRAM_LISTING_BOT_MAX_PHOTO_COUNT,
     val landingTelegramBotToken: String = "",
     val landingTelegramChatId: String = "",
 ) {
@@ -81,6 +85,7 @@ data class ApplicationSettings(
             val telegramUserId = secrets.require(SecretNames.TELEGRAM_USER_ID)
                 .toLongOrNull()
                 ?: error("Invalid ${SecretNames.TELEGRAM_USER_ID}: expected a numeric Telegram user ID")
+            val landingBotToken = secrets.get(SecretNames.LANDING_TELEGRAM_BOT_TOKEN).orEmpty()
             return ApplicationSettings(
                 mediaDirectory = Path.of(environmentOrDotenv("MEDIA_DIRECTORY", dotenv) ?: "media"),
                 publicBaseUrl = secrets.get(SecretNames.PUBLIC_BASE_URL)?.trimEnd('/') ?: inferredBaseUrl,
@@ -110,7 +115,11 @@ data class ApplicationSettings(
                 threadsAppSecret = secrets.get(SecretNames.THREADS_APP_SECRET).orEmpty(),
                 threadsRedirectUri = secrets.get(SecretNames.THREADS_REDIRECT_URI).orEmpty(),
                 threadsEnabled = booleanSetting(dotenv, "THREADS_ENABLED", false),
-                landingTelegramBotToken = secrets.get(SecretNames.LANDING_TELEGRAM_BOT_TOKEN).orEmpty(),
+                telegramListingBotToken = secrets.get(SecretNames.TELEGRAM_LISTING_BOT_TOKEN)
+                    .orEmpty()
+                    .ifBlank { landingBotToken },
+                telegramListingBotMaxPhotoCount = telegramListingBotMaxPhotoCount(dotenv),
+                landingTelegramBotToken = landingBotToken,
                 landingTelegramChatId = secrets.get(SecretNames.LANDING_TELEGRAM_CHAT_ID).orEmpty(),
             )
         }
@@ -173,6 +182,13 @@ fun repostMinIntervalMinutes(dotenv: Dotenv): Long {
 
 fun tikTokDailyLimitCooldownHours(dotenv: Dotenv): Long =
     positiveLong(dotenv, "TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS", DEFAULT_TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS, 1L..48L)
+
+fun telegramListingBotMaxPhotoCount(dotenv: Dotenv): Int = positiveInt(
+    dotenv,
+    "TELEGRAM_LISTING_BOT_MAX_PHOTO_COUNT",
+    DEFAULT_TELEGRAM_LISTING_BOT_MAX_PHOTO_COUNT,
+    1..MAX_TELEGRAM_LISTING_BOT_PHOTO_COUNT,
+)
 
 fun booleanSetting(dotenv: Dotenv, name: String, default: Boolean): Boolean {
     val configured = environmentOrDotenv(name, dotenv) ?: return default
@@ -265,3 +281,5 @@ const val DEFAULT_REPOST_MIN_INTERVAL_MINUTES = 20L
 const val DEFAULT_TIKTOK_MAX_POSTS_PER_24_HOURS = DEFAULT_REPOST_MAX_MESSAGES_PER_24_HOURS
 const val DEFAULT_TIKTOK_MIN_POST_INTERVAL_MINUTES = DEFAULT_REPOST_MIN_INTERVAL_MINUTES
 const val DEFAULT_TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS = 8L
+const val DEFAULT_TELEGRAM_LISTING_BOT_MAX_PHOTO_COUNT = 100
+const val MAX_TELEGRAM_LISTING_BOT_PHOTO_COUNT = 1_000

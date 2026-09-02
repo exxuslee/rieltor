@@ -4,9 +4,11 @@ import com.rieltor.application.orchestration.PersistentRepostMasterLimiter
 import com.rieltor.application.orchestration.RepostMasterLimiter
 import com.rieltor.application.orchestration.TelegramRepostCoordinator
 import com.rieltor.application.port.PhotoRepostHandler
+import com.rieltor.application.port.TelegramBotReplySender
 import com.rieltor.application.port.TelegramMessageSource
 import com.rieltor.application.service.TelegramRepostTracker
 import com.rieltor.application.usecase.PublishPhotoRepostUseCase
+import com.rieltor.application.usecase.ReplyWithFormattedListingUseCase
 import com.rieltor.domain.repository.*
 import com.rieltor.domain.service.ListingCaptionFormatter
 import com.rieltor.infrastructure.config.*
@@ -20,7 +22,9 @@ import com.rieltor.infrastructure.google.GoogleDrivePhotoSource
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import com.rieltor.infrastructure.media.MediaCleanupJob
 import com.rieltor.infrastructure.oauth.OAuthStateStore
+import com.rieltor.infrastructure.telegram.TelegramBotApiReplySender
 import com.rieltor.infrastructure.telegram.TelegramClientAdapter
+import com.rieltor.infrastructure.telegram.TelegramListingBot
 import com.rieltor.infrastructure.threads.ThreadsAuthService
 import com.rieltor.infrastructure.threads.ThreadsPhotoPublisher
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
@@ -86,6 +90,14 @@ private val networkModule = module {
 
 private val applicationModule = module {
     single { ListingCaptionFormatter() }
+    single {
+        ReplyWithFormattedListingUseCase(
+            externalPhotoSource = get(),
+            replySender = get(),
+            captionFormatter = get(),
+            maxPhotoCount = get<ApplicationSettings>().telegramListingBotMaxPhotoCount,
+        )
+    }
     single { TelegramRepostTracker(get()) }
     single {
         val settings = get<ApplicationSettings>()
@@ -135,6 +147,14 @@ private val integrationModule = module {
 
     single { GoogleDrivePhotoSource(get(), get(), get()) }
     single<ExternalPhotoSource> { get<GoogleDrivePhotoSource>() }
+    single { TelegramBotApiReplySender(get<ApplicationSettings>().telegramListingBotToken) }
+    single<TelegramBotReplySender> { get<TelegramBotApiReplySender>() }
+    single {
+        TelegramListingBot(
+            botToken = get<ApplicationSettings>().telegramListingBotToken,
+            replyUseCase = get(),
+        )
+    }
     single {
         val settings = get<ApplicationSettings>()
         LocalPublicMediaStorage(settings.mediaDirectory, settings.publicBaseUrl)
