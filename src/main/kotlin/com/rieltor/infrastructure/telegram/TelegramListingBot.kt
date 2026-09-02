@@ -20,6 +20,7 @@ import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.util.concurrent.atomic.AtomicBoolean
 
+/** Bot API entrypoint. Unlike monitored TDLib chats, bot messages are processed immediately. */
 class TelegramListingBot(
     private val botToken: String,
     private val replyUseCase: ReplyWithFormattedListingUseCase,
@@ -34,14 +35,17 @@ class TelegramListingBot(
             logger.warn("Telegram listing bot is disabled: bot token is not configured")
             return
         }
-        if (!started.compareAndSet(false, true)) return
+        if (!started.compareAndSet(false, true)) {
+            return
+        }
 
         val longPolling = TelegramBotsLongPollingApplication()
         try {
             longPolling.registerBot(botToken, LongPollingUpdateConsumer(::consumeUpdates))
             application = longPolling
-            logger.info("Telegram listing bot long polling started")
+            logger.info("Telegram listing bot started. processingMode=immediate")
         } catch (error: Throwable) {
+            logger.error("Telegram listing bot long polling failed to start", error)
             started.set(false)
             runCatching { longPolling.close() }
             throw error
@@ -49,7 +53,7 @@ class TelegramListingBot(
     }
 
     private fun consumeUpdates(updates: List<Update>) {
-        updates.mapNotNull { update -> update.toIncomingMessage() }.forEach { message ->
+        updates.mapNotNull { update -> update.toIncomingMessageOrLog() }.forEach { message ->
             scope.launch {
                 try {
                     replyUseCase.execute(message)
@@ -75,25 +79,64 @@ class TelegramListingBot(
         started.set(false)
     }
 
-    private fun Update.toIncomingMessage(): TelegramBotIncomingMessage? {
-        val incoming = message ?: return null
-        val sourceText = incoming.text ?: incoming.caption ?: return null
+    private fun Update.toIncomingMessageOrLog(): TelegramBotIncomingMessage? {
+        val incoming = message
+        if (incoming == null) {
+            logger.debug(
+                "Telegram listing bot update ignored: it is not a new message. updateId={}, updateType={}",
+                updateId,
+                updateType(),
+            )
+            return null
+        }
+        val sourceText = incoming.text ?: incoming.caption
+        if (sourceText == null) {
+            logger.debug(
+                "Telegram listing bot message ignored: no text or caption. updateId={}, chatId={}, " +
+                    "messageId={}, hasPhoto={}, hasDocument={}",
+                updateId,
+                incoming.chatId,
+                incoming.messageId,
+                incoming.hasPhoto(),
+                incoming.hasDocument(),
+            )
+            return null
+        }
         val entities = if (incoming.text != null) incoming.entities else incoming.captionEntities
+        val embeddedLinks = entities.orEmpty()
+            .asSequence()
+            .mapNotNull(MessageEntity::getUrl)
+            .filter(String::isNotBlank)
+            .distinct()
+            .toList()
+        logger.info(
+            "Telegram listing bot message received. chatId={}, messageId={}, senderUserId={}, forwarded={}, textLength={}",
+            incoming.chatId,
+            incoming.messageId,
+            incoming.from?.id,
+            incoming.forwardOrigin != null || incoming.forwardFrom != null || incoming.forwardFromChat != null,
+            sourceText.length,
+        )
         return TelegramBotIncomingMessage(
             chatId = incoming.chatId,
             messageId = incoming.messageId,
             messageThreadId = incoming.messageThreadId,
-            text = sourceText.withEmbeddedLinks(entities.orEmpty()),
+            text = sourceText.withEmbeddedLinks(embeddedLinks),
         )
     }
 
-    private fun String.withEmbeddedLinks(entities: List<MessageEntity>): String {
-        val links = entities.asSequence()
-            .mapNotNull(MessageEntity::getUrl)
-            .filter { it.isNotBlank() && !contains(it) }
-            .distinct()
-            .toList()
-        return if (links.isEmpty()) this else (listOf(this) + links).joinToString("\n")
+    private fun String.withEmbeddedLinks(links: List<String>): String {
+        val missingLinks = links.filterNot(::contains)
+        return if (missingLinks.isEmpty()) this else (listOf(this) + missingLinks).joinToString("\n")
+    }
+
+    private fun Update.updateType(): String = when {
+        editedMessage != null -> "editedMessage"
+        channelPost != null -> "channelPost"
+        editedChannelPost != null -> "editedChannelPost"
+        callbackQuery != null -> "callbackQuery"
+        inlineQuery != null -> "inlineQuery"
+        else -> "unsupported"
     }
 }
 

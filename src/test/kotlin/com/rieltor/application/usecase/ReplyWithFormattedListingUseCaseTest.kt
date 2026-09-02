@@ -5,6 +5,7 @@ import com.rieltor.application.port.TelegramBotReplySender
 import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.repository.ExternalPhotoSource
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import java.io.ByteArrayInputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,12 +14,14 @@ import kotlin.test.assertTrue
 
 class ReplyWithFormattedListingUseCaseTest {
     @Test
-    fun `formats caption downloads Drive photos and sends groups of at most ten`() = runBlocking {
+    fun `processes bot message immediately and sends groups of at most ten`() = runBlocking {
         val photoSource = FakePhotoSource(photoCount = 23)
         val sender = CapturingReplySender()
         val useCase = ReplyWithFormattedListingUseCase(photoSource, sender)
 
-        useCase.execute(incomingMessage())
+        withTimeout(1_000) {
+            useCase.execute(incomingMessage())
+        }
 
         assertEquals(100, photoSource.requestedLimit)
         assertEquals(listOf(10, 10, 3), sender.photoBatchSizes)

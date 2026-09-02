@@ -20,7 +20,10 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Telegram transport backed by TDLib. Emits monitored messages and knows nothing about TikTok or Google Drive. */
+/**
+ * Telegram transport backed by TDLib. Monitored chat messages retain the edit grace period before being emitted.
+ * Bot API messages use [TelegramListingBot] instead and never pass through this delay.
+ */
 class TelegramClientAdapter(
     private val apiId: Int,
     private val apiHash: String,

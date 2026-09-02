@@ -7,6 +7,7 @@ import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.domain.service.GoogleDriveLinkExtractor
 import com.rieltor.domain.service.ListingCaptionFormatter
 import kotlinx.coroutines.CancellationException
+import org.slf4j.LoggerFactory
 
 class ReplyWithFormattedListingUseCase(
     private val externalPhotoSource: ExternalPhotoSource,
@@ -15,14 +16,22 @@ class ReplyWithFormattedListingUseCase(
     private val driveLinkExtractor: GoogleDriveLinkExtractor = GoogleDriveLinkExtractor(),
     private val maxPhotoCount: Int = DEFAULT_MAX_PHOTO_COUNT,
 ) {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
     init {
         require(maxPhotoCount > 0) { "maxPhotoCount must be positive" }
     }
 
     suspend fun execute(message: TelegramBotIncomingMessage) {
+        val startedAt = System.nanoTime()
         val listing = captionFormatter.filter(message.text)
         val formattedText = captionFormatter.forTikTok(listing)
         if (formattedText == null) {
+            logger.warn(
+                "Telegram listing bot message rejected. chatId={}, messageId={}, reason=emptyFormattedText",
+                message.chatId,
+                message.messageId,
+            )
             replySender.sendText(
                 message.chatId,
                 message.messageThreadId,
@@ -31,9 +40,13 @@ class ReplyWithFormattedListingUseCase(
             )
             return
         }
-
         val driveLinks = driveLinkExtractor.extract(message.text)
         if (driveLinks.isEmpty()) {
+            logger.warn(
+                "Telegram listing bot message rejected. chatId={}, messageId={}, reason=noGoogleDriveLinks",
+                message.chatId,
+                message.messageId,
+            )
             replySender.sendText(
                 message.chatId,
                 message.messageThreadId,
@@ -42,12 +55,28 @@ class ReplyWithFormattedListingUseCase(
             )
             return
         }
+        logger.info(
+            "Telegram listing bot downloading photos. chatId={}, messageId={}, driveLinks={}, maxPhotos={}",
+            message.chatId,
+            message.messageId,
+            driveLinks.size,
+            maxPhotoCount,
+        )
 
+        val downloadStartedAt = System.nanoTime()
         val photos = try {
             externalPhotoSource.downloadPhotos(driveLinks, maxPhotoCount)
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Throwable) {
+        } catch (error: Throwable) {
+            logger.warn(
+                "Telegram bot Google Drive download failed. chatId={}, messageId={}, durationMs={}, reason={}",
+                message.chatId,
+                message.messageId,
+                downloadStartedAt.elapsedMillis(),
+                error.message ?: error.javaClass.simpleName,
+                error,
+            )
             replySender.sendText(
                 message.chatId,
                 message.messageThreadId,
@@ -57,6 +86,12 @@ class ReplyWithFormattedListingUseCase(
             return
         }
         if (photos.isEmpty()) {
+            logger.warn(
+                "Telegram bot Google Drive download returned no photos. chatId={}, messageId={}, durationMs={}",
+                message.chatId,
+                message.messageId,
+                downloadStartedAt.elapsedMillis(),
+            )
             replySender.sendText(
                 message.chatId,
                 message.messageThreadId,
@@ -65,9 +100,10 @@ class ReplyWithFormattedListingUseCase(
             )
             return
         }
-
         try {
-            formattedText.splitForTelegram().forEachIndexed { index, part ->
+            val textParts = formattedText.splitForTelegram()
+            val photoBatches = photos.chunked(TELEGRAM_MEDIA_GROUP_LIMIT)
+            textParts.forEachIndexed { index, part ->
                 replySender.sendText(
                     chatId = message.chatId,
                     messageThreadId = message.messageThreadId,
@@ -75,9 +111,17 @@ class ReplyWithFormattedListingUseCase(
                     text = part,
                 )
             }
-            photos.chunked(TELEGRAM_MEDIA_GROUP_LIMIT).forEach { batch ->
+            photoBatches.forEach { batch ->
                 replySender.sendPhotos(message.chatId, message.messageThreadId, batch)
             }
+            logger.info(
+                "Telegram listing bot reply sent. chatId={}, messageId={}, photos={}, photoBatches={}, durationMs={}",
+                message.chatId,
+                message.messageId,
+                photos.size,
+                photoBatches.size,
+                startedAt.elapsedMillis(),
+            )
         } finally {
             photos.closeAll()
         }
@@ -106,6 +150,8 @@ class ReplyWithFormattedListingUseCase(
     private fun List<TelegramPhoto>.closeAll() {
         forEach { photo -> runCatching { photo.content.close() } }
     }
+
+    private fun Long.elapsedMillis(): Long = (System.nanoTime() - this) / 1_000_000
 
     private companion object {
         const val TELEGRAM_MEDIA_GROUP_LIMIT = 10
