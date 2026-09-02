@@ -6,6 +6,7 @@ import com.rieltor.domain.model.*
 import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublicMediaStorage
+import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.domain.service.ListingCaptionFormatter
 import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
@@ -95,6 +96,9 @@ class PublishPhotoRepostUseCase(
                     }
                 }
                 outcomes += publisher.destination to outcome
+                outcome.exceptionOrNull()?.let { error ->
+                    if (error is PublisherBackpressureException) throw error
+                }
                 if (outcome.isFailure) break
             }
             val receipts = outcomes.mapNotNull { it.second.getOrNull() }

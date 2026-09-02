@@ -113,7 +113,15 @@ private val applicationModule = module {
             minIntervalMillis = settings.repostMinIntervalMinutes * 60_000L,
         )
     }
-    single { TelegramRepostCoordinator(get(), get(), get(), get()) }
+    single {
+        TelegramRepostCoordinator(
+            source = get(),
+            repostHandler = get(),
+            queue = get(),
+            masterLimiter = get(),
+            workerStartupDelayMillis = TelegramRepostCoordinator.PRODUCTION_WORKER_STARTUP_DELAY_MILLIS,
+        )
+    }
 }
 
 private val integrationModule = module {

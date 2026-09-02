@@ -12,6 +12,7 @@ sealed interface RepostFlowState {
     data object Stopped : RepostFlowState
     data object WaitingForMessage : RepostFlowState
     data class Processing(val updateId: Long) : RepostFlowState
+    data class Deferred(val updateId: Long, val reason: String) : RepostFlowState
     data class Published(val updateId: Long, val publishId: String) : RepostFlowState
     data class Skipped(val updateId: Long, val reason: SkipReason) : RepostFlowState
     data class Failed(val updateId: Long?, val reason: String) : RepostFlowState

@@ -2,10 +2,7 @@ package com.rieltor.infrastructure.tiktok
 
 import com.rieltor.domain.model.PublishReceipt
 import com.rieltor.domain.model.RepostDestination
-import com.rieltor.domain.repository.PhotoPublisher
-import com.rieltor.domain.repository.PublisherPendingDiagnostics
-import com.rieltor.domain.repository.TikTokPublishThrottleRepository
-import com.rieltor.domain.repository.TrackedTikTokPublish
+import com.rieltor.domain.repository.*
 import com.rieltor.infrastructure.config.DEFAULT_REPOST_MAX_PHOTO_COUNT
 import com.rieltor.infrastructure.config.TIKTOK_API_MAX_PHOTO_COUNT
 import com.rieltor.infrastructure.config.TikTokMode
@@ -264,6 +261,7 @@ class TikTokPhotoPublisher(
         val repository = publishRepository ?: return
         val snapshot = refreshTrackedPublishes(accessToken, repository)
         if (snapshot.active.size >= MAX_PENDING_SHARES) {
+            pauseGlobalPublishing("locally tracked pending-share limit")
             throw TikTokPendingShareLimitException(
                 "TikTok has ${snapshot.active.size} locally tracked pending shares; waiting for status/fetch to report " +
                     "PUBLISH_COMPLETE/FAILED or for the 24-hour pending window to expire."
@@ -445,4 +443,4 @@ class TikTokPhotoPublisher(
 
 private class TikTokRateLimitException(message: String) : TikTokAuthException(message)
 private class TikTokDailyPostLimitException(message: String) : TikTokAuthException(message)
-private class TikTokPendingShareLimitException(message: String) : TikTokAuthException(message)
+private class TikTokPendingShareLimitException(message: String) : PublisherBackpressureException(message)

@@ -9,6 +9,7 @@ import com.rieltor.application.port.PhotoRepostHandler
 import com.rieltor.application.port.TelegramMessageSource
 import com.rieltor.application.usecase.RepostPublishException
 import com.rieltor.domain.model.*
+import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.domain.repository.PublisherPendingDiagnostics
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
@@ -118,6 +119,39 @@ class TelegramRepostCoordinatorTest {
                     it.formattedMessage.contains("updateId=22")
             }
             assertTrue(event.formattedMessage.contains("picture_size_check_failed"))
+            assertEquals(null, event.throwableProxy)
+        } finally {
+            coordinator.close()
+            logger.detachAppender(appender)
+        }
+    }
+
+    @Test
+    fun `defers publisher backpressure without error stack trace`() = runBlocking {
+        val source = FakeTelegramMessageSource()
+        val coordinator = TelegramRepostCoordinator(
+            source,
+            PhotoRepostHandler {
+                throw PublisherBackpressureException("TikTok has 5 pending shares")
+            },
+        )
+        val logger = LoggerFactory.getLogger(TelegramRepostCoordinator::class.java) as Logger
+        val appender = ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>().apply { start() }
+        logger.addAppender(appender)
+
+        try {
+            coordinator.start()
+            source.emit(message(24))
+
+            val state = withTimeout(1_000) {
+                coordinator.state.first { it is RepostFlowState.Deferred }
+            }
+
+            assertEquals(RepostFlowState.Deferred(24, "TikTok has 5 pending shares"), state)
+            val event = appender.list.first {
+                it.formattedMessage.startsWith("Telegram repost deferred by destination capacity.")
+            }
+            assertEquals(ch.qos.logback.classic.Level.WARN, event.level)
             assertEquals(null, event.throwableProxy)
         } finally {
             coordinator.close()

@@ -12,6 +12,9 @@ interface PhotoPublisher {
     suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt
 }
 
+/** A temporary destination capacity condition that should defer, rather than fail, the FIFO head. */
+open class PublisherBackpressureException(message: String) : Exception(message)
+
 data class PublisherPendingDiagnostics(
     val destination: RepostDestination,
     val trackedCount: Int,

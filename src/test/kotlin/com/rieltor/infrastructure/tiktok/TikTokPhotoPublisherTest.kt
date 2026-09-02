@@ -1,6 +1,7 @@
 package com.rieltor.infrastructure.tiktok
 
 import com.rieltor.domain.model.StoredTokens
+import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.domain.repository.TikTokPublishThrottleRepository
 import com.rieltor.domain.repository.TikTokTokenRepository
 import com.rieltor.domain.repository.TrackedTikTokPublish
@@ -174,7 +175,7 @@ class TikTokPhotoPublisherTest {
             nowMillis = { 2_000L },
         )
 
-        val error = kotlin.test.assertFailsWith<TikTokAuthException> {
+        val error = kotlin.test.assertFailsWith<PublisherBackpressureException> {
             publisher.publish(listOf("https://api.example/media/photo.jpg"), null)
         }
 
@@ -220,13 +221,14 @@ class TikTokPhotoPublisherTest {
             publishRepository = throttle,
         )
 
-        val error = kotlin.test.assertFailsWith<TikTokAuthException> {
+        val error = kotlin.test.assertFailsWith<PublisherBackpressureException> {
             publisher.publish(listOf("https://api.example/media/photo.jpg"), null)
         }
 
         assertTrue(error.message.orEmpty().contains("5 locally tracked pending shares"))
         assertEquals(5, statusChecks)
         assertEquals(0, initializationRequests)
+        assertEquals(8 * 60 * 60 * 1_000L + 2_000L, throttle.blockedUntil)
     }
 
     @Test

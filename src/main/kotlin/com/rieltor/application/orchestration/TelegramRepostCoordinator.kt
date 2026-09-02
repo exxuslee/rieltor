@@ -8,6 +8,7 @@ import com.rieltor.application.port.TelegramMessageSource
 import com.rieltor.application.usecase.RepostPublishException
 import com.rieltor.domain.model.RepostResult
 import com.rieltor.domain.model.TelegramListing
+import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.domain.repository.QueueEnqueueResult
 import com.rieltor.domain.repository.TelegramRepostQueue
 import com.rieltor.domain.repository.TelegramRepostQueueSnapshot
@@ -30,6 +31,7 @@ class TelegramRepostCoordinator(
     private val queueCapacity: Int = DEFAULT_QUEUE_CAPACITY,
     private val retryDelayMillis: Long = DEFAULT_RETRY_DELAY_MILLIS,
     private val diagnosticsIntervalMillis: Long = DEFAULT_DIAGNOSTICS_INTERVAL_MILLIS,
+    private val workerStartupDelayMillis: Long = 0L,
     private val nowMillis: () -> Long = System::currentTimeMillis,
 ) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -52,6 +54,7 @@ class TelegramRepostCoordinator(
         require(queueCapacity > 0) { "Repost queue capacity must be positive." }
         require(retryDelayMillis >= 0) { "Repost retry delay must not be negative." }
         require(diagnosticsIntervalMillis > 0) { "Repost diagnostics interval must be positive." }
+        require(workerStartupDelayMillis >= 0) { "Repost worker startup delay must not be negative." }
         mutableState.value = RepostFlowState.WaitingForMessage
         queue.recoverInterrupted()
 
@@ -65,7 +68,7 @@ class TelegramRepostCoordinator(
             }
         }
         workerJob = scope.launch {
-            delay(60_000L.milliseconds)
+            if (workerStartupDelayMillis > 0) delay(workerStartupDelayMillis.milliseconds)
             for (ignored in queueSignal) {
                 while (!closing.get()) {
                     val message = queue.peekOldest() ?: break
@@ -91,6 +94,7 @@ class TelegramRepostCoordinator(
             source.start()
             queueSignal.trySend(Unit)
         } catch (error: Throwable) {
+            closing.set(true)
             observerJob?.cancel()
             sourceStateObserverJob?.cancel()
             workerJob?.cancel()
@@ -167,6 +171,14 @@ class TelegramRepostCoordinator(
             }
         } catch (error: CancellationException) {
             throw error
+        } catch (error: PublisherBackpressureException) {
+            logger.warn(
+                "Telegram repost deferred by destination capacity. updateId={}, reason={}",
+                message.updateId,
+                error.failureReason(),
+            )
+            defer(message.updateId, error.failureReason())
+            false
         } catch (error: RepostPublishException) {
             logger.error("Failed to repost Telegram message. updateId={}, reason={}", message.updateId, error.failureReason())
             retry(message.updateId, error.failureReason())
@@ -181,6 +193,16 @@ class TelegramRepostCoordinator(
     private fun retry(updateId: Long, reason: String) {
         queue.markRetryPending(updateId, reason)
         mutableState.value = RepostFlowState.Failed(updateId, reason)
+        scheduleRetry()
+    }
+
+    private fun defer(updateId: Long, reason: String) {
+        queue.markRetryPending(updateId, reason)
+        mutableState.value = RepostFlowState.Deferred(updateId, reason)
+        scheduleRetry()
+    }
+
+    private fun scheduleRetry() {
         retryUntilMillis.set(nowMillis() + retryDelayMillis)
         scope.launch {
             delay(retryDelayMillis)
@@ -263,6 +285,7 @@ class TelegramRepostCoordinator(
         const val DEFAULT_QUEUE_CAPACITY = 64
         const val DEFAULT_RETRY_DELAY_MILLIS = 60_000L
         const val DEFAULT_DIAGNOSTICS_INTERVAL_MILLIS = 15 * 60_000L
+        const val PRODUCTION_WORKER_STARTUP_DELAY_MILLIS = 60_000L
         const val STATUS_REJECTED_NO_PRICE = "REJECTED_NO_PRICE"
         const val STATUS_REJECTED_NO_DRIVE = "REJECTED_NO_GOOGLE_DRIVE_LINK"
         const val STATUS_PUBLISHED = "PUBLISHED"
