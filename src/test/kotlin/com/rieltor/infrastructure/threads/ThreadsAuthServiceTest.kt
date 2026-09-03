@@ -3,13 +3,9 @@ package com.rieltor.infrastructure.threads
 import com.rieltor.domain.model.StoredThreadsTokens
 import com.rieltor.domain.repository.ThreadsTokenRepository
 import com.rieltor.infrastructure.config.ApplicationSettings
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.respond
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.headersOf
+import io.ktor.client.*
+import io.ktor.client.engine.mock.*
+import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import java.nio.file.Path
@@ -27,7 +23,7 @@ class ThreadsAuthServiceTest {
         val engine = MockEngine { request ->
             paths += request.url.encodedPath
             val content = if (request.url.encodedPath.endsWith("/oauth/access_token")) {
-                """{"user_id":"threads-user","access_token":"short","expires_in":3600}"""
+                """{"user_id":17841400000000000,"access_token":"short","expires_in":3600}"""
             } else {
                 """{"access_token":"long","expires_in":5184000}"""
             }
@@ -47,7 +43,7 @@ class ThreadsAuthServiceTest {
         assertEquals("threads_basic,threads_content_publish", authorizeUrl.parameters["scope"])
         assertEquals("state-1", authorizeUrl.parameters["state"])
         assertEquals(listOf("/oauth/access_token", "/access_token"), paths)
-        assertEquals("threads-user", stored.userId)
+        assertEquals("17841400000000000", stored.userId)
         assertEquals("long", stored.accessToken)
         assertEquals(stored, repository.load())
     }
