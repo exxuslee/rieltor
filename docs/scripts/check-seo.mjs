@@ -61,6 +61,12 @@ for (const expected of ['Ірина Ліннік', 'https://rieltor.dpdns.org/se
 }
 if (!fs.existsSync(path.join(root, 'llms-full.txt'))) errors.push('missing llms-full.txt');
 
+for (const file of ['privacy.html', 'terms.html']) {
+    const html = fs.readFileSync(path.join(root, file), 'utf8');
+    if (!html.includes('Rieltor')) errors.push(`${file}: missing exact TikTok app name Rieltor`);
+    if (!html.includes('/images/rieltor-app-icon-v8.png')) errors.push(`${file}: missing shared Rieltor app icon`);
+}
+
 const robots = fs.readFileSync(path.join(root, 'robots.txt'), 'utf8');
 for (const agent of ['GPTBot', 'OAI-SearchBot', 'ChatGPT-User', 'ClaudeBot', 'PerplexityBot']) {
     if (!robots.includes(`User-agent: ${agent}`)) errors.push(`robots.txt: missing ${agent}`);

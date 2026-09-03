@@ -20,7 +20,8 @@ for (const file of walk(root).filter(file => file.endsWith('.html'))) {
     for (const match of html.matchAll(/(?:href|src)=["']([^"'#?]+)["']/gi)) {
         const reference = match[1];
         if (/^(?:https?:|mailto:|tel:|data:)/i.test(reference)) continue;
-        const target = reference.startsWith('/') ? path.join(root, reference.slice(1)) : path.resolve(path.dirname(file), reference);
+        const localReference = reference.split(/[?#]/)[0];
+        const target = localReference.startsWith('/') ? path.join(root, localReference.slice(1)) : path.resolve(path.dirname(file), localReference);
         if (!fs.existsSync(target)) errors.push(`${relative}: missing local target ${reference}`);
     }
 }

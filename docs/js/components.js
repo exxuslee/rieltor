@@ -18,7 +18,7 @@ class SiteHeader extends HTMLElement {
             ['sell', siteUrl('sell-your-apartment.html'), 'ПРОДАЖ'], ['faq', siteUrl('faq.html'), 'FAQ'], ['contacts', siteUrl('contacts.html'), 'КОНТАКТИ']
         ];
         this.innerHTML = `<header class="site-header"><div class="container header-inner">
-      <a class="brand" href="${siteUrl('index.html')}" aria-label="Ірина Ліннік — головна"><span class="brand-mark">IL</span><span class="brand-name">Ірина Ліннік</span></a>
+      <a class="brand" href="${siteUrl('index.html')}" aria-label="Ірина Ліннік — головна"><img class="brand-mark" src="${siteUrl('images/rieltor-app-icon-v8.png')}" alt="" width="40" height="40"><span class="brand-name">Ірина Ліннік</span></a>
       <nav class="nav" id="main-nav" aria-label="Головна навігація">${links.map(([key, href, label]) => `<a href="${href}" ${page === key ? 'aria-current="page"' : ''}>${label}</a>`).join('')}</nav>
       <div class="header-actions"><a class="phone" href="tel:+380663727102">+380 (66) 372 71 02</a>
         <button class="theme-toggle" type="button" aria-label="Змінити тему"><span class="sun">${icon('sun')}</span><span class="moon">${icon('moon')}</span></button>
@@ -93,10 +93,10 @@ class SiteHeader extends HTMLElement {
 class SiteFooter extends HTMLElement {
     connectedCallback() {
         this.innerHTML = `<footer class="site-footer"><div class="container">
-      <div class="footer-grid"><div class="footer-brand"><a class="brand" href="${siteUrl('index.html')}"><span class="brand-mark">IL</span><span class="brand-name">Ірина Ліннік</span></a><p>Персональний супровід у купівлі та продажу нерухомості в Ірпені, Бучі та Гостомелі.</p><div class="footer-links"><a href="${siteUrl('about.html')}">Про Ірину</a><a href="${siteUrl('faq.html')}">Запитання й відповіді</a><a href="${siteUrl('privacy.html')}">Конфіденційність</a></div></div>
+      <div class="footer-grid"><div class="footer-brand"><a class="brand" href="${siteUrl('index.html')}"><img class="brand-mark" src="${siteUrl('images/rieltor-app-icon-v8.png')}" alt="" width="40" height="40"><span class="brand-name">Ірина Ліннік</span></a><p>Персональний супровід у купівлі та продажу нерухомості в Ірпені, Бучі та Гостомелі.</p><div class="footer-links"><a href="${siteUrl('about.html')}">Про Ірину</a><a href="${siteUrl('faq.html')}">Запитання й відповіді</a><a href="${siteUrl('privacy.html')}">Політика конфіденційності Rieltor</a><a href="${siteUrl('terms.html')}">Умови використання Rieltor</a></div></div>
       <div><h2 class="footer-title">Послуги</h2><div class="footer-links"><a href="${siteUrl('buy.html')}">Купівля нерухомості</a><a href="${siteUrl('sell-your-apartment.html')}">Продаж нерухомості</a><a href="${siteUrl('contacts.html')}">Консультація</a></div></div>
       <div><h2 class="footer-title">Зв’язок</h2><div class="footer-links"><a href="tel:+380663727102">+380 (66) 372 71 02</a><a href="mailto:irinalinnik.lee@gmail.com">irinalinnik.lee@gmail.com</a><a href="https://t.me/irynalinnik_rieltor" target="_blank" rel="noopener noreferrer">Telegram: @irynalinnik_rieltor</a><a href="https://www.tiktok.com/@irina_rieltor_novator" target="_blank" rel="noopener noreferrer">TikTok: @irina_rieltor_novator</a></div></div></div>
-      <div class="footer-bottom"><span>© ${new Date().getFullYear()} Ірина Ліннік</span><span>Сайт персонального рієлтора</span></div>
+      <div class="footer-bottom"><span>© ${new Date().getFullYear()} Ірина Ліннік</span><span>Вебзастосунок Rieltor</span></div>
     </div></footer>`;
     }
 }

@@ -77,11 +77,11 @@ const propertyPage = item => {
   <meta property="og:image" content="${domain}/${imagePath(item)}">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#f5f1e8">
-  <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/images/favicon-v8-48.png" sizes="48x48" type="image/png">
   <link rel="manifest" href="/site.webmanifest">
   <script type="application/ld+json">${json(schema)}</script>
   <script src="/js/theme.js"></script>
-  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/styles.css?v=8.1">
 </head>
 <body data-page="buy">
   <site-header></site-header>

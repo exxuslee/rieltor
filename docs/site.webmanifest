@@ -1,13 +1,13 @@
 {
-  "name": "Ірина Ліннік — персональний рієлтор",
-  "short_name": "Ірина Ліннік",
+  "name": "Rieltor — Ірина Ліннік",
+  "short_name": "Rieltor",
   "lang": "uk",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f5f1e8",
   "theme_color": "#f5f1e8",
   "icons": [
-    { "src": "/images/favicon-48.png", "sizes": "48x48", "type": "image/png", "purpose": "any" },
-    { "src": "/images/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    { "src": "/images/favicon-v8-48.png", "sizes": "48x48", "type": "image/png", "purpose": "any" },
+    { "src": "/images/rieltor-app-icon-v8.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
   ]
 }

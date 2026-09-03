@@ -200,10 +200,12 @@ button, a {
 }
 
 .brand-mark {
-    font: 400 2.35rem/1 var(--serif);
-    color: var(--accent);
-    letter-spacing: -.08em;
-    transition: font-size .25s ease;
+    display: block;
+    width: 40px;
+    height: 40px;
+    border-radius: 9px;
+    object-fit: cover;
+    transition: width .25s ease, height .25s ease, border-radius .25s ease;
 }
 
 .brand-name {
@@ -327,7 +329,9 @@ button, a {
 }
 
 .site-header.is-compact .brand-mark {
-    font-size: 1.2rem;
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
 }
 
 .site-header.is-compact .brand-name {
@@ -1273,6 +1277,7 @@ textarea.control {
     margin: 0;
     font: 400 clamp(3.2rem, 6vw, 6.3rem)/.96 var(--serif);
     letter-spacing: var(--display-tracking);
+    overflow-wrap: anywhere;
 }
 
 .page-hero p {
@@ -2014,7 +2019,9 @@ textarea.control {
     }
 
     .brand-mark {
-        font-size: 2rem;
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
     }
 
     .header-actions {
@@ -2195,6 +2202,10 @@ textarea.control {
 }
 
 @media (max-width: 520px) {
+    .page-hero h1 {
+        font-size: clamp(2.45rem, 11vw, 2.85rem);
+    }
+
     .header-inner {
         gap: 6px;
     }
@@ -2208,7 +2219,9 @@ textarea.control {
     }
 
     .brand-mark {
-        font-size: 1.8rem;
+        width: 30px;
+        height: 30px;
+        border-radius: 7px;
     }
 
     .theme-toggle {
