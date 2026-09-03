@@ -284,7 +284,7 @@ class TelegramRepostCoordinator(
     companion object {
         const val DEFAULT_QUEUE_CAPACITY = 64
         const val DEFAULT_RETRY_DELAY_MILLIS = 60_000L
-        const val DEFAULT_DIAGNOSTICS_INTERVAL_MILLIS = 15 * 60_000L
+        const val DEFAULT_DIAGNOSTICS_INTERVAL_MILLIS = 60 * 60_000L
         const val PRODUCTION_WORKER_STARTUP_DELAY_MILLIS = 60_000L
         const val STATUS_REJECTED_NO_PRICE = "REJECTED_NO_PRICE"
         const val STATUS_REJECTED_NO_DRIVE = "REJECTED_NO_GOOGLE_DRIVE_LINK"

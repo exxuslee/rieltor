@@ -280,7 +280,7 @@ class TikTokPhotoPublisher(
         tracked.forEach { publish ->
             val fetched = fetchPublishStatus(accessToken, publish.publishId)
             val status = fetched.data.status
-            logPublishStatus(publish.publishId, fetched.data, 1, 1, fetched)
+//            logPublishStatus(publish.publishId, fetched.data, 1, 1, fetched)
             if (status == "FAILED" || status == "PUBLISH_COMPLETE") {
                 repository.removeTrackedPublish(publish.publishId)
             } else {
