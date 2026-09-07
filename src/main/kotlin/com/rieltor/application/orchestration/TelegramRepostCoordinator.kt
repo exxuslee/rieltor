@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration.Companion.milliseconds
 
 /** Persistent FIFO coordinator and the only owner of the cross-destination dispatch quota. */
@@ -29,7 +28,6 @@ class TelegramRepostCoordinator(
     private val queue: TelegramRepostQueue = InMemoryTelegramRepostQueue(),
     private val masterLimiter: RepostMasterLimiter = RepostMasterLimiter { },
     private val queueCapacity: Int = DEFAULT_QUEUE_CAPACITY,
-    private val retryDelayMillis: Long = DEFAULT_RETRY_DELAY_MILLIS,
     private val diagnosticsIntervalMillis: Long = DEFAULT_DIAGNOSTICS_INTERVAL_MILLIS,
     private val workerStartupDelayMillis: Long = 0L,
     private val nowMillis: () -> Long = System::currentTimeMillis,
@@ -40,7 +38,6 @@ class TelegramRepostCoordinator(
     private val closing = AtomicBoolean(false)
     private val mutableState = MutableStateFlow<RepostFlowState>(RepostFlowState.Stopped)
     private val queueSignal = Channel<Unit>(Channel.CONFLATED)
-    private val retryUntilMillis = AtomicLong(0L)
     private var observerJob: Job? = null
     private var sourceStateObserverJob: Job? = null
     private var workerJob: Job? = null
@@ -52,7 +49,6 @@ class TelegramRepostCoordinator(
     fun start() {
         if (!started.compareAndSet(false, true)) return
         require(queueCapacity > 0) { "Repost queue capacity must be positive." }
-        require(retryDelayMillis >= 0) { "Repost retry delay must not be negative." }
         require(diagnosticsIntervalMillis > 0) { "Repost diagnostics interval must be positive." }
         require(workerStartupDelayMillis >= 0) { "Repost worker startup delay must not be negative." }
         mutableState.value = RepostFlowState.WaitingForMessage
@@ -125,7 +121,6 @@ class TelegramRepostCoordinator(
 
     /** Returns true when the FIFO head was finalized and the next row may start. */
     private suspend fun process(message: TelegramListing): Boolean {
-        retryUntilMillis.set(0L)
         logger.info("Persistent FIFO repost processing started. updateId={}", message.updateId)
         mutableState.value = RepostFlowState.Processing(message.updateId)
         return try {
@@ -138,8 +133,8 @@ class TelegramRepostCoordinator(
                     ) }
                     if (result.failures.isNotEmpty()) {
                         val reason = result.failures.joinToString("; ") { "${it.destination}: ${it.reason}" }
-                        retry(message.updateId, reason)
-                        false
+                        finishFailed(message.updateId, reason, "PARTIALLY_PUBLISHED")
+                        true
                     } else {
                         queue.complete(message.updateId, STATUS_PUBLISHED)
                         mutableState.value = RepostFlowState.Published(message.updateId, result.receipt.publishId)
@@ -166,41 +161,28 @@ class TelegramRepostCoordinator(
             throw error
         } catch (error: PublisherBackpressureException) {
             logger.warn(
-                "Telegram repost deferred by destination capacity. updateId={}, reason={}",
+                "Telegram repost failed due to destination capacity. updateId={}, reason={}",
                 message.updateId,
                 error.failureReason(),
             )
-            defer(message.updateId, error.failureReason())
-            false
+            finishFailed(message.updateId, error.failureReason())
+            true
         } catch (error: RepostPublishException) {
             logger.error("Failed to repost Telegram message. updateId={}, reason={}", message.updateId, error.failureReason())
-            retry(message.updateId, error.failureReason())
-            false
+            finishFailed(message.updateId, error.failureReason())
+            true
         } catch (error: Throwable) {
             logger.error("Failed to repost Telegram message {}", message.updateId, error)
-            retry(message.updateId, error.failureReason())
-            false
+            finishFailed(message.updateId, error.failureReason())
+            true
         }
     }
 
-    private fun retry(updateId: Long, reason: String) {
-        queue.markRetryPending(updateId, reason)
+    private fun finishFailed(updateId: Long, reason: String, status: String = "FAILED") {
+        queue.fail(updateId, status, reason)
         mutableState.value = RepostFlowState.Failed(updateId, reason)
-        scheduleRetry()
-    }
-
-    private fun defer(updateId: Long, reason: String) {
-        queue.markRetryPending(updateId, reason)
-        mutableState.value = RepostFlowState.Deferred(updateId, reason)
-        scheduleRetry()
-    }
-
-    private fun scheduleRetry() {
-        retryUntilMillis.set(nowMillis() + retryDelayMillis)
-        scope.launch {
-            delay(retryDelayMillis)
-            queueSignal.trySend(Unit)
-        }
+        logger.warn("Telegram repost finalized in history; continuing FIFO. updateId={}, status={}, reason={}",
+            updateId, status, reason)
     }
 
     override fun close() {
@@ -221,15 +203,10 @@ class TelegramRepostCoordinator(
     private suspend fun logDiagnostics() {
         val queueSnapshot = queue.snapshot()
         val now = nowMillis()
-        val retryRemainingMillis = retryUntilMillis.get().remainingMillis(now)
         val limiterRemainingMillis = masterLimiter.waitUntilMillis().remainingMillis(now)
         val waitingFor: String
         val remainingMillis: Long?
         when {
-            retryRemainingMillis != null -> {
-                waitingFor = "retry delay"
-                remainingMillis = retryRemainingMillis
-            }
             limiterRemainingMillis != null -> {
                 waitingFor = "master repost limiter"
                 remainingMillis = limiterRemainingMillis
@@ -276,7 +253,6 @@ class TelegramRepostCoordinator(
 
     companion object {
         const val DEFAULT_QUEUE_CAPACITY = 64
-        const val DEFAULT_RETRY_DELAY_MILLIS = 60_000L
         const val DEFAULT_DIAGNOSTICS_INTERVAL_MILLIS = 60 * 60_000L
         const val PRODUCTION_WORKER_STARTUP_DELAY_MILLIS = 60_000L
         const val STATUS_REJECTED_NO_PRICE = "REJECTED_NO_PRICE"

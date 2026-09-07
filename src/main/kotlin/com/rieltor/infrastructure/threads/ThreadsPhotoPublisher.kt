@@ -3,14 +3,13 @@ package com.rieltor.infrastructure.threads
 import com.rieltor.domain.model.PublishReceipt
 import com.rieltor.domain.model.RepostDestination
 import com.rieltor.domain.repository.PhotoPublisher
-import io.ktor.client.HttpClient
-import io.ktor.client.request.get
-import io.ktor.client.request.parameter
-import io.ktor.client.request.post
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.isSuccess
+import io.ktor.client.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
+import org.slf4j.LoggerFactory
 
 class ThreadsPhotoPublisher(
     private val httpClient: HttpClient,
@@ -19,6 +18,7 @@ class ThreadsPhotoPublisher(
     private val statusPollDelayMillis: Long = 500,
     private val maxStatusAttempts: Int = 20,
 ) : PhotoPublisher {
+    private val logger = LoggerFactory.getLogger(javaClass)
     override val destination = RepostDestination.THREADS
     override val maxPhotoCount = MAX_PHOTO_COUNT
 
@@ -26,6 +26,7 @@ class ThreadsPhotoPublisher(
         require(photoUrls.isNotEmpty()) { "At least one photo URL is required." }
         require(photoUrls.size <= maxPhotoCount) { "Threads accepts at most $maxPhotoCount photos per carousel." }
         val token = auth.validAccessToken()
+        logger.info("Threads publishing started. photoCount={}", photoUrls.size)
         val text = caption.orEmpty().trim().take(MAX_TEXT_LENGTH)
         val containerId = if (photoUrls.size == 1) {
             createContainer(token, "IMAGE", mapOf("image_url" to photoUrls.single(), "text" to text))
@@ -48,7 +49,8 @@ class ThreadsPhotoPublisher(
             parameter("creation_id", containerId)
             parameter("access_token", token)
         }
-        val published = decodeId(response.status.value, response.bodyAsText(), response.status.isSuccess(), "publish")
+        val published = decodeId(response.status.value, response.bodyAsText(), response.status.isSuccess(), "publish", token)
+        logger.info("Threads publishing completed. publishId={}", published)
         return PublishReceipt(
             publishId = published,
             creatorName = auth.connectedUserId().orEmpty(),
@@ -63,7 +65,7 @@ class ThreadsPhotoPublisher(
             values.filterValues(String::isNotBlank).forEach { (name, value) -> parameter(name, value) }
             parameter("access_token", token)
         }
-        return decodeId(response.status.value, response.bodyAsText(), response.status.isSuccess(), "container creation")
+        return decodeId(response.status.value, response.bodyAsText(), response.status.isSuccess(), "container creation mediaType=$mediaType", token)
     }
 
     private suspend fun waitUntilReady(containerId: String, token: String) {
@@ -73,12 +75,15 @@ class ThreadsPhotoPublisher(
                 parameter("access_token", token)
             }
             val payload = runCatching { json.decodeFromString<ThreadsContainerStatus>(response.bodyAsText()) }
-                .getOrElse { throw ThreadsAuthException("Threads returned an unreadable container status.") }
-            payload.error?.let { throw ThreadsAuthException("Threads status failed: ${it.message}") }
+                .getOrElse { throw ThreadsAuthException("Threads container status returned an unreadable response (HTTP ${response.status.value}).") }
+            if (!response.status.isSuccess() || payload.error != null) {
+                failResponse(response.status.value, "container status", payload.error, token)
+            }
+            logger.info("Threads container status. containerId={}, attempt={}, status={}", containerId, attempt + 1, payload.status)
             when (payload.status) {
                 "FINISHED" -> return
                 "ERROR", "EXPIRED" -> throw ThreadsAuthException(
-                    "Threads media container ${payload.status}: ${payload.errorMessage ?: "unknown error"}"
+                    "Threads media container ${payload.status}: ${safe(payload.errorMessage ?: "unknown error", token)}"
                 )
             }
             if (attempt + 1 < maxStatusAttempts) delay(statusPollDelayMillis)
@@ -86,14 +91,27 @@ class ThreadsPhotoPublisher(
         throw ThreadsAuthException("Threads media container did not become ready in time.")
     }
 
-    private fun decodeId(status: Int, raw: String, success: Boolean, operation: String): String {
+    private fun decodeId(status: Int, raw: String, success: Boolean, operation: String, token: String): String {
         val payload = runCatching { json.decodeFromString<ThreadsIdResponse>(raw) }
             .getOrElse { throw ThreadsAuthException("Threads $operation returned an unreadable response (HTTP $status).") }
         if (!success || payload.error != null || payload.id.isNullOrBlank()) {
-            throw ThreadsAuthException("Threads $operation failed: ${payload.error?.message ?: "HTTP $status"}")
+            failResponse(status, operation, payload.error, token)
         }
         return payload.id
     }
+
+    private fun failResponse(status: Int, operation: String, error: ThreadsApiError?, token: String): Nothing {
+        val details = "operation=$operation, HTTP=$status, type=${safe(error?.type.orEmpty(), token)}, " +
+            "code=${error?.code}, subcode=${error?.errorSubcode}, transient=${error?.isTransient}, " +
+            "traceId=${safe(error?.traceId.orEmpty(), token)}, message=${safe(error?.message ?: "Missing response id or API error", token)}"
+        logger.warn("Threads API request failed. {}", details)
+        throw ThreadsAuthException("Threads request failed: $details")
+    }
+
+    private fun safe(value: String, token: String): String = value
+        .replace(token, "[REDACTED]")
+        .replace(Regex("https?://[^\\s]+"), "[URL]")
+        .replace('\n', ' ').replace('\r', ' ').take(1000)
 
     private companion object {
         const val GRAPH_URL = "https://graph.threads.net/v1.0"

@@ -24,6 +24,24 @@ import kotlin.test.*
 
 class TelegramRepostCoordinatorTest {
     @Test
+    fun `failed FIFO head is finalized and next message is published`() = runBlocking {
+        val source = FakeTelegramMessageSource()
+        val calls = java.util.Collections.synchronizedList(mutableListOf<Long>())
+        val coordinator = TelegramRepostCoordinator(source, PhotoRepostHandler { listing ->
+            calls.add(listing.updateId)
+            if (listing.updateId == 501L) error("Threads blocked")
+            RepostResult.Published(listOf(PublishReceipt("next", "test", "SELF_ONLY")))
+        })
+        try {
+            coordinator.start()
+            source.emit(message(501))
+            source.emit(message(502))
+            withTimeout(2_000) { coordinator.state.first { it is RepostFlowState.Published } }
+            assertEquals(listOf(501L, 502L), calls.toList())
+        } finally { coordinator.close() }
+    }
+
+    @Test
     fun `observes source and publishes flow state`() = runBlocking {
         val source = FakeTelegramMessageSource()
         val coordinator = TelegramRepostCoordinator(
@@ -127,7 +145,7 @@ class TelegramRepostCoordinatorTest {
     }
 
     @Test
-    fun `defers publisher backpressure without error stack trace`() = runBlocking {
+    fun `finalizes publisher backpressure without error stack trace`() = runBlocking {
         val source = FakeTelegramMessageSource()
         val coordinator = TelegramRepostCoordinator(
             source,
@@ -144,12 +162,12 @@ class TelegramRepostCoordinatorTest {
             source.emit(message(24))
 
             val state = withTimeout(1_000) {
-                coordinator.state.first { it is RepostFlowState.Deferred }
+                coordinator.state.first { it is RepostFlowState.Failed }
             }
 
-            assertEquals(RepostFlowState.Deferred(24, "TikTok has 5 pending shares"), state)
+            assertEquals(RepostFlowState.Failed(24, "TikTok has 5 pending shares"), state)
             val event = appender.list.first {
-                it.formattedMessage.startsWith("Telegram repost deferred by destination capacity.")
+                it.formattedMessage.startsWith("Telegram repost failed due to destination capacity.")
             }
             assertEquals(ch.qos.logback.classic.Level.WARN, event.level)
             assertEquals(null, event.throwableProxy)
@@ -160,12 +178,11 @@ class TelegramRepostCoordinatorTest {
     }
 
     @Test
-    fun `logs queue and remaining retry delay in periodic diagnostics`() = runBlocking {
+    fun `failed message leaves queue empty in periodic diagnostics`() = runBlocking {
         val source = FakeTelegramMessageSource()
         val coordinator = TelegramRepostCoordinator(
             source = source,
             repostHandler = PhotoRepostHandler { error("TikTok unavailable") },
-            retryDelayMillis = 1_000,
             diagnosticsIntervalMillis = 10,
         )
         val logger = LoggerFactory.getLogger(TelegramRepostCoordinator::class.java) as Logger
@@ -179,9 +196,9 @@ class TelegramRepostCoordinatorTest {
             withTimeout(1_000) {
                 while (appender.list.none { event ->
                     event.formattedMessage.startsWith("Telegram repost coordinator status.") &&
-                        event.formattedMessage.contains("claimedUpdateId=23") &&
-                        event.formattedMessage.contains("waitingFor=retry delay") &&
-                        event.formattedMessage.contains("remainingMinutes=1")
+                        event.formattedMessage.contains("queueSize=0") &&
+                        event.formattedMessage.contains("waitingFor=a new Telegram message") &&
+                        event.formattedMessage.contains("remainingMinutes=null")
                 }) delay(10)
             }
         } finally {

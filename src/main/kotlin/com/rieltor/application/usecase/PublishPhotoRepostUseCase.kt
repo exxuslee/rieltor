@@ -6,7 +6,6 @@ import com.rieltor.domain.model.*
 import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublicMediaStorage
-import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.domain.service.ListingCaptionFormatter
 import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
@@ -73,7 +72,7 @@ class PublishPhotoRepostUseCase(
             // Keep destinations failure-isolated, but publish them one at a time.
             val outcomes = mutableListOf<Pair<RepostDestination, Result<PublishReceipt>>>()
             val orderedPublishers = activePublishers.toList()
-            for ((index, publisher) in orderedPublishers.withIndex()) {
+            for (publisher in orderedPublishers) {
                 val outcome = runCatching {
                     val receipt = publisher.publish(
                         media.map { it.publicUrl }.take(minOf(publisher.maxPhotoCount, maxPhotoCount)),
@@ -85,21 +84,13 @@ class PublishPhotoRepostUseCase(
                     runCatching {
                         repostTracker.markFailed(listing.updateId, publisher.destination, error)
                     }.onFailure(error::addSuppressed)
-                    orderedPublishers.drop(index + 1).forEach { waitingPublisher ->
-                        runCatching {
-                            repostTracker.markFailed(
-                                listing.updateId,
-                                waitingPublisher.destination,
-                                IllegalStateException("Previous destination failed; sequential batch will be retried"),
-                            )
-                        }.onFailure(error::addSuppressed)
-                    }
                 }
                 outcomes += publisher.destination to outcome
                 outcome.exceptionOrNull()?.let { error ->
-                    if (error is PublisherBackpressureException) throw error
+                    if (error is CancellationException) throw error
+                    logger.warn("Photo repost destination failed. updateId={}, destination={}, reason={}",
+                        listing.updateId, publisher.destination, error.message)
                 }
-                if (outcome.isFailure) break
             }
             val receipts = outcomes.mapNotNull { it.second.getOrNull() }
             val failures = reservationFailures + outcomes.mapNotNull { (destination, result) ->

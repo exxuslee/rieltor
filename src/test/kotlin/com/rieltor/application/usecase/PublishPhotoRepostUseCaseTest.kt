@@ -280,7 +280,7 @@ class PublishPhotoRepostUseCaseTest {
     }
 
     @Test
-    fun `first destination failure stops the sequential batch`() = runBlocking {
+    fun `first destination failure still attempts the next destination`() = runBlocking {
         val jobs = FakeJobs()
         val tikTok = FakePublisher(failure = IllegalStateException("TikTok unavailable"))
         val threads = FakePublisher(destination = RepostDestination.THREADS, maxPhotoCount = 20)
@@ -291,10 +291,11 @@ class PublishPhotoRepostUseCaseTest {
             allowedSources = setOf(TelegramMonitoredTopic(MONITORED_CHAT_ID, MONITORED_THREAD_ID)),
         )
 
-        assertFailsWith<RepostPublishException> { service.handle(message(22)) }
+        val result = assertIs<RepostResult.Published>(service.handle(message(22)))
+        assertEquals(RepostDestination.TIKTOK, result.failures.single().destination)
 
         assertEquals(1, tikTok.calls)
-        assertEquals(0, threads.calls)
+        assertEquals(1, threads.calls)
     }
 
     @Test

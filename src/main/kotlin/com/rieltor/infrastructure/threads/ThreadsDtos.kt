@@ -59,4 +59,6 @@ data class ThreadsApiError(
     val type: String? = null,
     val code: Int? = null,
     @SerialName("error_subcode") val errorSubcode: Int? = null,
+    @SerialName("fbtrace_id") val traceId: String? = null,
+    @SerialName("is_transient") val isTransient: Boolean? = null,
 )

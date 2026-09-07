@@ -12,6 +12,7 @@ internal data class ReceivedMessageState(
     val status: String,
     @ColumnInfo(name = "duplicate_of_update_id") val duplicateOfUpdateId: Long?,
     @ColumnInfo(name = "google_drive_links") val googleDriveLinks: String,
+    val error: String?,
 )
 
 @Dao
@@ -20,7 +21,7 @@ internal abstract class RepostDao {
     abstract suspend fun receivedCount(): Int
 
     @Query(
-        "SELECT status, duplicate_of_update_id, google_drive_links FROM received_telegram_messages " +
+        "SELECT status, duplicate_of_update_id, google_drive_links, error FROM received_telegram_messages " +
             "WHERE telegram_update_id = :updateId"
     )
     abstract suspend fun receivedState(updateId: Long): ReceivedMessageState?
@@ -254,9 +255,9 @@ internal abstract class RepostQueueDao {
     }
 
     @Transaction
-    open suspend fun complete(updateId: Long, status: String, now: Long) {
+    open suspend fun complete(updateId: Long, status: String, now: Long, error: String? = null) {
         deleteQueue(updateId)
-        updateReceived(updateId, status, null, now)
+        updateReceived(updateId, status, error?.take(1000), now)
     }
 
     @Transaction

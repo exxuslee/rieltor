@@ -4,13 +4,9 @@ import com.rieltor.domain.model.RepostDestination
 import com.rieltor.domain.model.StoredThreadsTokens
 import com.rieltor.domain.repository.ThreadsTokenRepository
 import com.rieltor.infrastructure.config.ApplicationSettings
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.respond
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.headersOf
+import io.ktor.client.*
+import io.ktor.client.engine.mock.*
+import io.ktor.http.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import java.nio.file.Path
@@ -89,6 +85,30 @@ class ThreadsPhotoPublisherTest {
 
         assertEquals("IMAGE", createdParameters["media_type"])
         assertEquals(500, createdParameters.getValue("text").length)
+    }
+
+    @Test
+    fun `API denial reports HTTP codes and trace without exposing token`() = runBlocking {
+        val client = HttpClient(MockEngine {
+            respond(
+                """{"error":{"message":"API access blocked secret-token","type":"OAuthException","code":200,"error_subcode":123,"fbtrace_id":"trace-42","is_transient":false}}""",
+                HttpStatusCode.Forbidden,
+                headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+            )
+        })
+        val auth = ThreadsAuthService(client, settings(), InMemoryThreadsTokens(
+            StoredThreadsTokens("user-1", "secret-token", Instant.now().epochSecond + 2_000_000)
+        ), json)
+        try {
+            val error = kotlin.test.assertFailsWith<ThreadsAuthException> {
+                ThreadsPhotoPublisher(client, auth, json).publish(listOf("https://example.com/photo.jpg"), null)
+            }
+            val reason = error.message.orEmpty()
+            listOf("HTTP=403", "code=200", "subcode=123", "traceId=trace-42", "OAuthException", "API access blocked").forEach {
+                assertTrue(reason.contains(it), reason)
+            }
+            assertTrue(!reason.contains("secret-token"))
+        } finally { client.close() }
     }
 
     private fun settings() = ApplicationSettings(

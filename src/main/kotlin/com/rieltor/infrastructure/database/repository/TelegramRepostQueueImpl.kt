@@ -71,6 +71,10 @@ class TelegramRepostQueueImpl(
         it.repostQueueDao().complete(updateId, status, Instant.now().epochSecond)
     }
 
+    override fun fail(updateId: Long, status: String, reason: String) = database.blocking {
+        it.repostQueueDao().complete(updateId, status, Instant.now().epochSecond, reason)
+    }
+
     override fun reject(listing: TelegramListing, status: String) {
         val now = Instant.now().epochSecond
         val record = TelegramListingRecord.from(listing)

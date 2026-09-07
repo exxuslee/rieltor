@@ -15,6 +15,28 @@ import kotlin.test.*
 
 class RoomPersistenceTest {
     @Test
+    fun `failed queue message stays in history after restart and next message is available`() {
+        val path = Files.createTempDirectory("failed-repost-history").resolve("test.db")
+        RoomDatabaseStore(path).use { database ->
+            val queue = TelegramRepostQueueImpl(database)
+            queue.enqueue(message(601, TelegramRepostKey(10, "90000:USD", "address 1")), 64)
+            queue.enqueue(message(602, TelegramRepostKey(10, "91000:USD", "address 2")), 64)
+            assertEquals(601L, queue.peekOldest()?.updateId)
+            queue.fail(601, "PARTIALLY_PUBLISHED", "THREADS: API access blocked")
+        }
+        RoomDatabaseStore(path).use { database ->
+            val queue = TelegramRepostQueueImpl(database)
+            queue.recoverInterrupted()
+            assertEquals(602L, queue.peekOldest()?.updateId)
+            database.blocking { room ->
+                val history = assertNotNull(room.repostDao().receivedState(601))
+                assertEquals("PARTIALLY_PUBLISHED", history.status)
+                assertEquals("THREADS: API access blocked", history.error)
+            }
+        }
+    }
+
+    @Test
     fun `tracked TikTok publish survives restart and expires after pending window`() {
         val databasePath = Files.createTempDirectory("tiktok-publish-tracking-test").resolve("test.db")
 

@@ -19,6 +19,7 @@ interface TelegramRepostQueue {
     fun peekOldest(): TelegramListing?
     fun snapshot(): TelegramRepostQueueSnapshot
     fun complete(updateId: Long, status: String)
+    fun fail(updateId: Long, status: String, reason: String) { complete(updateId, status) }
     fun reject(listing: TelegramListing, status: String)
     fun markRetryPending(updateId: Long, reason: String)
     fun cleanHistoryBefore(cutoffEpochSeconds: Long): Int
