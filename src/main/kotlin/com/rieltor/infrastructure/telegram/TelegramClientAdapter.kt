@@ -133,11 +133,11 @@ class TelegramClientAdapter(
         if (!isMonitored(message)) return
 
         logger.info(
-            "Telegram monitored message: chatId={}, messageThreadId={}, messageId={}, message={}",
+            "{}, messageId={}, threadId={}, chatId={}",
+            message.summary(),
             message.chatId,
             message.messageThreadId,
             message.id,
-            message.summary(),
         )
 
         when (message.content) {

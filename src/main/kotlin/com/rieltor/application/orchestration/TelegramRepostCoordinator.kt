@@ -117,14 +117,7 @@ class TelegramRepostCoordinator(
                 mutableState.value = RepostFlowState.Skipped(message.updateId, SkipReason.MISSING_GOOGLE_DRIVE_LINK)
             }
             else -> {
-                val result = queue.enqueue(message, queueCapacity)
-                result.droppedUpdateId?.let { dropped ->
-                    logger.warn(
-                        "Persistent repost queue is full; oldest pending message was dropped. updateId={}, queueCapacity={}",
-                        dropped,
-                        queueCapacity,
-                    )
-                }
+                queue.enqueue(message, queueCapacity)
                 queueSignal.trySend(Unit)
             }
         }

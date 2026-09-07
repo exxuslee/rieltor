@@ -7,12 +7,13 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 
 class MediaCleanupJob(
     private val directory: Path,
-    private val maxAge: Duration = Duration.ofDays(1),
-    private val interval: Duration = Duration.ofHours(1),
+    private val maxAge: Duration = Duration.ofDays(4),
+    private val interval: Duration = Duration.ofHours(8),
     private val clock: Clock = Clock.systemUTC(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) : Closeable {
@@ -22,7 +23,7 @@ class MediaCleanupJob(
     fun start() {
         check(job == null) { "Media cleanup job is already started" }
         job = scope.launch {
-            delay(60_000L.milliseconds)
+            delay(8.hours)
             while (isActive) {
                 runCatching { cleanNow() }.onFailure { logger.error("Media cleanup failed", it) }
                 delay(interval.toMillis().milliseconds)
