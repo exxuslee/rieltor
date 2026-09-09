@@ -114,6 +114,7 @@ class ListingCaptionFormatter {
 
         line = googleUrl.replace(line, "")
         line = agency.replace(line, "")
+        line = exclusiveAbbreviation.replace(line, "")
         line = priceParentheticalNote.replace(line, "$1")
         line = parenthesizedCommission.replace(line, "")
         line = commissionTail.replace(line, "")
@@ -187,6 +188,7 @@ class ListingCaptionFormatter {
             """(?iu)\s*(?:\(?\s*)?(?:ваша\s+)?(?:коміс(?:ія|ії)?|комиссия|ком(?:\.|(?=\s*:?\s*\d)))\s*:?.*$"""
         )
         val standalonePercentage = Regex("""^\s*\d[\d.,]*\s*%\s*$""")
+        val exclusiveAbbreviation = Regex("""(?iu)(?<![\p{L}\p{N}_])екс(?![\p{L}\p{N}_])\.?""")
         val internalNoise = Regex(
             """(?iu)^\s*(?:продаж|новий\s+об['ʼ’]?єкт!?|ексклюзив|терміново!?|без\s+реклами\s*!*|бартер)\s*$"""
         )
@@ -215,9 +217,9 @@ class ListingCaptionFormatter {
             """(?iu)(?:(?:ціна|вартість)\s*[-:.]?\s*)?((?:від\s*)?\d[\d\s.,]*(?:[$€₴]|грн\.?|usd|eur))"""
         )
         val governmentProgramsLine = Regex("""(?iu)(?:держ(?:авні|\.)?\s*програм\p{L}*|єосел\p{L}*|сертифікат|постанова)""")
-        val registrationLine = Regex("""(?iu)(?:оформлення|оф\.?(?=\s)|переуступка)""")
+        val registrationLine = Regex("""(?iu)(?:оформлення|оф\.?(?=\s)|переуступк[ау])""")
         val registrationCostLine = Regex(
-            """(?iu)(?:оформлення|оф\.?(?=\s)|переуступка).*(?:\d|%|[$€₴]|грн\.?|мінімальн\p{L}*|минимальн\p{L}*)"""
+            """(?iu)(?:оформлення|оф\.?(?=\s)|переуступк[ау]).*(?:\d|%|[$€₴]|грн\.?|мінімальн\p{L}*|минимальн\p{L}*)"""
         )
         val boilerCostLine = Regex(
             """(?iu)кот[её]л\p{L}*.*\d[\d\s.,]*(?:[$€₴]|грн\.?|usd|eur|євро|евро)"""

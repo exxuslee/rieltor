@@ -208,6 +208,38 @@ class ListingCaptionFormatterTest {
     }
 
     @Test
+    fun `omits assignment fee in accusative form`() {
+        val listing = requireNotNull(filter.filter("Квартира в Ірпені\nПереуступку - 4%\nЦіна 52500${'$'}"))
+
+        assertNull(listing.registration)
+        assertEquals("52500${'$'}", listing.price)
+        assertTrue(listing.keyParameters.isEmpty())
+        assertTrue(listing.additionalParameters.isEmpty())
+        assertFalse(requireNotNull(filter.forTikTok(listing)).contains("4%"))
+    }
+
+    @Test
+    fun `removes exclusive abbreviation as a word while preserving other words`() {
+        val source = """
+            Екс
+            ЕКС Квартира в Ірпені
+            Житловий комплекс
+            Введений в експлуатацію
+            Гарний ремонт екс.
+            Ціна 52500${'$'}
+        """.trimIndent()
+
+        val listing = requireNotNull(filter.filter(source))
+
+        assertEquals("Квартира в Ірпені", listing.title)
+        assertEquals(
+            listOf("Житловий комплекс", "Введений в експлуатацію", "Гарний ремонт"),
+            listing.additionalParameters,
+        )
+        assertNull(filter.filter("Екс"))
+    }
+
+    @Test
     fun `omits assignment fees and boiler cost without treating them as listing price`() {
         val source = """
             Квартира в ЖК Бургундія
