@@ -171,7 +171,9 @@ class TikTokPhotoPublisher(
         payload.error.ensureOk("photo publish")
         val publishId = payload.data?.publishId
             ?: throw TikTokAuthException("TikTok photo publish response has no publish_id.")
-        publishRepository?.trackPublish(publishId, tikTokMode.name, nowMillis())
+        val context = kotlinx.coroutines.currentCoroutineContext()[com.rieltor.application.orchestration.PublicationContext]
+        if (context != null) publishRepository?.trackPublishForListing(context.listingId, context.attemptId, publishId, tikTokMode.name, nowMillis())
+        else publishRepository?.trackPublish(publishId, tikTokMode.name, nowMillis())
         logger.info(
             "TikTok photo repost accepted for processing. publishId={}, mode={}, httpStatus={}, logId={}",
             publishId,

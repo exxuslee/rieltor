@@ -1,15 +1,24 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import vm from 'node:vm';
+
 import {fileURLToPath} from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const domain = 'https://rieltor.dpdns.org';
-const context = {window: {}};
-vm.createContext(context);
-vm.runInContext(fs.readFileSync(path.join(root, 'js', 'data.js'), 'utf8'), context);
-const properties = context.window.PROPERTIES;
-
+const api = process.env.CATALOG_API_URL || 'http://localhost:8080/api/listings';
+const properties = [];
+let cursor;
+do {
+    const url = new URL(api);
+    url.searchParams.set('limit', '100');
+    if (cursor) url.searchParams.set('cursor', cursor);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Catalog snapshot failed: HTTP ${response.status}`);
+    const page = await response.json();
+    properties.push(...page.items.map(item => ({...item, price: Number(item.price),
+        priceSuffix: ` ${item.currency}${{MONTH: '/міс.', PER_M2: '/м²', PER_SOTKA: '/сотка'}[item.pricePeriod] || ''}`})));
+    cursor = page.nextCursor;
+} while (cursor);
 const escapeHtml = value => String(value)
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -18,14 +27,14 @@ const escapeHtml = value => String(value)
     .replaceAll("'", '&#039;');
 
 const json = value => JSON.stringify(value).replaceAll('<', '\\u003c');
-const areaText = item => item.category === 'land' ? `${item.area / 100} соток` : `${item.area} м²`;
+const areaText = item => item.category === 'land' ? `${item.landAreaSotka || ''} соток` : `${item.area || ''} м²`;
 const priceText = item => `${item.pricePrefix || ''}${item.price.toLocaleString('uk-UA')}${item.priceSuffix || ' $'}`;
 const imagePath = item => item.image.replace(/\.png$/i, '.webp');
 const cardImagePath = item => item.image.replace(/\.png$/i, '-768.webp');
 const canonical = item => `${domain}/properties/${item.id}.html`;
 
 const card = item => `<article class="property-card"><a href="/properties/${item.id}.html" aria-label="Переглянути: ${escapeHtml(item.title)}">
-  <div class="property-card__image"><img src="/${cardImagePath(item)}" alt="${escapeHtml(item.title)}" loading="lazy" width="768" height="512"></div>
+  <div class="property-card__image"><img src="${cardImagePath(item)}" alt="${escapeHtml(item.title)}" loading="lazy" width="768" height="512"></div>
   <div class="property-card__body"><h3 class="property-card__title">${escapeHtml(item.title)}</h3><p class="property-card__location">${escapeHtml(item.location)}</p>
     <div class="property-card__meta"><strong class="property-card__price">${escapeHtml(priceText(item))}</strong>${item.rooms ? `<span class="property-card__spec">${item.rooms} кімн.</span>` : ''}<span class="property-card__spec">${escapeHtml(areaText(item))}</span><span aria-hidden="true">→</span></div>
   </div></a></article>`;
@@ -44,7 +53,7 @@ const propertyPage = item => {
                 inLanguage: 'uk-UA',
                 dateModified: new Date().toISOString().slice(0, 10),
                 isPartOf: {'@id': `${domain}/#website`},
-                primaryImageOfPage: `${domain}/${imagePath(item)}`,
+                primaryImageOfPage: imagePath(item),
                 breadcrumb: {'@id': `${canonical(item)}#breadcrumb`}
             },
             {
@@ -90,7 +99,7 @@ const propertyPage = item => {
       <div class="container">
         <nav class="breadcrumbs" aria-label="Хлібні крихти"><a href="/index.html">Головна</a><span aria-hidden="true">/</span><a href="/buy.html">Купівля</a><span aria-hidden="true">/</span><span aria-current="page">${escapeHtml(item.title)}</span></nav>
         <div class="property-detail__grid">
-          <div class="property-detail__image"><img src="/${imagePath(item)}" alt="${escapeHtml(item.title)}, ${escapeHtml(item.location)}" width="1536" height="1024" fetchpriority="high"></div>
+          <div class="property-detail__image"><img src="${imagePath(item)}" alt="${escapeHtml(item.title)}, ${escapeHtml(item.location)}" width="1536" height="1024" fetchpriority="high"></div>
           <article class="property-detail__info">
             <p class="eyebrow">${escapeHtml(context.window.CATEGORY_LABELS[item.category])}</p>
             <h1>${escapeHtml(item.title)}</h1>
@@ -106,7 +115,7 @@ const propertyPage = item => {
     </section>
   </main>
   <site-footer></site-footer>
-  <script src="/js/components.js?v=3"></script>
+  <script src="/js/data.js"></script><script src="/js/components.js?v=4"></script><script src="/js/property-detail.js"></script>
 </body>
 </html>
 `;
@@ -128,7 +137,7 @@ const updatedBuy = buy.replace(
 fs.writeFileSync(buyPath, updatedBuy);
 
 const today = new Date().toISOString().slice(0, 10);
-const staticUrls = ['/', '/buy.html', '/sell-your-apartment.html', '/faq.html', '/contacts.html', '/about.html', '/privacy.html'];
+const staticUrls = ['/', '/catalog.html', '/buy.html', '/sell-your-apartment.html', '/faq.html', '/contacts.html', '/about.html', '/privacy.html'];
 const urls = [...staticUrls, ...properties.map(item => `/properties/${item.id}.html`)];
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -138,3 +147,4 @@ ${urls.map(url => `  <url><loc>${domain}${url}</loc><lastmod>${today}</lastmod><
 fs.writeFileSync(path.join(root, 'sitemap.xml'), sitemap);
 
 console.log(`Generated ${properties.length} property pages and sitemap with ${urls.length} URLs.`);
+

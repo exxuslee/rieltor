@@ -1,223 +1,149 @@
 package com.rieltor.infrastructure.database
 
-import com.rieltor.domain.model.*
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
+import com.rieltor.domain.model.RepostDestination
+import com.rieltor.domain.model.SourceMessage
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
-import com.rieltor.infrastructure.database.model.ReceivedTelegramMessageEntity
-import com.rieltor.infrastructure.database.repository.TelegramRepostQueueImpl
-import com.rieltor.infrastructure.database.repository.TelegramRepostRepositoryImpl
+import com.rieltor.infrastructure.database.model.ListingEntity
+import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.database.repository.TikTokPublishThrottleRepositoryImpl
-import java.io.ByteArrayInputStream
+import com.rieltor.web.CatalogQuery
+import io.ktor.http.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.nio.file.Files
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
+import java.nio.file.Path
 import kotlin.test.*
 
 class RoomPersistenceTest {
-    @Test
-    fun `failed queue message stays in history after restart and next message is available`() {
-        val path = Files.createTempDirectory("failed-repost-history").resolve("test.db")
-        RoomDatabaseStore(path).use { database ->
-            val queue = TelegramRepostQueueImpl(database)
-            queue.enqueue(message(601, TelegramRepostKey(10, "90000:USD", "address 1")), 64)
-            queue.enqueue(message(602, TelegramRepostKey(10, "91000:USD", "address 2")), 64)
-            assertEquals(601L, queue.peekOldest()?.updateId)
-            queue.fail(601, "PARTIALLY_PUBLISHED", "THREADS: API access blocked")
+    private fun path() = Files.createTempDirectory("catalog-test").resolve("test.db")
+    private fun source(id: Long = 1, text: String = "Ірпінь\nКвартира\nЦіна: 82 000 USD") =
+        SourceMessage(-100, id, 20, text = text, raw = text, sourceCreatedAt = id * 1000)
+    private fun listing(id: Long, price: Long = 8_200_000, city: String = "IRPIN", programs: String = "[]") =
+        ListingEntity(groupKey = "test:$id", chatId = -100, messageId = id, messageThreadId = 20,
+            rawMessage = "private phone", sourceRevision = "1", title = "Квартира $id", location = city,
+            typeOfRealty = "APARTMENT", price = price, currency = "USD", governmentPrograms = programs,
+            sourceCreatedAt = id * 1000, receivedAt = 1000, cdt = 1000, updatedAt = 1000, status = "ACTIVE")
+
+    @Test fun `inbox survives restart and edits reset deadline without dropping old messages`() {
+        val path = path()
+        RoomDatabaseStore(path).use { db ->
+            val repo = CatalogRepository(db)
+            repeat(70) { repo.receive(source(it + 1L), 1000, 1_200_000) }
+            repo.receive(source(), 5000, 1_200_000)
+            assertEquals(1_201_000, repo.source(-100, 1)?.verifyAfter)
+            repo.receive(source(text = "Нова версія"), 1_000_000, 1_200_000)
         }
-        RoomDatabaseStore(path).use { database ->
-            val queue = TelegramRepostQueueImpl(database)
-            queue.recoverInterrupted()
-            assertEquals(602L, queue.peekOldest()?.updateId)
-            database.blocking { room ->
-                val history = assertNotNull(room.repostDao().receivedState(601))
-                assertEquals("PARTIALLY_PUBLISHED", history.status)
-                assertEquals("THREADS: API access blocked", history.error)
+        RoomDatabaseStore(path).use { db ->
+            val repo = CatalogRepository(db)
+            assertEquals(70, repo.groups().size)
+            assertEquals(2_200_000, repo.source(-100, 1)?.verifyAfter)
+            assertEquals(2, repo.source(-100, 1)?.revision)
+        }
+    }
+
+    @Test fun `edit or album extension invalidates download token and stale promotion`() {
+        RoomDatabaseStore(path()).use { db ->
+            val repo = CatalogRepository(db)
+            val source = source().copy(mediaAlbumId = 99)
+            repo.receive(source, 0, 1_200_000)
+            val rows = repo.group(source.groupKey)
+            assertTrue(repo.stage(rows, "READY_FOR_MEDIA", 1_200_001))
+            val token = assertNotNull(repo.claim(rows, 1_200_001))
+            repo.receive(source.copy(messageId = 2), 1_200_002, 1_200_000)
+            assertFalse(repo.promote(rows, token, listing(1).copy(groupKey = source.groupKey), 1_200_003))
+            assertTrue(repo.listings().isEmpty())
+            assertEquals(2, repo.group(source.groupKey).size)
+        }
+    }
+
+    @Test fun `promotion is idempotent and deletion hides catalog`() {
+        RoomDatabaseStore(path()).use { db ->
+            val repo = CatalogRepository(db); val source = source()
+            repo.receive(source, 0, 1_200_000)
+            val rows = repo.group(source.groupKey)
+            repo.stage(rows, "READY_FOR_MEDIA", 1_200_001)
+            val token = assertNotNull(repo.claim(rows, 1_200_001))
+            assertTrue(repo.promote(rows, token, listing(1).copy(groupKey = source.groupKey), 1_200_002))
+            assertFalse(repo.promote(rows, token, listing(1).copy(groupKey = source.groupKey), 1_200_003))
+            assertEquals(1, repo.listings().size)
+            repo.delete(-100, 1, 1_200_004)
+            assertEquals("HIDDEN", repo.listings().single().status)
+        }
+    }
+
+    @Test fun `draft is not published and confirmation updates boolean atomically`() {
+        val path = path()
+        RoomDatabaseStore(path).use { db ->
+            val repo = CatalogRepository(db); val id = repo.save(listing(1))
+            val attempt = assertNotNull(repo.prepare(id, setOf(RepostDestination.TIKTOK), 1000))
+            val throttle = TikTokPublishThrottleRepositoryImpl(db, repo)
+            throttle.trackPublishForListing(id, attempt, "pub-1", "DRAFT", 2000)
+            throttle.updateTrackedStatus("pub-1", "SEND_TO_USER_INBOX", 3000)
+            assertFalse(repo.listing(id)!!.tiktokReposted)
+        }
+        RoomDatabaseStore(path).use { db ->
+            val repo = CatalogRepository(db); val throttle = TikTokPublishThrottleRepositoryImpl(db, repo)
+            assertEquals("pub-1", throttle.trackedPublishes(10_000, 86_400_000).single().publishId)
+            throttle.updateTrackedStatus("pub-1", "PUBLISH_COMPLETE", 11_000)
+            assertTrue(repo.listings().single().tiktokReposted)
+            assertTrue(throttle.trackedPublishes(12_000, 86_400_000).isEmpty())
+        }
+    }
+
+    @Test fun `filters use inclusive prices AND groups OR programs and stable cursor`() {
+        RoomDatabaseStore(path()).use { db ->
+            val repo = CatalogRepository(db)
+            repo.save(listing(1, programs = "[\"EOSELIA\"]")); repo.save(listing(2, programs = "[\"CERTIFICATE\"]"))
+            repo.save(listing(3, city = "BUCHA")); repo.save(listing(4, price = 9_000_000))
+            val api = CatalogQuery(repo, "http://localhost")
+            val params = Parameters.build {
+                append("location", "IRPIN"); append("governmentPrograms", "EOSELIA,CERTIFICATE")
+                append("currency", "USD"); append("transactionType", "SALE"); append("pricePeriod", "TOTAL")
+                append("priceMin", "82000"); append("priceMax", "82000"); append("limit", "1")
+            }
+            val first = api.list(params); assertEquals("Квартира 2", first.items.single().title)
+            val second = api.list(Parameters.build { appendAll(params); append("cursor", assertNotNull(first.nextCursor)) })
+            assertEquals("Квартира 1", second.items.single().title); assertNull(second.nextCursor)
+            assertFalse(Json.encodeToString(first).contains("private phone"))
+            assertFailsWith<IllegalArgumentException> { api.list(Parameters.build { append("priceMin", "1") }) }
+            assertFailsWith<IllegalArgumentException> { api.list(Parameters.build { append("location", "INVALID") }) }
+        }
+    }
+
+    @Test fun `v11 migration leaves two tables preserves raw pending and limiter`() {
+        val path = path()
+        val schema = Json.parseToJsonElement(Files.readString(Path.of("schemas/com.rieltor.infrastructure.database.local.RieltorDatabase/11.json"))).jsonObject["database"]!!.jsonObject
+        BundledSQLiteDriver().open(path.toString()).use { connection ->
+            schema["entities"]!!.jsonArray.forEach { entity ->
+                val obj = entity.jsonObject; val table = obj["tableName"]!!.jsonPrimitive.content
+                connection.execSQL(obj["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", table))
+                obj["indices"]?.jsonArray.orEmpty().forEach { connection.execSQL(it.jsonObject["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", table)) }
+            }
+            connection.execSQL("INSERT INTO received_telegram_messages VALUES (1,-100,20,'82000:USD','address','raw original','[]','PROCESSING',NULL,NULL,100,101)")
+            connection.execSQL("INSERT INTO repost_publications VALUES (1,'TIKTOK',20,'82000:USD','address','PROCESSING',NULL,'pub-1',NULL,100,101)")
+            connection.execSQL("INSERT INTO tiktok_tracked_publishes VALUES ('pub-1','DRAFT',100000,'SEND_TO_USER_INBOX',101000)")
+            connection.execSQL("INSERT INTO tiktok_publish_attempts VALUES (1,100000)")
+            connection.execSQL("INSERT INTO tiktok_publish_throttle VALUES (1,9999999)")
+            connection.execSQL("PRAGMA user_version=11")
+        }
+        RoomDatabaseStore(path).use { db ->
+            val repo = CatalogRepository(db)
+            val old = repo.listings().single()
+            assertNull(old.messageId); assertEquals("NEEDS_REVIEW", old.status)
+            assertTrue(old.rawMessage.contains("raw original")); assertFalse(old.tiktokReposted)
+            assertEquals("DELIVERED_DRAFT", old.tiktokStatus)
+            assertEquals(9999999, db.settings.snapshot().blockedUntil)
+            assertEquals(100000, db.settings.snapshot().slotReservations.single().reservedAt)
+        }
+        BundledSQLiteDriver().open(path.toString()).use { connection ->
+            connection.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'room_master_table'").use { query ->
+                val names = buildSet { while(query.step()) add(query.getText(0)) }
+                assertEquals(setOf("incoming_telegram_messages", "listings"), names)
             }
         }
     }
-
-    @Test
-    fun `tracked TikTok publish survives restart and expires after pending window`() {
-        val databasePath = Files.createTempDirectory("tiktok-publish-tracking-test").resolve("test.db")
-
-        RoomDatabaseStore(databasePath).use { database ->
-            val repository = TikTokPublishThrottleRepositoryImpl(database)
-            repository.trackPublish("publish-1", "DRAFT", 1_000L)
-            repository.updateTrackedStatus("publish-1", "SEND_TO_USER_INBOX", 2_000L)
-        }
-
-        RoomDatabaseStore(databasePath).use { database ->
-            val repository = TikTokPublishThrottleRepositoryImpl(database)
-            val restored = repository.trackedPublishes(3_000L, 86_400_000L).single()
-            assertEquals("publish-1", restored.publishId)
-            assertEquals("SEND_TO_USER_INBOX", restored.lastStatus)
-            assertTrue(repository.trackedPublishes(86_401_001L, 86_400_000L).isEmpty())
-        }
-    }
-
-    @Test
-    fun `persistent FIFO queue survives database restart with local photo paths`() {
-        val directory = Files.createTempDirectory("rieltor-persistent-queue-test")
-        val databasePath = directory.resolve("test.db")
-        val photoPath = directory.resolve("photo.jpg")
-        Files.write(photoPath, byteArrayOf(1, 2, 3))
-
-        RoomDatabaseStore(databasePath).use { database ->
-            val queue = TelegramRepostQueueImpl(database)
-            queue.enqueue(
-                message(201, TelegramRepostKey(10, "90000:USD", "соборна 1")).copy(
-                    photos = listOf(
-                        TelegramPhoto("photo.jpg", ByteArrayInputStream(byteArrayOf(1)), photoPath.toString())
-                    )
-                ),
-                64,
-            )
-        }
-
-        RoomDatabaseStore(databasePath).use { database ->
-            val queue = TelegramRepostQueueImpl(database)
-            queue.recoverInterrupted()
-            assertEquals(listOf(201L), queue.snapshot().pendingUpdateIds)
-            val restored = assertNotNull(queue.peekOldest())
-            assertEquals(201L, restored.updateId)
-            assertEquals(photoPath.toString(), restored.photos.single().localPath)
-            assertEquals(201L, queue.snapshot().claimedUpdateId)
-            restored.photos.single().content.close()
-            queue.complete(201, "PUBLISHED")
-            assertNull(queue.peekOldest())
-        }
-    }
-
-    @Test
-    fun `history cleanup removes old terminal rows but preserves queued rows`() {
-        database().use { database ->
-            val old = 1_000L
-            val terminal = ReceivedTelegramMessageEntity(
-                301, -1001, 5, "90000:USD", "соборна 1", "caption", "[]",
-                "FAILED", null, "error", old, old,
-            )
-            database.blocking { it.repostQueueDao().reject(terminal, "FAILED", old) }
-
-            val queue = TelegramRepostQueueImpl(database)
-            queue.enqueue(message(302, TelegramRepostKey(10, "91000:USD", "соборна 2")), 64)
-
-            assertEquals(1, queue.cleanHistoryBefore(old + 1))
-            database.blocking { room ->
-                assertNull(room.repostDao().receivedState(301))
-                assertNotNull(room.repostDao().receivedState(302))
-            }
-        }
-    }
-
-    @Test
-    fun `records received messages and suppresses an already published repost key`() {
-        database().use { database ->
-            val repository = TelegramRepostRepositoryImpl(database)
-            val key = TelegramRepostKey(5242880, "175000:USD", "мечнікова 10")
-
-            assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(101, key), RepostDestination.TIKTOK))
-            repository.markRepostPublished(101, RepostDestination.TIKTOK, "publish-101")
-            val duplicate = assertIs<TelegramMessageRegistration.Duplicate>(
-                repository.register(message(102, key), RepostDestination.TIKTOK)
-            )
-
-            assertEquals(101, duplicate.originalUpdateId)
-            database.blocking { room ->
-                assertEquals(2, room.repostDao().receivedCount())
-                val state = assertNotNull(room.repostDao().receivedState(102))
-                assertEquals("DUPLICATE", state.status)
-                assertEquals(101, state.duplicateOfUpdateId)
-                assertEquals("[\"https://drive.google.com/drive/folders/example\"]", state.googleDriveLinks)
-                assertEquals("publish-101", room.repostDao().publishId(101, "TIKTOK"))
-            }
-        }
-    }
-
-    @Test
-    fun `thread price and address are independent parts of uniqueness key`() {
-        database().use { database ->
-            val repository = TelegramRepostRepositoryImpl(database)
-            val base = TelegramRepostKey(10, "90000:USD", "соборна 1")
-
-            assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(1, base), RepostDestination.TIKTOK))
-            assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(2, base.copy(messageThreadId = 11)), RepostDestination.TIKTOK))
-            assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(3, base.copy(price = "91000:USD")), RepostDestination.TIKTOK))
-            assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(4, base.copy(address = "соборна 2")), RepostDestination.TIKTOK))
-            assertIs<TelegramMessageRegistration.Duplicate>(repository.register(message(5, base), RepostDestination.TIKTOK))
-        }
-    }
-
-    @Test
-    fun `failed repost releases identity for retry`() {
-        database().use { database ->
-            val repository = TelegramRepostRepositoryImpl(database)
-            val key = TelegramRepostKey(10, "90000:USD", "соборна 1")
-
-            assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(1, key), RepostDestination.TIKTOK))
-            repository.markRepostFailed(1, RepostDestination.TIKTOK, "temporary")
-            assertIs<TelegramMessageRegistration.Accepted>(repository.register(message(1, key), RepostDestination.TIKTOK))
-        }
-    }
-
-    @Test
-    fun `destinations keep independent duplicate and retry state`() {
-        database().use { database ->
-            val repository = TelegramRepostRepositoryImpl(database)
-            val key = TelegramRepostKey(10, "90000:USD", "соборна 1")
-            val first = message(1, key)
-
-            assertIs<TelegramMessageRegistration.Accepted>(repository.register(first, RepostDestination.TIKTOK))
-            assertIs<TelegramMessageRegistration.Accepted>(repository.register(first, RepostDestination.THREADS))
-            repository.markRepostPublished(1, RepostDestination.TIKTOK, "tiktok-1")
-            repository.markRepostFailed(1, RepostDestination.THREADS, "temporary")
-
-            val repeated = message(2, key)
-            assertIs<TelegramMessageRegistration.Duplicate>(repository.register(repeated, RepostDestination.TIKTOK))
-            assertIs<TelegramMessageRegistration.Accepted>(repository.register(repeated, RepostDestination.THREADS))
-        }
-    }
-
-    @Test
-    fun `only one concurrent message reserves the same repost key`() {
-        database().use { database ->
-            val repository = TelegramRepostRepositoryImpl(database)
-            val workerCount = 8
-            val ready = CountDownLatch(workerCount)
-            val start = CountDownLatch(1)
-            val executor = Executors.newFixedThreadPool(workerCount)
-            val key = TelegramRepostKey(10, "90000:USD", "соборна 1")
-
-            try {
-                val attempts = (1..workerCount).map { updateId ->
-                    executor.submit<TelegramMessageRegistration> {
-                        ready.countDown()
-                        start.await()
-                        repository.register(message(updateId.toLong(), key), RepostDestination.TIKTOK)
-                    }
-                }
-                assertTrue(ready.await(5, TimeUnit.SECONDS))
-                start.countDown()
-                val results = attempts.map { it.get(10, TimeUnit.SECONDS) }
-                assertEquals(1, results.count { it is TelegramMessageRegistration.Accepted })
-                assertEquals(workerCount - 1, results.count { it is TelegramMessageRegistration.Duplicate })
-            } finally {
-                start.countDown()
-                executor.shutdownNow()
-            }
-        }
-    }
-
-    private fun database() = RoomDatabaseStore(
-        Files.createTempDirectory("rieltor-room-test").resolve("test.db")
-    )
-
-    private fun message(updateId: Long, key: TelegramRepostKey) = TelegramListing(
-        updateId = updateId,
-        chatId = -1002681732909,
-        messageThreadId = key.messageThreadId,
-        caption = "Вул. Соборна 1\nЦіна 90000${'$'}",
-        photos = emptyList(),
-        googleDriveLinks = listOf("https://drive.google.com/drive/folders/example"),
-        repostKey = key,
-    )
 }

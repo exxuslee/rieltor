@@ -1,94 +1,59 @@
 package com.rieltor.infrastructure.database.model
 
-import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "received_telegram_messages")
-internal data class ReceivedTelegramMessageEntity(
-    @PrimaryKey @ColumnInfo(name = "telegram_update_id") val telegramUpdateId: Long,
-    @ColumnInfo(name = "chat_id") val chatId: Long,
-    @ColumnInfo(name = "message_thread_id") val messageThreadId: Long,
-    @ColumnInfo(name = "normalized_price") val normalizedPrice: String?,
-    @ColumnInfo(name = "normalized_address") val normalizedAddress: String?,
-    val caption: String?,
-    @ColumnInfo(name = "google_drive_links", defaultValue = "'[]'") val googleDriveLinks: String,
-    val status: String,
-    @ColumnInfo(name = "duplicate_of_update_id") val duplicateOfUpdateId: Long?,
-    val error: String?,
-    @ColumnInfo(name = "received_at") val receivedAt: Long,
-    @ColumnInfo(name = "updated_at") val updatedAt: Long,
-)
-
-@Entity(tableName = "published_reposts")
-internal data class PublishedRepostEntity(
-    @PrimaryKey @ColumnInfo(name = "telegram_update_id") val telegramUpdateId: Long,
-    @ColumnInfo(name = "message_thread_id") val messageThreadId: Long,
-    @ColumnInfo(name = "normalized_price") val normalizedPrice: String?,
-    @ColumnInfo(name = "normalized_address") val normalizedAddress: String?,
-    @ColumnInfo(name = "publish_id") val publishId: String,
-    @ColumnInfo(name = "published_at") val publishedAt: Long,
-)
-
-@Entity(
-    tableName = "repost_publications",
-    primaryKeys = ["telegram_update_id", "destination"],
-)
-internal data class RepostPublicationEntity(
-    @ColumnInfo(name = "telegram_update_id") val telegramUpdateId: Long,
-    val destination: String,
-    @ColumnInfo(name = "message_thread_id") val messageThreadId: Long,
-    @ColumnInfo(name = "normalized_price") val normalizedPrice: String?,
-    @ColumnInfo(name = "normalized_address") val normalizedAddress: String?,
-    val status: String,
-    @ColumnInfo(name = "duplicate_of_update_id") val duplicateOfUpdateId: Long?,
-    @ColumnInfo(name = "publish_id") val publishId: String?,
-    val error: String?,
-    @ColumnInfo(name = "created_at") val createdAt: Long,
-    @ColumnInfo(name = "updated_at") val updatedAt: Long,
-)
-
-@Entity(
-    tableName = "telegram_repost_queue",
-    indices = [Index(value = ["enqueued_at"], name = "ix_telegram_repost_queue_fifo")],
-)
-internal data class TelegramRepostQueueEntity(
-    @PrimaryKey @ColumnInfo(name = "telegram_update_id") val telegramUpdateId: Long,
-    @ColumnInfo(name = "chat_id") val chatId: Long,
-    @ColumnInfo(name = "message_thread_id") val messageThreadId: Long,
-    val caption: String?,
-    @ColumnInfo(name = "google_drive_links") val googleDriveLinks: String,
-    @ColumnInfo(name = "normalized_price") val normalizedPrice: String?,
-    @ColumnInfo(name = "normalized_address") val normalizedAddress: String?,
-    @ColumnInfo(name = "telegram_photo_paths") val telegramPhotoPaths: String,
-    @ColumnInfo(name = "enqueued_at") val enqueuedAt: Long,
-    @ColumnInfo(defaultValue = "0") val claimed: Boolean = false,
-)
-
-@Entity(
-    tableName = "tiktok_publish_attempts",
-    indices = [Index(value = ["attempted_at"], name = "ix_tiktok_publish_attempts_time")],
-)
-internal data class TikTokPublishAttemptEntity(
+@Entity(tableName = "incoming_telegram_messages", indices = [
+    Index(value = ["chatId", "messageId"], unique = true), Index(value = ["groupKey"]),
+    Index(value = ["status", "verifyAfter"]), Index(value = ["legacyUpdateId"], unique = true),
+])
+@kotlinx.serialization.Serializable
+data class IncomingEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    @ColumnInfo(name = "attempted_at") val attemptedAt: Long,
+    val chatId: Long, val messageId: Long?, val messageThreadId: Long,
+    val mediaAlbumId: Long = 0, val groupKey: String,
+    val originalRawMessage: String, val rawMessage: String, val rawText: String,
+    val sourceCreatedAt: Long, val sourceEditedAt: Long = 0,
+    val receivedAt: Long, val updatedAt: Long, val contentHash: String, val revision: Long = 1,
+    val stableSince: Long, val verifyAfter: Long, val verifiedAt: Long? = null,
+    val status: String = "WAITING_STABILITY", val googleDriveUrls: String = "[]",
+    val mediaManifest: String = "[]", val attemptCount: Int = 0, val nextAttemptAt: Long = 0,
+    val lastError: String? = null, val leaseToken: String? = null, val leaseUntil: Long = 0,
+    val listingId: Long? = null, val promotedAt: Long? = null, val deletedAt: Long? = null,
+    val legacyUpdateId: Long? = null,
 )
 
-@Entity(tableName = "tiktok_publish_throttle")
-internal data class TikTokPublishThrottleEntity(
-    @PrimaryKey val id: Long = 1,
-    @ColumnInfo(name = "blocked_until", defaultValue = "0") val blockedUntil: Long,
+@Entity(tableName = "listings", indices = [
+    Index(value = ["groupKey"], unique = true), Index(value = ["chatId", "messageId"], unique = true),
+    Index(value = ["status", "sourceCreatedAt", "id"]),
+    Index(value = ["status", "location", "typeOfRealty", "currency", "price"]),
+    Index(value = ["status", "tiktokStatus", "sourceCreatedAt"]),
+    Index(value = ["status", "threadsStatus", "sourceCreatedAt"]), Index(value = ["legacyUpdateId"], unique = true),
+])
+@kotlinx.serialization.Serializable
+data class ListingEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val groupKey: String, val chatId: Long, val messageId: Long?, val messageThreadId: Long,
+    val mediaAlbumId: Long = 0, val rawMessage: String, val sourceRevision: String,
+    val title: String = "", val description: String = "", val location: String? = null,
+    val address: String? = null, val district: String? = null, val typeOfRealty: String? = null,
+    val transactionType: String = "SALE", val tags: String = "[]",
+    val primeParams: String = "{}", val secondaryParams: String = "{}",
+    val governmentPrograms: String = "[]", val governmentProgramsKnown: Boolean = false,
+    val googleDriveUrl: String? = null, val googleDriveUrls: String = "[]",
+    val price: Long? = null, val currency: String? = null, val pricePeriod: String = "TOTAL",
+    val areaM2: Double? = null, val landAreaSotka: Double? = null, val rooms: Int? = null,
+    val floor: Int? = null, val totalFloors: Int? = null, val photos: String = "[]",
+    val coverPhotoId: String? = null, val status: String = "NEEDS_REVIEW",
+    val sourceCreatedAt: Long, val receivedAt: Long, val cdt: Long, val updatedAt: Long,
+    val publishedAt: Long? = null,
+    val tiktokReposted: Boolean = false, val threadsReposted: Boolean = false,
+    val tiktokRepostedAt: Long? = null, val threadsRepostedAt: Long? = null,
+    val tiktokStatus: String = "PENDING", val threadsStatus: String = "PENDING",
+    val tiktokPublishId: String? = null, val threadsPublishId: String? = null,
+    val tiktokState: String = "{\"attempts\":[]}", val threadsState: String = "{\"attempts\":[]}",
+    val parserVersion: Int = 1, val parseWarnings: String = "[]", val legacyUpdateId: Long? = null,
+    val legacySnapshot: String? = null,
 )
 
-@Entity(
-    tableName = "tiktok_tracked_publishes",
-    indices = [Index(value = ["created_at"], name = "ix_tiktok_tracked_publishes_created_at")],
-)
-internal data class TikTokTrackedPublishEntity(
-    @PrimaryKey @ColumnInfo(name = "publish_id") val publishId: String,
-    val mode: String,
-    @ColumnInfo(name = "created_at") val createdAt: Long,
-    @ColumnInfo(name = "last_status") val lastStatus: String?,
-    @ColumnInfo(name = "updated_at") val updatedAt: Long,
-)

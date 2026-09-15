@@ -33,6 +33,7 @@ class MediaCleanupJobTest {
 
         val cleanup = MediaCleanupJob(
             directory = directory,
+            maxAge = Duration.ofDays(1),
             clock = Clock.fixed(now, ZoneOffset.UTC),
         )
 
@@ -56,6 +57,7 @@ class MediaCleanupJobTest {
         Files.setLastModifiedTime(image, FileTime.from(now.minus(Duration.ofDays(1))))
         val cleanup = MediaCleanupJob(
             directory = directory,
+            maxAge = Duration.ofDays(1),
             clock = Clock.fixed(now, ZoneOffset.UTC),
         )
 
@@ -65,6 +67,16 @@ class MediaCleanupJobTest {
         } finally {
             cleanup.close()
             directory.toFile().deleteRecursively()
+        }
+    }
+
+    @Test fun `active catalog photo is retained regardless of age`() {
+        val directory = Files.createTempDirectory("catalog-media-retention")
+        val image = directory.resolve("active.jpg").createFile()
+        Files.setLastModifiedTime(image, FileTime.from(Instant.parse("2020-01-01T00:00:00Z")))
+        MediaCleanupJob(directory, referencedFiles = { setOf("active.jpg") }).use {
+            assertEquals(0, it.cleanNow())
+            assertTrue(Files.exists(image))
         }
     }
 }

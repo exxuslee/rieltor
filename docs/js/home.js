@@ -1,26 +1,22 @@
 (function () {
     const grid = document.querySelector('[data-featured-grid]');
-    const featuredIds = [
-        'apartment-central-park',
-        'apartment-new-turnkey',
-        'rc-olymp',
-        'house-terrace-bucha'
-    ];
-    const featuredProperties = featuredIds
-        .map(id => window.PROPERTIES.find(item => item.id === id))
-        .filter(Boolean);
-    if (grid) grid.innerHTML = featuredProperties.map(window.propertyCard).join('');
-
-    document.querySelectorAll('[data-category-tab]').forEach(button => {
-        button.addEventListener('click', () => {
-            document.querySelectorAll('[data-category-tab]').forEach(tab => tab.classList.remove('is-active'));
-            button.classList.add('is-active');
-            const value = button.dataset.categoryTab;
-            const items = value === 'all' ? featuredProperties : window.PROPERTIES.filter(item => item.category === value).slice(0, 4);
-            grid.innerHTML = items.map(window.propertyCard).join('');
-        });
-    });
-
+    let controller;
+    async function loadFeatured(category = 'all') {
+        if (!grid) return;
+        controller?.abort(); controller = new AbortController();
+        grid.textContent = 'Завантажуємо актуальні пропозиції…';
+        try {
+            const page = await Listings.list({limit: 4, ...(category === 'all' ? {} : {typeOfRealty: Listings.types[category]})}, controller.signal);
+            grid.innerHTML = page.items.length ? page.items.map(window.propertyCard).join('') : '<p>Наразі немає пропозицій у цій категорії. Зверніться за персональним підбором.</p>';
+        } catch (error) {
+            if (error.name !== 'AbortError') grid.innerHTML = '<p>Не вдалося завантажити пропозиції. <a href="/catalog.html">Відкрити каталог</a></p>';
+        }
+    }
+    document.querySelectorAll('[data-category-tab]').forEach(button => button.addEventListener('click', () => {
+        document.querySelectorAll('[data-category-tab]').forEach(tab => tab.classList.toggle('is-active', tab === button));
+        loadFeatured(button.dataset.categoryTab);
+    }));
+    loadFeatured();
     const tiktokReviews = [
         {
             title: 'Відеоогляд нерухомості',

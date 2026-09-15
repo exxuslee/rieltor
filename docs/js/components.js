@@ -15,7 +15,7 @@ class SiteHeader extends HTMLElement {
         const page = document.body.dataset.page || '';
         const links = [
             ['home', siteUrl('index.html'), 'ГОЛОВНА'], ['buy', siteUrl('buy.html'), 'КУПІВЛЯ'],
-            ['sell', siteUrl('sell-your-apartment.html'), 'ПРОДАЖ'], ['faq', siteUrl('faq.html'), 'FAQ'], ['contacts', siteUrl('contacts.html'), 'КОНТАКТИ']
+            ['catalog', siteUrl('catalog.html'), 'ОБ’ЄКТИ'], ['sell', siteUrl('sell-your-apartment.html'), 'ПРОДАЖ'], ['faq', siteUrl('faq.html'), 'FAQ'], ['contacts', siteUrl('contacts.html'), 'КОНТАКТИ']
         ];
         this.innerHTML = `<header class="site-header"><div class="container header-inner">
       <a class="brand" href="${siteUrl('index.html')}" aria-label="Ірина Ліннік — головна"><img class="brand-mark" src="${siteUrl('images/rieltor-app-icon-v8.png')}" alt="" width="40" height="40"><span class="brand-name">Ірина Ліннік</span></a>
@@ -105,12 +105,10 @@ customElements.define('site-header', SiteHeader);
 customElements.define('site-footer', SiteFooter);
 
 window.propertyCard = function (property) {
-    const rooms = property.rooms ? `<span class="property-card__spec">${property.rooms} кімн.</span>` : '';
-    const area = property.category === 'land' ? `${property.area / 100} соток` : `${property.area} м²`;
-    const price = `${property.pricePrefix || ''}${property.price.toLocaleString('uk-UA')}${property.priceSuffix || ' $'}`;
-    return `<article class="property-card"><a href="${siteUrl(`properties/${property.id}.html`)}" aria-label="Переглянути: ${property.title}">
-    <div class="property-card__image"><img src="${siteUrl(property.image.replace(/\.png$/i, '-768.webp'))}" alt="${property.title}" loading="lazy" width="768" height="512"></div>
-    <div class="property-card__body"><h3 class="property-card__title">${property.title}</h3><p class="property-card__location">${property.location}</p>
-      <div class="property-card__meta"><strong class="property-card__price">${price}</strong>${rooms}<span class="property-card__spec">${area}</span>${icon('arrow')}</div>
-    </div></a></article>`;
+    const e = window.Listings.escape;
+    const area = property.category === 'land' ? (property.landAreaSotka ? `${property.landAreaSotka} соток` : '') : (property.area ? `${property.area} м²` : '');
+    return `<article class="property-card"><a href="/property.html?id=${encodeURIComponent(property.id)}" aria-label="Переглянути: ${e(property.title)}">
+        <div class="property-card__image"><img src="${e(property.image)}" alt="${e(property.title)}" loading="lazy" width="768" height="512"></div>
+        <div class="property-card__body"><h3 class="property-card__title">${e(property.title)}</h3><p class="property-card__location">${e(property.location)}</p>
+        <div class="property-card__meta"><strong class="property-card__price">${e(Listings.price(property))}</strong>${property.rooms ? `<span>${e(property.rooms)} кімн.</span>` : ''}<span>${e(area)}</span>${icon('arrow')}</div></div></a></article>`;
 };

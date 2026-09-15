@@ -21,6 +21,9 @@ interface TikTokPublishThrottleRepository {
 
     fun trackPublish(publishId: String, mode: String, nowMillis: Long)
 
+    fun trackPublishForListing(listingId: Long, attemptId: String, publishId: String, mode: String, nowMillis: Long) =
+        trackPublish(publishId, mode, nowMillis)
+
     fun trackedPublishes(nowMillis: Long, retentionMillis: Long): List<TrackedTikTokPublish>
 
     fun updateTrackedStatus(publishId: String, status: String, nowMillis: Long)

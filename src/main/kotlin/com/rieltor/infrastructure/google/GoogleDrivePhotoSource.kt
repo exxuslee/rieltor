@@ -67,6 +67,38 @@ class GoogleDrivePhotoSource(
     private val logger = LoggerFactory.getLogger(javaClass)
     private val downloadSemaphore = Semaphore(MAX_CONCURRENT_DOWNLOAD_BATCHES)
 
+    /** Catalog ingestion is strict and streams one decoded photo at a time to durable storage. */
+    suspend fun downloadCatalogPhotos(
+        links: List<String>, limit: Int, fileDelayMs: Long,
+        cached: (DriveFileMetadata) -> Boolean = { false },
+        consume: suspend (DriveFileMetadata, java.io.InputStream) -> Unit,
+    ) = downloadSemaphore.withPermit {
+        val token = AccessToken(auth.validAccessToken())
+        val files = linkedMapOf<String, DriveFileMetadata>()
+        for (target in GoogleDriveLinkParser.extract(links)) {
+            val discovered = when (target) {
+                is DriveTarget.Folder -> listFolderFiles(target.id, token)
+                is DriveTarget.File -> listOf(getFileMetadata(target.id, token))
+                is DriveTarget.Unknown -> getFileMetadata(target.id, token).let {
+                    if (it.mimeType == GOOGLE_DRIVE_FOLDER_MIME_TYPE) listFolderFiles(it.id, token) else listOf(it)
+                }
+            }
+            discovered.forEach { files.putIfAbsent(it.id, it) }
+        }
+        val selected = files.values.filter { it.mimeType in SUPPORTED_IMAGE_MIME_TYPES }
+            .sortedWith(compareBy<DriveFileMetadata> { it.orientationPriority() }.thenBy { it.name }.thenBy { it.id }).take(limit)
+        require(selected.isNotEmpty()) { "Drive folder contains no supported images" }
+        for (file in selected) {
+            require(file.capabilities?.canDownload != false) { "Drive image is not downloadable" }
+            require(file.version.isNotBlank()) { "Drive did not supply a stable file version" }
+            val content = if (cached(file)) java.io.InputStream.nullInputStream() else ByteArrayInputStream(downloadFile(file, token))
+            content.use { consume(file, it) }
+            delay(fileDelayMs)
+        }
+        // Do not publish a mixture when the owner edits the folder during a batch.
+        for (file in selected) check(getFileMetadata(file.id, token).version == file.version) { "Drive file changed during download" }
+    }
+
     override suspend fun downloadPhotos(links: List<String>, limit: Int): List<TelegramPhoto> {
         if (limit <= 0) return emptyList()
         val targets = GoogleDriveLinkParser.extract(links)
@@ -288,7 +320,7 @@ class GoogleDrivePhotoSource(
 
     private companion object {
         const val FILES_URL = "https://www.googleapis.com/drive/v3/files"
-        const val FILE_FIELDS = "id,name,mimeType,size,capabilities(canDownload),imageMediaMetadata(width,height,rotation)"
+        const val FILE_FIELDS = "id,name,mimeType,size,version,capabilities(canDownload),imageMediaMetadata(width,height,rotation)"
         const val MAX_DISCOVERED_FILES = 1000
         const val MAX_DOWNLOAD_BYTES = 20L * 1024 * 1024
         const val MAX_ERROR_BODY_LENGTH = 500

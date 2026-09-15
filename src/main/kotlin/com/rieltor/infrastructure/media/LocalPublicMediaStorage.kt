@@ -39,8 +39,13 @@ class LocalPublicMediaStorage(
         require(destination.parent == directory.toAbsolutePath().normalize() || destination.parent == directory.normalize()) {
             "Invalid media path"
         }
-        writeJpeg(normalized, destination)
-        setPublicFilePermissions(destination)
+        val temporary = directory.resolve("$publicName.tmp")
+        try {
+            writeJpeg(normalized, temporary)
+            java.nio.channels.FileChannel.open(temporary, java.nio.file.StandardOpenOption.WRITE).use { it.force(true) }
+            Files.move(temporary, destination, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+            setPublicFilePermissions(destination)
+        } finally { Files.deleteIfExists(temporary) }
         return StoredMedia(
             publicUrl = "${publicBaseUrl.trimEnd('/')}/media/$publicName",
             localPath = destination.toString(),
@@ -58,6 +63,11 @@ class LocalPublicMediaStorage(
         if (!publicName.matches(Regex("[0-9a-fA-F-]{36}\\.(jpg|jpeg|png|webp)"))) return null
         val candidate = directory.resolve(publicName).normalize()
         return candidate.takeIf { it.startsWith(directory.normalize()) && Files.isRegularFile(it) }
+    }
+
+    fun publicUrl(publicName: String): String {
+        require(resolve(publicName) != null) { "Media not found" }
+        return "${publicBaseUrl.trimEnd('/')}/media/$publicName"
     }
 
     private fun normalizeForPublish(source: BufferedImage): BufferedImage {

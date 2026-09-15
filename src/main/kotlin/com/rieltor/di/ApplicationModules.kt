@@ -1,21 +1,15 @@
 package com.rieltor.di
 
-import com.rieltor.application.orchestration.PersistentRepostMasterLimiter
-import com.rieltor.application.orchestration.RepostMasterLimiter
-import com.rieltor.application.orchestration.TelegramRepostCoordinator
-import com.rieltor.application.port.PhotoRepostHandler
+import com.rieltor.application.orchestration.CatalogIngestionService
+import com.rieltor.application.orchestration.CatalogRepostService
 import com.rieltor.application.port.TelegramBotReplySender
-import com.rieltor.application.port.TelegramMessageSource
-import com.rieltor.application.service.TelegramRepostTracker
-import com.rieltor.application.usecase.PublishPhotoRepostUseCase
+import com.rieltor.application.port.TelegramInboxSource
 import com.rieltor.application.usecase.ReplyWithFormattedListingUseCase
 import com.rieltor.domain.repository.*
 import com.rieltor.domain.service.ListingCaptionFormatter
 import com.rieltor.infrastructure.config.*
-import com.rieltor.infrastructure.database.TelegramHistoryCleanupJob
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
-import com.rieltor.infrastructure.database.repository.TelegramRepostQueueImpl
-import com.rieltor.infrastructure.database.repository.TelegramRepostRepositoryImpl
+import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.database.repository.TikTokPublishThrottleRepositoryImpl
 import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.google.GoogleDrivePhotoSource
@@ -63,15 +57,24 @@ private fun configurationModule(dotenv: Dotenv) = module {
 }
 
 private val persistenceModule = module {
-    single { RoomDatabaseStore(databasePath(get())) }
+        single {
+        val app = get<ApplicationSettings>()
+        val root = java.nio.file.Path.of(System.getenv("APP_PROJECT_ROOT") ?: ".").toAbsolutePath().normalize()
+        JsonSettingsStore(root.resolve("settings.json"), LocalSettings(
+            minIntervalMs = app.repostMinIntervalMinutes * 60_000,
+            maxMessagesPer24Hours = app.repostMaxMessagesPer24Hours, threadsEnabled = app.threadsEnabled,
+        ))
+    }
+    single { RoomDatabaseStore(databasePath(get()), get(), ownsSettings = false) }
+    single { CatalogRepository(get()) }
     single { JsonCredentialStore(credentialsPath(get())) }
     single<SecretRepository> { get<JsonCredentialStore>() }
     single<TikTokTokenRepository> { JsonTikTokTokenRepository(get()) }
     single<TikTokPublishThrottleRepository> { TikTokPublishThrottleRepositoryImpl(get()) }
     single<GoogleDriveTokenRepository> { JsonGoogleDriveTokenRepository(get()) }
     single<ThreadsTokenRepository> { JsonThreadsTokenRepository(get()) }
-    single<TelegramRepostRepository> { TelegramRepostRepositoryImpl(get()) }
-    single<TelegramRepostQueue> { TelegramRepostQueueImpl(get()) }
+
+
 }
 
 private val networkModule = module {
@@ -98,44 +101,15 @@ private val applicationModule = module {
             maxPhotoCount = get<ApplicationSettings>().telegramListingBotMaxPhotoCount,
         )
     }
-    single { TelegramRepostTracker(get()) }
+    single { CatalogIngestionService(get(), get(), get(), get(), get()) }
     single {
-        val settings = get<ApplicationSettings>()
-        PublishPhotoRepostUseCase(
-            allowedSources = settings.monitoredTelegramTopics,
-            repostTracker = get(),
-            mediaStorage = get(),
-            publishers = buildList {
-                add(get<TikTokPhotoPublisher>())
-                if (settings.threadsEnabled && settings.threadsConfigured) {
-                    add(get<ThreadsPhotoPublisher>())
-                }
-            },
-            externalPhotoSource = get(),
-            captionFormatter = get(),
-            maxPhotoCount = settings.repostMaxPhotoCount,
-        )
-    }
-    single<PhotoRepostHandler> { get<PublishPhotoRepostUseCase>() }
-    single<RepostMasterLimiter> {
-        val settings = get<ApplicationSettings>()
-        PersistentRepostMasterLimiter(
-            repository = get(),
-            maxMessagesPer24Hours = settings.repostMaxMessagesPer24Hours,
-            minIntervalMillis = settings.repostMinIntervalMinutes * 60_000L,
-        )
-    }
-    single {
-        TelegramRepostCoordinator(
-            source = get(),
-            repostHandler = get(),
-            queue = get(),
-            masterLimiter = get(),
-            workerStartupDelayMillis = TelegramRepostCoordinator.PRODUCTION_WORKER_STARTUP_DELAY_MILLIS,
-        )
+        val app = get<ApplicationSettings>()
+        CatalogRepostService(get(), get(), buildList {
+            add(get<TikTokPhotoPublisher>())
+            if (app.threadsConfigured) add(get<ThreadsPhotoPublisher>())
+        }, get())
     }
 }
-
 private val integrationModule = module {
     single { LandingLeadSender(get(), get()) }
     single { TikTokAuthService(get(), get(), get(), get()) }
@@ -160,8 +134,13 @@ private val integrationModule = module {
         LocalPublicMediaStorage(settings.mediaDirectory, settings.publicBaseUrl)
     }
     single<PublicMediaStorage> { get<LocalPublicMediaStorage>() }
-    single { MediaCleanupJob(get<ApplicationSettings>().mediaDirectory) }
-    single { TelegramHistoryCleanupJob(get()) }
+    single { MediaCleanupJob(get<ApplicationSettings>().mediaDirectory, referencedFiles = {
+        val repo = get<CatalogRepository>()
+        val json = kotlinx.serialization.json.Json
+        (repo.listings().flatMap { json.decodeFromString<List<com.rieltor.domain.model.CatalogPhoto>>(it.photos).map { photo -> photo.fileName } } +
+            repo.groups().flatten().flatMap { json.decodeFromString<List<com.rieltor.domain.model.CatalogPhoto>>(it.mediaManifest).map { photo -> photo.fileName } }).toSet()
+    }) }
+
     single {
         TikTokPhotoPublisher(
             httpClient = get(),
@@ -174,13 +153,17 @@ private val integrationModule = module {
         )
     }
     single { ThreadsPhotoPublisher(get(), get(), get()) }
-    single<TelegramMessageSource> {
+    single<TelegramInboxSource> {
         val settings = get<ApplicationSettings>()
         TelegramClientAdapter(
             apiId = settings.telegramApiId,
             apiHash = settings.telegramApiHash,
             sessionDirectory = settings.telegramSessionDirectory,
-            monitoredTopics = settings.monitoredTelegramTopics,
+            monitoredTopics = settings.monitoredTelegramTopics + get<JsonSettingsStore>().snapshot().topicTypeMapping.keys.map { key ->
+                val parts = key.split(':'); com.rieltor.domain.model.TelegramMonitoredTopic(parts[0].toLong(), parts[1].toLong())
+            },
+            repository = get(), settings = get(),
         )
     }
 }
+

@@ -1472,6 +1472,15 @@ textarea.control {
     background: var(--surface);
 }
 
+.catalog-programs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px 24px; border: 0; padding: 0; }
+.catalog-programs legend { margin-bottom: 12px; }
+.catalog-programs label { display: flex; align-items: center; gap: 8px; }
+.catalog-programs input { width: auto; }
+.listing-gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 32px; }
+.listing-gallery img { width: 100%; height: auto; border-radius: var(--radius); }
+[hidden] { display: none !important; }
+@media (max-width: 600px) { .listing-gallery { grid-template-columns: 1fr; } }
+
 .catalog-filters__actions {
     display: flex;
     gap: 10px;

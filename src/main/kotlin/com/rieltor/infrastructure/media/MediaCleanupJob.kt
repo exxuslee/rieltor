@@ -16,6 +16,7 @@ class MediaCleanupJob(
     private val interval: Duration = Duration.ofHours(8),
     private val clock: Clock = Clock.systemUTC(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val referencedFiles: () -> Set<String> = { emptySet() },
 ) : Closeable {
     private val logger = LoggerFactory.getLogger(MediaCleanupJob::class.java)
     private var job: Job? = null
@@ -35,11 +36,13 @@ class MediaCleanupJob(
         if (!Files.isDirectory(directory)) return 0
 
         val cutoff = clock.instant().minus(maxAge)
+        val protectedFiles = referencedFiles()
         var deletedCount = 0
         Files.list(directory).use { paths ->
             paths
                 .filter(Files::isRegularFile)
                 .filter(::isSupportedImage)
+                .filter { it.fileName.toString() !in protectedFiles }
                 .filter { Files.getLastModifiedTime(it).toInstant().isBefore(cutoff) }
                 .forEach { path ->
                     if (Files.deleteIfExists(path)) deletedCount++

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8"><meta content="width=device-width,initial-scale=1" name="viewport">
+    <title>Каталог нерухомості — Ірина Ліннік</title>
+    <meta content="Актуальні квартири, будинки та ділянки в Ірпені, Бучі, Ворзелі й Гостомелі. Пошук за ціною та державними програмами." name="description">
+    <link href="https://rieltor.dpdns.org/catalog.html" rel="canonical">
+    <script src="js/theme.js"></script><link href="css/styles.css?v=8.1" rel="stylesheet">
+</head>
+<body data-page="catalog"><site-header></site-header>
+<main><section class="page-hero"><div class="container"><h1>Знайдіть свою нерухомість</h1>
+<p>Актуальні пропозиції. Оберіть локацію, бюджет і зручні умови придбання.</p></div></section>
+<section class="section catalog-section"><div class="container">
+<form class="catalog-filters" data-catalog-filters>
+    <label class="field">Локація<select name="location"><option value="">Усі локації</option value="IRPIN">Ірпінь</option><option value="BUCHA">Буча</option><option value="VORZEL">Ворзель</option><option value="HOSTOMEL">Гостомель</option></select></label>
+    <label class="field">Тип нерухомості<select name="typeOfRealty"><option value="">Усі типи</option value="APARTMENT">Квартири</option><option value="NEW_BUILD">Новобудови</option><option value="HOUSE">Будинки</option><option value="LAND">Земля</option><option value="COMMERCIAL">Комерція</option></select></label>
+    <label class="field">Ціна від<input inputmode="decimal" min="0" name="priceMin" step="0.01" type="number"></label>
+    <label class="field">Ціна до<input inputmode="decimal" min="0" name="priceMax" step="0.01" type="number"></label>
+    <label class="field">Валюта<select name="currency"><option value="">Усі валюти</option><option value="USD">USD — долар</option><option value="UAH">UAH — гривня</option><option value="EUR">EUR — євро</option></select></label>
+    <label class="field">Угода<select name="transactionType"><option value="">Усі угоди</option><option value="SALE">Продаж</option><option value="RENT">Оренда</option></select></label>
+    <label class="field">Ціна за<select name="pricePeriod"><option value="">Усі варіанти</option><option value="TOTAL">Об’єкт</option><option value="MONTH">Місяць</option><option value="PER_M2">м²</option><option value="PER_SOTKA">Сотку</option></select></label>
+    <label class="field">Сортування<select data-default="newest" name="sort"><option value="newest">Спочатку нові</option><option value="priceAsc">Ціна за зростанням</option><option value="priceDesc">Ціна за спаданням</option></select></label>
+    <fieldset class="catalog-programs"><legend>Державні програми — будь-яка з обраних</legend>
+        <label><input name="governmentPrograms" type="checkbox" value="EOSELIA"> єОселя</label>
+        <label><input name="governmentPrograms" type="checkbox" value="VOUCHER"> Ваучер</label>
+        <label><input name="governmentPrograms" type="checkbox" value="CERTIFICATE"> Сертифікат</label>
+        <label><input name="governmentPrograms" type="checkbox" value="POSTANOVA"> Постанова</label>
+    </fieldset>
+    <div class="catalog-filters__actions"><button class="btn" type="submit">Знайти</button><button class="btn btn--outline" type="reset">Скинути фільтри</button></div>
+</form>
+<p aria-live="polite" data-result-status role="status">Завантажуємо оголошення…</p>
+<button class="btn" data-retry hidden type="button">Спробувати ще раз</button>
+<div class="property-grid" data-property-grid></div>
+<button class="btn" data-load-more hidden type="button">Показати ще</button>
+</div></section></main><site-footer></site-footer>
+<script src="js/data.js"></script><script src="js/components.js?v=4"></script><script src="js/catalog.js"></script>
+</body></html>
+

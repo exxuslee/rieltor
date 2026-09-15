@@ -31,6 +31,9 @@ out/
 tiktok-tokens.json
 secrets.json
 secrets.json.tmp
+/settings.json
+/settings.json.*
+/*.db.backup-*
 /*.db
 /*.db-shm
 /*.db-wal

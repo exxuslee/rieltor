@@ -12,6 +12,64 @@ import java.time.Instant
 import kotlin.test.*
 
 class GoogleDrivePhotoSourceTest {
+    @Test fun `catalog worker waits for stable source then downloads newest independent of repost flags`() = runBlocking {
+        val directory = java.nio.file.Files.createTempDirectory("catalog-pipeline")
+        val image = java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB)
+        val bytes = java.io.ByteArrayOutputStream().also { javax.imageio.ImageIO.write(image, "jpg", it) }.toByteArray()
+        var downloads = 0
+        val client = HttpClient(MockEngine { request ->
+            when {
+                request.url.parameters["alt"] == "media" -> { downloads++; respond(bytes, headers = headersOf(HttpHeaders.ContentType, "image/jpeg")) }
+                request.url.encodedPath.endsWith("/files") -> respond("""{"files":[{"id":"photo","name":"photo.jpg","mimeType":"image/jpeg","version":"1"}]}""")
+                else -> respond("""{"id":"photo","name":"photo.jpg","mimeType":"image/jpeg","version":"1"}""")
+            }
+        })
+        com.rieltor.infrastructure.database.local.RoomDatabaseStore(directory.resolve("test.db")).use { db ->
+            db.settings.update { it.copy(topicTypeMapping = mapOf("-100:20" to "APARTMENT"), driveFileDelayMs = 0, tiktokEnabled = false, threadsEnabled = false) }
+            val repo = com.rieltor.infrastructure.database.repository.CatalogRepository(db)
+            var time = 0L
+            var unavailable = false
+            val messages = (1L..2L).associateWith { id -> com.rieltor.domain.model.SourceMessage(-100, id, 20,
+                text = "Ірпінь\nКвартира\nЦіна: 80 000 USD\nhttps://drive.google.com/drive/folders/example", raw = "source-$id", sourceCreatedAt = id * 1000) }
+            val telegram = object : com.rieltor.application.port.TelegramInboxSource {
+                override fun start() = Unit
+                override fun close() = Unit
+                override suspend fun refresh(chatId: Long, messageId: Long) = if (unavailable) com.rieltor.domain.model.SourceRefresh.Unavailable
+                    else com.rieltor.domain.model.SourceRefresh.Found(messages.getValue(messageId))
+            }
+            val storage = com.rieltor.infrastructure.media.LocalPublicMediaStorage(directory.resolve("media"), "https://api.example")
+            val service = com.rieltor.application.orchestration.CatalogIngestionService(telegram, repo, db.settings, createSource(client), storage) { time }
+            messages.values.forEach { repo.receive(it, time, 1_200_000) }
+            time = 1_199_999
+            service.verifyDue(); assertFalse(service.downloadNext()); assertEquals(0, downloads)
+            time = 1_200_000; unavailable = true
+            service.verifyDue(); assertFalse(service.downloadNext()); assertEquals(0, downloads)
+            time = 1_260_001; unavailable = false
+            service.verifyDue(); assertTrue(service.downloadNext())
+            assertEquals(2, repo.listings().single().messageId); assertEquals(1, downloads)
+            assertTrue(service.downloadNext()); assertEquals(2, repo.listings().size)
+            assertTrue(repo.listings().all { it.status == "ACTIVE" && !it.tiktokReposted })
+            service.close()
+        }
+        client.close()
+    }
+
+    @Test fun `catalog rejects partial batch and changed Drive version`() = runBlocking {
+        var version = "1"
+        val client = HttpClient(MockEngine { request ->
+            when {
+                request.url.parameters["alt"] == "media" -> respond(byteArrayOf(1,2,3), headers = headersOf(HttpHeaders.ContentType, "image/jpeg"))
+                request.url.encodedPath.endsWith("/files") -> respond("""{"files":[{"id":"photo","name":"photo.jpg","mimeType":"image/jpeg","version":"1"}]}""")
+                else -> respond("""{"id":"photo","name":"photo.jpg","mimeType":"image/jpeg","version":"$version"}""")
+            }
+        })
+        assertFailsWith<IllegalStateException> {
+            createSource(client).downloadCatalogPhotos(listOf("https://drive.google.com/drive/folders/example"), 10, 0) { _, stream ->
+                stream.readBytes(); version = "2"
+            }
+        }
+        client.close()
+    }
     @Test
     fun `extracts folder and file links from telegram text`() {
         val targets = GoogleDriveLinkParser.extract(

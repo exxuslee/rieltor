@@ -7,7 +7,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
-import com.rieltor.infrastructure.database.model.*
+import com.rieltor.infrastructure.database.model.IncomingEntity
+import com.rieltor.infrastructure.database.model.ListingEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
@@ -15,33 +16,31 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
 
 @Database(
-    entities = [
-        ReceivedTelegramMessageEntity::class,
-        PublishedRepostEntity::class,
-        RepostPublicationEntity::class,
-        TelegramRepostQueueEntity::class,
-        TikTokPublishAttemptEntity::class,
-        TikTokPublishThrottleEntity::class,
-        TikTokTrackedPublishEntity::class,
-    ],
-    version = 11,
+    entities = [IncomingEntity::class, ListingEntity::class], version = 12,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
-    abstract fun repostDao(): RepostDao
-    abstract fun tikTokThrottleDao(): TikTokThrottleDao
-    abstract fun repostQueueDao(): RepostQueueDao
+    abstract fun catalogDao(): CatalogDao
 }
 
-class RoomDatabaseStore(path: Path) : AutoCloseable {
+class RoomDatabaseStore(path: Path, val settings: com.rieltor.infrastructure.config.JsonSettingsStore = com.rieltor.infrastructure.config.JsonSettingsStore(path.resolveSibling("settings.json")), private val ownsSettings: Boolean = true) : AutoCloseable {
     internal val room: RieltorDatabase
 
     init {
         path.parent?.let(Files::createDirectories)
+        if (Files.exists(path) && Files.size(path) > 0) {
+            BundledSQLiteDriver().open(path.toAbsolutePath().toString()).use { connection ->
+                val version = connection.prepare("PRAGMA user_version").use { it.step(); it.getLong(0) }
+                if (version in 1..11) {
+                    val backup = path.resolveSibling("${path.fileName}.backup-${System.currentTimeMillis()}").toAbsolutePath()
+                    connection.prepare("VACUUM INTO ?").use { it.bindText(1, backup.toString()); it.step() }
+                }
+            }
+        }
         room = Room.databaseBuilder<RieltorDatabase>(name = path.toAbsolutePath().toString())
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)
-            .addMigrations(*LEGACY_MIGRATIONS)
+            .addMigrations(*LEGACY_MIGRATIONS, CatalogMigration(settings, path))
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(connection: SQLiteConnection) {
                     connection.execSQL("PRAGMA busy_timeout=5000")
@@ -51,7 +50,7 @@ class RoomDatabaseStore(path: Path) : AutoCloseable {
             .build()
 
         // Force opening and migration before the store becomes injectable.
-        blocking { it.repostDao().receivedCount() }
+        blocking { it.catalogDao().count() }
         restrictFilePermissions(path)
     }
 
@@ -59,7 +58,7 @@ class RoomDatabaseStore(path: Path) : AutoCloseable {
         block(room)
     }
 
-    override fun close() = room.close()
+    override fun close() { room.close(); if (ownsSettings) settings.close() }
 
     private fun restrictFilePermissions(path: Path) {
         runCatching {
@@ -230,3 +229,4 @@ private fun dropCredentialTables(connection: SQLiteConnection) {
     connection.execSQL("DROP TABLE IF EXISTS google_drive_tokens")
     connection.execSQL("DROP TABLE IF EXISTS threads_tokens")
 }
+
