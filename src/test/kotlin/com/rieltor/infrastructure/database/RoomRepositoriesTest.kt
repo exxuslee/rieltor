@@ -179,4 +179,37 @@ class RoomPersistenceTest {
             }
         }
     }
+
+    @Test fun `v12 migration removes write-only inbox columns and preserves queued message`() {
+        val path = path()
+        val schema = Json.parseToJsonElement(Files.readString(Path.of("schemas/com.rieltor.infrastructure.database.local.RieltorDatabase/12.json"))).jsonObject["database"]!!.jsonObject
+        BundledSQLiteDriver().open(path.toString()).use { connection ->
+            schema["entities"]!!.jsonArray.forEach { entity ->
+                val obj = entity.jsonObject; val table = obj["tableName"]!!.jsonPrimitive.content
+                connection.execSQL(obj["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", table))
+                obj["indices"]?.jsonArray.orEmpty().forEach { connection.execSQL(it.jsonObject["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", table)) }
+            }
+            connection.execSQL("""INSERT INTO incoming_telegram_messages (
+                chatId, messageId, messageThreadId, mediaAlbumId, groupKey, originalRawMessage, rawMessage, rawText,
+                sourceCreatedAt, sourceEditedAt, receivedAt, updatedAt, contentHash, revision, stableSince, verifyAfter,
+                status, googleDriveUrls, mediaManifest, attemptCount, nextAttemptAt, leaseUntil
+            ) VALUES (-100,1,20,0,'-100:message:1','original','raw','text',10,0,11,12,'hash',1,12,13,'WAITING_STABILITY','[]','[]',0,0,0)""")
+            connection.execSQL("PRAGMA user_version=12")
+        }
+        RoomDatabaseStore(path).use { db ->
+            val source = CatalogRepository(db).source(-100, 1)
+            assertEquals("raw", source?.rawMessage)
+            assertEquals("text", source?.rawText)
+            assertEquals(13, source?.verifyAfter)
+        }
+        BundledSQLiteDriver().open(path.toString()).use { connection ->
+            connection.prepare("PRAGMA table_info(incoming_telegram_messages)").use { query ->
+                val columns = buildSet { while (query.step()) add(query.getText(1)) }
+                assertFalse("originalRawMessage" in columns)
+                assertFalse("googleDriveUrls" in columns)
+                assertFalse("legacyUpdateId" in columns)
+                assertTrue("mediaManifest" in columns)
+            }
+        }
+    }
 }

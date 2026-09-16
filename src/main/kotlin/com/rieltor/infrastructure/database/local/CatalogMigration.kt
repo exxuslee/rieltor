@@ -8,7 +8,6 @@ import com.rieltor.domain.model.PublishAttempt
 import com.rieltor.domain.model.sha256
 import com.rieltor.infrastructure.config.JsonSettingsStore
 import com.rieltor.infrastructure.config.SlotReservation
-import com.rieltor.infrastructure.database.model.IncomingEntity
 import com.rieltor.infrastructure.database.model.ListingEntity
 import kotlinx.serialization.json.*
 import java.nio.file.Path
@@ -43,7 +42,7 @@ internal class CatalogMigration(private val settings: JsonSettingsStore, private
                 migratedDatabases = current.migratedDatabases + migrationKey,
             )
         }
-        createCatalogTables(connection)
+        createCatalogTablesV12(connection)
         fun insert(table: String, values: JsonObject) {
             val fields = values.filterKeys { it != "id" }
             connection.prepare("INSERT INTO $table (${fields.keys.joinToString()}) VALUES (${fields.keys.joinToString { "?" }})").use { sql ->
@@ -74,13 +73,17 @@ internal class CatalogMigration(private val settings: JsonSettingsStore, private
             }.toString()
             val created = source.number("received_at").takeIf { it > 0 }?.times(1000) ?: source.number("created_at") * 1000
             val group = "legacy:$oldId"
-            insert("incoming_telegram_messages", json.encodeToJsonElement(IncomingEntity(
-                chatId = source.number("chat_id"), messageId = null, messageThreadId = source.number("message_thread_id"),
-                groupKey = group, originalRawMessage = snapshot, rawMessage = snapshot, rawText = source.text("caption").orEmpty(),
-                sourceCreatedAt = created, receivedAt = created, updatedAt = created, contentHash = sha256(snapshot),
-                stableSince = created, verifyAfter = created, status = "NEEDS_REVIEW", legacyUpdateId = oldId,
-                googleDriveUrls = source.text("google_drive_links") ?: "[]", lastError = "Legacy messageId is unknown; source reconciliation required",
-            )).jsonObject)
+            insert("incoming_telegram_messages", buildJsonObject {
+                put("chatId", source.number("chat_id")); put("messageThreadId", source.number("message_thread_id"))
+                put("mediaAlbumId", 0); put("groupKey", group); put("originalRawMessage", snapshot)
+                put("rawMessage", snapshot); put("rawText", source.text("caption").orEmpty())
+                put("sourceCreatedAt", created); put("sourceEditedAt", 0); put("receivedAt", created); put("updatedAt", created)
+                put("contentHash", sha256(snapshot)); put("revision", 1); put("stableSince", created); put("verifyAfter", created)
+                put("status", "NEEDS_REVIEW"); put("googleDriveUrls", source.text("google_drive_links") ?: "[]")
+                put("mediaManifest", "[]"); put("attemptCount", 0); put("nextAttemptAt", 0)
+                put("lastError", "Legacy messageId is unknown; source reconciliation required"); put("leaseUntil", 0)
+                put("legacyUpdateId", oldId)
+            })
             fun state(destination: String): PublicationState {
                 val matching = posts.filter { it.text("destination") == destination }
                 val legacyPosts = if (matching.isEmpty() && destination == "TIKTOK") historical else emptyList()

@@ -57,7 +57,7 @@ class CatalogIngestionService(
                 is SourceRefresh.Found -> repository.receive(refreshed.message, now(), settings.snapshot().stabilityWindowMinutes * 60_000)
                 SourceRefresh.Deleted -> { repository.delete(row.chatId, row.messageId, now()); return false }
                 SourceRefresh.Unavailable -> {
-                    repository.stage(rows, "VERIFY_RETRY", now(), "Telegram source unavailable", now() + 60_000)
+                    repository.stage(rows, "VERIFY_RETRY", now(), now() + 60_000, failed = true)
                     return false
                 }
             }
@@ -120,8 +120,7 @@ class CatalogIngestionService(
             val attempts = rows.first().attemptCount + 1
             val delay = (config.driveRetryBaseMs * (1L shl attempts.coerceAtMost(10))).coerceAtMost(3_600_000) + kotlin.random.Random.nextLong(1000)
             if (attempts >= config.driveMaxAttempts) repository.discard(rows)
-            else repository.stage(rows, "MEDIA_RETRY", now(),
-                error.javaClass.simpleName + ": " + error.message.orEmpty().replace(Regex("https?://\\S+"), "[URL]").take(400), now() + delay)
+            else repository.stage(rows, "MEDIA_RETRY", now(), now() + delay, failed = true)
         }
         return true
     }

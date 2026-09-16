@@ -6,22 +6,20 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "incoming_telegram_messages", indices = [
     Index(value = ["chatId", "messageId"], unique = true), Index(value = ["groupKey"]),
-    Index(value = ["status", "verifyAfter"]), Index(value = ["legacyUpdateId"], unique = true),
+    Index(value = ["status", "verifyAfter"]),
 ])
 @kotlinx.serialization.Serializable
 data class IncomingEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val chatId: Long, val messageId: Long?, val messageThreadId: Long,
     val mediaAlbumId: Long = 0, val groupKey: String,
-    val originalRawMessage: String, val rawMessage: String, val rawText: String,
+    val rawMessage: String, val rawText: String,
     val sourceCreatedAt: Long, val sourceEditedAt: Long = 0,
-    val receivedAt: Long, val updatedAt: Long, val contentHash: String, val revision: Long = 1,
-    val stableSince: Long, val verifyAfter: Long, val verifiedAt: Long? = null,
-    val status: String = "WAITING_STABILITY", val googleDriveUrls: String = "[]",
+    val receivedAt: Long, val contentHash: String, val revision: Long = 1,
+    val verifyAfter: Long, val verifiedAt: Long? = null,
+    val status: String = "WAITING_STABILITY",
     val mediaManifest: String = "[]", val attemptCount: Int = 0, val nextAttemptAt: Long = 0,
-    val lastError: String? = null, val leaseToken: String? = null, val leaseUntil: Long = 0,
-    val listingId: Long? = null, val promotedAt: Long? = null, val deletedAt: Long? = null,
-    val legacyUpdateId: Long? = null,
+    val leaseToken: String? = null, val leaseUntil: Long = 0,
 )
 
 @Entity(tableName = "listings", indices = [
@@ -56,4 +54,3 @@ data class ListingEntity(
     val parserVersion: Int = 1, val parseWarnings: String = "[]", val legacyUpdateId: Long? = null,
     val legacySnapshot: String? = null,
 )
-

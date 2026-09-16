@@ -16,7 +16,7 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
 
 @Database(
-    entities = [IncomingEntity::class, ListingEntity::class], version = 12,
+    entities = [IncomingEntity::class, ListingEntity::class], version = 13,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -41,7 +41,7 @@ class RoomDatabaseStore(path: Path, val settings: com.rieltor.infrastructure.con
             .setDriver(BundledSQLiteDriver())
 //            .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
             .setQueryCoroutineContext(Dispatchers.IO)
-            .addMigrations(*LEGACY_MIGRATIONS, CatalogMigration(settings, path))
+            .addMigrations(*LEGACY_MIGRATIONS, CatalogMigration(settings, path), SimplifyIncomingTelegramMessagesMigration)
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(connection: SQLiteConnection) {
                     connection.execSQL("PRAGMA busy_timeout=5000")
@@ -115,6 +115,55 @@ private val LEGACY_MIGRATIONS = ((1..7).map { startVersion ->
         createTikTokTrackedPublishesTable(connection)
     }
 }).toTypedArray()
+
+/** Removes inbox fields that were write-only or duplicated data derived during parsing. */
+private object SimplifyIncomingTelegramMessagesMigration : Migration(12, 13) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            """CREATE TABLE incoming_telegram_messages_v13 (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                chatId INTEGER NOT NULL,
+                messageId INTEGER,
+                messageThreadId INTEGER NOT NULL,
+                mediaAlbumId INTEGER NOT NULL,
+                groupKey TEXT NOT NULL,
+                rawMessage TEXT NOT NULL,
+                rawText TEXT NOT NULL,
+                sourceCreatedAt INTEGER NOT NULL,
+                sourceEditedAt INTEGER NOT NULL,
+                receivedAt INTEGER NOT NULL,
+                contentHash TEXT NOT NULL,
+                revision INTEGER NOT NULL,
+                verifyAfter INTEGER NOT NULL,
+                verifiedAt INTEGER,
+                status TEXT NOT NULL,
+                mediaManifest TEXT NOT NULL,
+                attemptCount INTEGER NOT NULL,
+                nextAttemptAt INTEGER NOT NULL,
+                leaseToken TEXT,
+                leaseUntil INTEGER NOT NULL
+            )"""
+        )
+        connection.execSQL(
+            """INSERT INTO incoming_telegram_messages_v13 (
+                id, chatId, messageId, messageThreadId, mediaAlbumId, groupKey,
+                rawMessage, rawText, sourceCreatedAt, sourceEditedAt, receivedAt,
+                contentHash, revision, verifyAfter, verifiedAt, status, mediaManifest,
+                attemptCount, nextAttemptAt, leaseToken, leaseUntil
+            ) SELECT
+                id, chatId, messageId, messageThreadId, mediaAlbumId, groupKey,
+                rawMessage, rawText, sourceCreatedAt, sourceEditedAt, receivedAt,
+                contentHash, revision, verifyAfter, verifiedAt, status, mediaManifest,
+                attemptCount, nextAttemptAt, leaseToken, leaseUntil
+            FROM incoming_telegram_messages"""
+        )
+        connection.execSQL("DROP TABLE incoming_telegram_messages")
+        connection.execSQL("ALTER TABLE incoming_telegram_messages_v13 RENAME TO incoming_telegram_messages")
+        connection.execSQL("CREATE UNIQUE INDEX index_incoming_telegram_messages_chatId_messageId ON incoming_telegram_messages(chatId, messageId)")
+        connection.execSQL("CREATE INDEX index_incoming_telegram_messages_groupKey ON incoming_telegram_messages(groupKey)")
+        connection.execSQL("CREATE INDEX index_incoming_telegram_messages_status_verifyAfter ON incoming_telegram_messages(status, verifyAfter)")
+    }
+}
 
 private fun createCurrentTables(connection: SQLiteConnection) {
     connection.execSQL(
@@ -230,4 +279,3 @@ private fun dropCredentialTables(connection: SQLiteConnection) {
     connection.execSQL("DROP TABLE IF EXISTS google_drive_tokens")
     connection.execSQL("DROP TABLE IF EXISTS threads_tokens")
 }
-

@@ -34,24 +34,22 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         val row = IncomingEntity(
             id = old?.id ?: 0, chatId = message.chatId, messageId = message.messageId,
             messageThreadId = message.messageThreadId, mediaAlbumId = message.mediaAlbumId, groupKey = message.groupKey,
-            originalRawMessage = old?.originalRawMessage ?: message.raw, rawMessage = message.raw, rawText = message.text,
+            rawMessage = message.raw, rawText = message.text,
             sourceCreatedAt = message.sourceCreatedAt, sourceEditedAt = message.sourceEditedAt,
-            receivedAt = old?.receivedAt ?: now, updatedAt = now, contentHash = message.fingerprint(),
-            revision = (old?.revision ?: 0) + 1, stableSince = now, verifyAfter = now + stabilityMs,
-            googleDriveUrls = json.encodeToString(GoogleDriveLinkExtractor().extract(message.text)),
-            listingId = old?.listingId,
+            receivedAt = old?.receivedAt ?: now, contentHash = message.fingerprint(),
+            revision = (old?.revision ?: 0) + 1, verifyAfter = now + stabilityMs,
         )
         dao.saveSource(row)
         // A late album item invalidates every part, including a currently running media lease.
         dao.group(message.groupKey).filter { it.status != "DELETED" }.forEach {
-            dao.saveSource(it.copy(status = "WAITING_STABILITY", stableSince = now, verifyAfter = now + stabilityMs,
+            dao.saveSource(it.copy(status = "WAITING_STABILITY", verifyAfter = now + stabilityMs,
                 verifiedAt = null, leaseToken = null, leaseUntil = 0, attemptCount = 0, nextAttemptAt = 0))
         }
         dao.listingForGroup(message.groupKey)?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
     }
     fun delete(chatId: Long, messageId: Long, now: Long) = transaction { dao ->
         val row = dao.source(chatId, messageId) ?: return@transaction
-        dao.group(row.groupKey).forEach { dao.saveSource(it.copy(status = "DELETED", deletedAt = now, leaseToken = null, leaseUntil = 0)) }
+        dao.group(row.groupKey).forEach { dao.saveSource(it.copy(status = "DELETED", leaseToken = null, leaseUntil = 0)) }
         dao.listingForGroup(row.groupKey)?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
     }
     fun source(chatId: Long, messageId: Long) = transaction { it.source(chatId, messageId) }
@@ -110,13 +108,13 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     fun query(query: androidx.room.RoomRawQuery) = database.blocking { it.catalogDao().query(query) }
     fun revision(rows: List<IncomingEntity>) = sha256(rows.joinToString("|") { "${it.id}:${it.revision}:${it.contentHash}" })
 
-    fun stage(rows: List<IncomingEntity>, status: String, now: Long, error: String? = null, next: Long = 0): Boolean = transaction { dao ->
+    fun stage(rows: List<IncomingEntity>, status: String, now: Long, next: Long = 0, failed: Boolean = false): Boolean = transaction { dao ->
         val current = dao.group(rows.first().groupKey)
         if (revision(current) != revision(rows) || current.any { it.status == "DELETED" }) return@transaction false
-        current.forEach { dao.saveSource(it.copy(status = status, updatedAt = now,
+        current.forEach { dao.saveSource(it.copy(status = status,
             verifiedAt = if (status in setOf("READY_FOR_MEDIA", "PROMOTED")) now else it.verifiedAt,
-            lastError = error, nextAttemptAt = next, leaseToken = null, leaseUntil = 0,
-            attemptCount = if (error != null) it.attemptCount + 1 else it.attemptCount)) }
+            nextAttemptAt = next, leaseToken = null, leaseUntil = 0,
+            attemptCount = if (failed) it.attemptCount + 1 else it.attemptCount)) }
         true
     }
     fun claim(rows: List<IncomingEntity>, now: Long): String? = transaction { dao ->
@@ -151,7 +149,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
             tiktokPublishId = old.tiktokPublishId, threadsPublishId = old.threadsPublishId,
             tiktokState = old.tiktokState, threadsState = old.threadsState)
         val id = dao.saveListing(normalizePrice(row)).takeIf { it > 0 } ?: row.id
-        current.forEach { dao.saveSource(it.copy(status = "PROMOTED", listingId = id, promotedAt = now, leaseToken = null, leaseUntil = 0)) }
+        current.forEach { dao.saveSource(it.copy(status = "PROMOTED", leaseToken = null, leaseUntil = 0)) }
         true
     }
     fun recover(now: Long) = transaction { dao ->
