@@ -1,7 +1,6 @@
 package com.rieltor.domain.service
 
 import com.rieltor.infrastructure.database.model.ListingEntity
-import kotlinx.serialization.json.Json
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -27,11 +26,8 @@ class CatalogPriceNormalizer(private val uahPerUsd: Double = 45.0, private val u
             }.setScale(0, RoundingMode.HALF_UP).longValueExact()
             require(converted > 0) { "Normalized price must be positive" }
             converted
-        }.getOrElse { error ->
-            val warning = "Price normalization: ${error.message}"
-            val warnings = Json.decodeFromString<List<String>>(row.parseWarnings)
-            return row.copy(status = if (row.status == "ACTIVE") "NEEDS_REVIEW" else row.status,
-                parseWarnings = Json.encodeToString((warnings + warning).distinct()))
+        }.getOrElse {
+            return row.copy(status = if (row.status == "ACTIVE") "NEEDS_REVIEW" else row.status)
         }
         return row.copy(price = cents, currency = "USD", pricePeriod = "TOTAL")
     }

@@ -16,7 +16,7 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
 
 @Database(
-    entities = [IncomingEntity::class, ListingEntity::class], version = 13,
+    entities = [IncomingEntity::class, ListingEntity::class], version = 14,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -41,7 +41,7 @@ class RoomDatabaseStore(path: Path, val settings: com.rieltor.infrastructure.con
             .setDriver(BundledSQLiteDriver())
 //            .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
             .setQueryCoroutineContext(Dispatchers.IO)
-            .addMigrations(*LEGACY_MIGRATIONS, CatalogMigration(settings, path), SimplifyIncomingTelegramMessagesMigration)
+            .addMigrations(*LEGACY_MIGRATIONS, CatalogMigration(settings, path), SimplifyIncomingTelegramMessagesMigration, RemoveListingMetadataMigration)
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(connection: SQLiteConnection) {
                     connection.execSQL("PRAGMA busy_timeout=5000")
@@ -162,6 +162,54 @@ private object SimplifyIncomingTelegramMessagesMigration : Migration(12, 13) {
         connection.execSQL("CREATE UNIQUE INDEX index_incoming_telegram_messages_chatId_messageId ON incoming_telegram_messages(chatId, messageId)")
         connection.execSQL("CREATE INDEX index_incoming_telegram_messages_groupKey ON incoming_telegram_messages(groupKey)")
         connection.execSQL("CREATE INDEX index_incoming_telegram_messages_status_verifyAfter ON incoming_telegram_messages(status, verifyAfter)")
+    }
+}
+
+/** Removes parser and legacy-migration metadata that is not used by the catalog. */
+private object RemoveListingMetadataMigration : Migration(13, 14) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("DROP INDEX IF EXISTS index_listings_legacyUpdateId")
+        connection.execSQL(
+            """CREATE TABLE listings_v14 (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                groupKey TEXT NOT NULL, chatId INTEGER NOT NULL, messageId INTEGER,
+                messageThreadId INTEGER NOT NULL, mediaAlbumId INTEGER NOT NULL,
+                rawMessage TEXT NOT NULL, sourceRevision TEXT NOT NULL, title TEXT NOT NULL,
+                description TEXT NOT NULL, location TEXT, address TEXT, district TEXT,
+                typeOfRealty TEXT, transactionType TEXT NOT NULL, tags TEXT NOT NULL,
+                primeParams TEXT NOT NULL, secondaryParams TEXT NOT NULL,
+                governmentPrograms TEXT NOT NULL, governmentProgramsKnown INTEGER NOT NULL,
+                googleDriveUrl TEXT, googleDriveUrls TEXT NOT NULL, price INTEGER, currency TEXT,
+                pricePeriod TEXT NOT NULL, areaM2 REAL, landAreaSotka REAL, rooms INTEGER,
+                floor INTEGER, totalFloors INTEGER, photos TEXT NOT NULL, coverPhotoId TEXT,
+                status TEXT NOT NULL, sourceCreatedAt INTEGER NOT NULL, receivedAt INTEGER NOT NULL,
+                cdt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, publishedAt INTEGER,
+                tiktokReposted INTEGER NOT NULL, threadsReposted INTEGER NOT NULL,
+                tiktokRepostedAt INTEGER, threadsRepostedAt INTEGER, tiktokStatus TEXT NOT NULL,
+                threadsStatus TEXT NOT NULL, tiktokPublishId TEXT, threadsPublishId TEXT,
+                tiktokState TEXT NOT NULL, threadsState TEXT NOT NULL
+            )"""
+        )
+        connection.execSQL(
+            """INSERT INTO listings_v14 SELECT
+                id, groupKey, chatId, messageId, messageThreadId, mediaAlbumId, rawMessage,
+                sourceRevision, title, description, location, address, district, typeOfRealty,
+                transactionType, tags, primeParams, secondaryParams, governmentPrograms,
+                governmentProgramsKnown, googleDriveUrl, googleDriveUrls, price, currency,
+                pricePeriod, areaM2, landAreaSotka, rooms, floor, totalFloors, photos,
+                coverPhotoId, status, sourceCreatedAt, receivedAt, cdt, updatedAt, publishedAt,
+                tiktokReposted, threadsReposted, tiktokRepostedAt, threadsRepostedAt,
+                tiktokStatus, threadsStatus, tiktokPublishId, threadsPublishId, tiktokState,
+                threadsState FROM listings"""
+        )
+        connection.execSQL("DROP TABLE listings")
+        connection.execSQL("ALTER TABLE listings_v14 RENAME TO listings")
+        connection.execSQL("CREATE UNIQUE INDEX index_listings_groupKey ON listings(groupKey)")
+        connection.execSQL("CREATE UNIQUE INDEX index_listings_chatId_messageId ON listings(chatId, messageId)")
+        connection.execSQL("CREATE INDEX index_listings_status_sourceCreatedAt_id ON listings(status, sourceCreatedAt, id)")
+        connection.execSQL("CREATE INDEX index_listings_status_location_typeOfRealty_currency_price ON listings(status, location, typeOfRealty, currency, price)")
+        connection.execSQL("CREATE INDEX index_listings_status_tiktokStatus_sourceCreatedAt ON listings(status, tiktokStatus, sourceCreatedAt)")
+        connection.execSQL("CREATE INDEX index_listings_status_threadsStatus_sourceCreatedAt ON listings(status, threadsStatus, sourceCreatedAt)")
     }
 }
 

@@ -27,7 +27,7 @@ data class IncomingEntity(
     Index(value = ["status", "sourceCreatedAt", "id"]),
     Index(value = ["status", "location", "typeOfRealty", "currency", "price"]),
     Index(value = ["status", "tiktokStatus", "sourceCreatedAt"]),
-    Index(value = ["status", "threadsStatus", "sourceCreatedAt"]), Index(value = ["legacyUpdateId"], unique = true),
+    Index(value = ["status", "threadsStatus", "sourceCreatedAt"]),
 ])
 @kotlinx.serialization.Serializable
 data class ListingEntity(
@@ -51,6 +51,4 @@ data class ListingEntity(
     val tiktokStatus: String = "PENDING", val threadsStatus: String = "PENDING",
     val tiktokPublishId: String? = null, val threadsPublishId: String? = null,
     val tiktokState: String = "{\"attempts\":[]}", val threadsState: String = "{\"attempts\":[]}",
-    val parserVersion: Int = 1, val parseWarnings: String = "[]", val legacyUpdateId: Long? = null,
-    val legacySnapshot: String? = null,
 )

@@ -59,6 +59,13 @@ internal class CatalogMigration(private val settings: JsonSettingsStore, private
                 sql.step()
             }
         }
+        fun legacyListing(row: ListingEntity, legacyUpdateId: Long?, legacySnapshot: String): JsonObject =
+            JsonObject(json.encodeToJsonElement(row).jsonObject + mapOf(
+                "parserVersion" to JsonPrimitive(1),
+                "parseWarnings" to JsonPrimitive("[]"),
+                "legacyUpdateId" to (legacyUpdateId?.let(::JsonPrimitive) ?: JsonNull),
+                "legacySnapshot" to JsonPrimitive(legacySnapshot),
+            ))
         val ids = (received + queue + publications + published).map { it.number("telegram_update_id") }.distinct()
         val assignedTracked = mutableSetOf<String>()
         ids.forEach { oldId ->
@@ -105,7 +112,7 @@ internal class CatalogMigration(private val settings: JsonSettingsStore, private
                 })
             }
             val tik = state("TIKTOK"); val threads = state("THREADS")
-            insert("listings", json.encodeToJsonElement(ListingEntity(
+            insert("listings", legacyListing(ListingEntity(
                 groupKey = group, chatId = source.number("chat_id"), messageId = null,
                 messageThreadId = source.number("message_thread_id"), rawMessage = snapshot, sourceRevision = "legacy",
                 sourceCreatedAt = created, receivedAt = created, cdt = created, updatedAt = created,
@@ -113,21 +120,20 @@ internal class CatalogMigration(private val settings: JsonSettingsStore, private
                 tiktokStatus = tik.attempts.lastOrNull()?.status ?: "UNKNOWN", threadsStatus = threads.attempts.lastOrNull()?.status ?: "UNKNOWN",
                 tiktokPublishId = tik.attempts.lastOrNull()?.publishId, threadsPublishId = threads.attempts.lastOrNull()?.publishId,
                 tiktokReposted = tik.attempts.any { it.status == "PUBLISHED" }, threadsReposted = threads.attempts.any { it.status == "PUBLISHED" },
-                legacyUpdateId = oldId, legacySnapshot = snapshot,
-            )).jsonObject)
+            ), oldId, snapshot))
         }
         // Preserve pending jobs even when the old cleanup already removed their source history.
         tracked.filter { it.text("publish_id") !in assignedTracked }.forEach { old ->
             val id = requireNotNull(old.text("publish_id")); val created = old.number("created_at")
             val state = PublicationState(listOf(PublishAttempt("legacy-pending:$id", "AWAITING_CONFIRMATION", id,
                 old.text("mode") ?: "POST", created, old.number("updated_at"))))
-            insert("listings", json.encodeToJsonElement(ListingEntity(
+            insert("listings", legacyListing(ListingEntity(
                 groupKey = "legacy-pending:$id", chatId = 0, messageId = null, messageThreadId = 0,
                 rawMessage = old.toString(), sourceRevision = "legacy", sourceCreatedAt = created,
                 receivedAt = created, cdt = created, updatedAt = created,
                 tiktokState = json.encodeToString(state), tiktokStatus = "AWAITING_CONFIRMATION", tiktokPublishId = id,
-                threadsStatus = "UNKNOWN", legacySnapshot = old.toString(),
-            )).jsonObject)
+                threadsStatus = "UNKNOWN",
+            ), null, old.toString()))
         }
         connection.prepare("SELECT COUNT(*) FROM incoming_telegram_messages").use { check(it.step() && it.getLong(0) == ids.size.toLong()) }
         listOf("received_telegram_messages", "telegram_repost_queue", "published_reposts", "repost_publications",

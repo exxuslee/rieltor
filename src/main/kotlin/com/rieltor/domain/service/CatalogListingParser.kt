@@ -69,7 +69,7 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
             landAreaSotka = decimal("""(\d+(?:[.,]\d+)?)\s*сот""", areaText),
             status = if (warnings.isEmpty()) "ACTIVE" else "NEEDS_REVIEW",
             sourceCreatedAt = rows.maxOf { maxOf(it.sourceCreatedAt, it.sourceEditedAt) }, receivedAt = first.receivedAt, cdt = now, updatedAt = now,
-            publishedAt = now.takeIf { warnings.isEmpty() }, parseWarnings = Json.encodeToString(warnings))
+            publishedAt = now.takeIf { warnings.isEmpty() })
     }
 
     private fun parseMoney(raw: String): Long? = runCatching {

@@ -212,4 +212,26 @@ class RoomPersistenceTest {
             }
         }
     }
+
+    @Test fun `v13 migration removes unused listing metadata`() {
+        val path = path()
+        val schema = Json.parseToJsonElement(Files.readString(Path.of("schemas/com.rieltor.infrastructure.database.local.RieltorDatabase/13.json"))).jsonObject["database"]!!.jsonObject
+        BundledSQLiteDriver().open(path.toString()).use { connection ->
+            schema["entities"]!!.jsonArray.forEach { entity ->
+                val obj = entity.jsonObject; val table = obj["tableName"]!!.jsonPrimitive.content
+                connection.execSQL(obj["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", table))
+                obj["indices"]?.jsonArray.orEmpty().forEach { connection.execSQL(it.jsonObject["createSql"]!!.jsonPrimitive.content.replace("\${TABLE_NAME}", table)) }
+            }
+            connection.execSQL("PRAGMA user_version=13")
+        }
+        RoomDatabaseStore(path).use { db -> assertEquals(0, CatalogRepository(db).listings().size) }
+        BundledSQLiteDriver().open(path.toString()).use { connection ->
+            connection.prepare("PRAGMA table_info(listings)").use { query ->
+                val columns = buildSet { while (query.step()) add(query.getText(1)) }
+                setOf("parserVersion", "parseWarnings", "legacyUpdateId", "legacySnapshot").forEach {
+                    assertFalse(it in columns)
+                }
+            }
+        }
+    }
 }

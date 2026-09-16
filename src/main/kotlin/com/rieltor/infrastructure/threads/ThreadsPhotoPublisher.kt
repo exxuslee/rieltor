@@ -10,12 +10,13 @@ import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
+import kotlin.time.Duration.Companion.milliseconds
 
 class ThreadsPhotoPublisher(
     private val httpClient: HttpClient,
     private val auth: ThreadsAuthService,
     private val json: Json,
-    private val statusPollDelayMillis: Long = 500,
+    private val statusPollDelayMillis: Long = 15_000,
     private val maxStatusAttempts: Int = 20,
 ) : PhotoPublisher {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -49,7 +50,8 @@ class ThreadsPhotoPublisher(
             parameter("creation_id", containerId)
             parameter("access_token", token)
         }
-        val published = decodeId(response.status.value, response.bodyAsText(), response.status.isSuccess(), "publish", token)
+        val published =
+            decodeId(response.status.value, response.bodyAsText(), response.status.isSuccess(), "publish", token)
         logger.info("Threads publishing completed. publishId={}", published)
         return PublishReceipt(
             publishId = published,
@@ -65,7 +67,13 @@ class ThreadsPhotoPublisher(
             values.filterValues(String::isNotBlank).forEach { (name, value) -> parameter(name, value) }
             parameter("access_token", token)
         }
-        return decodeId(response.status.value, response.bodyAsText(), response.status.isSuccess(), "container creation mediaType=$mediaType", token)
+        return decodeId(
+            response.status.value,
+            response.bodyAsText(),
+            response.status.isSuccess(),
+            "container creation mediaType=$mediaType",
+            token
+        )
     }
 
     private suspend fun waitUntilReady(containerId: String, token: String) {
@@ -79,14 +87,35 @@ class ThreadsPhotoPublisher(
             if (!response.status.isSuccess() || payload.error != null) {
                 failResponse(response.status.value, "container status", payload.error, token)
             }
-            logger.info("Threads container status. containerId={}, attempt={}, status={}", containerId, attempt + 1, payload.status)
             when (payload.status) {
-                "FINISHED" -> return
-                "ERROR", "EXPIRED" -> throw ThreadsAuthException(
-                    "Threads media container ${payload.status}: ${safe(payload.errorMessage ?: "unknown error", token)}"
-                )
+                "FINISHED" -> {
+                    logger.info(
+                        "Threads container status. containerId={}, attempt={}, status={}",
+                        containerId,
+                        attempt + 1,
+                        payload.status,
+                    )
+                    return
+                }
+
+                "ERROR", "EXPIRED" -> {
+                    logger.warn(
+                        "Threads container status. containerId={}, attempt={}, status={}",
+                        containerId,
+                        attempt + 1,
+                        payload.status,
+                    )
+                    throw ThreadsAuthException(
+                        "Threads media container ${payload.status}: ${
+                            safe(
+                                payload.errorMessage ?: "unknown error",
+                                token
+                            )
+                        }"
+                    )
+                }
             }
-            if (attempt + 1 < maxStatusAttempts) delay(statusPollDelayMillis)
+            if (attempt + 1 < maxStatusAttempts) delay(statusPollDelayMillis.milliseconds)
         }
         throw ThreadsAuthException("Threads media container did not become ready in time.")
     }
@@ -102,8 +131,13 @@ class ThreadsPhotoPublisher(
 
     private fun failResponse(status: Int, operation: String, error: ThreadsApiError?, token: String): Nothing {
         val details = "operation=$operation, HTTP=$status, type=${safe(error?.type.orEmpty(), token)}, " +
-            "code=${error?.code}, subcode=${error?.errorSubcode}, transient=${error?.isTransient}, " +
-            "traceId=${safe(error?.traceId.orEmpty(), token)}, message=${safe(error?.message ?: "Missing response id or API error", token)}"
+                "code=${error?.code}, subcode=${error?.errorSubcode}, transient=${error?.isTransient}, " +
+                "traceId=${
+                    safe(
+                        error?.traceId.orEmpty(),
+                        token
+                    )
+                }, message=${safe(error?.message ?: "Missing response id or API error", token)}"
         logger.warn("Threads API request failed. {}", details)
         throw ThreadsAuthException("Threads request failed: $details")
     }

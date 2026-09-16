@@ -1,0 +1,527 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 14,
+    "identityHash": "d8628c9f6bbb47a162b169222bc21008",
+    "entities": [
+      {
+        "tableName": "incoming_telegram_messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `chatId` INTEGER NOT NULL, `messageId` INTEGER, `messageThreadId` INTEGER NOT NULL, `mediaAlbumId` INTEGER NOT NULL, `groupKey` TEXT NOT NULL, `rawMessage` TEXT NOT NULL, `rawText` TEXT NOT NULL, `sourceCreatedAt` INTEGER NOT NULL, `sourceEditedAt` INTEGER NOT NULL, `receivedAt` INTEGER NOT NULL, `contentHash` TEXT NOT NULL, `revision` INTEGER NOT NULL, `verifyAfter` INTEGER NOT NULL, `verifiedAt` INTEGER, `status` TEXT NOT NULL, `mediaManifest` TEXT NOT NULL, `attemptCount` INTEGER NOT NULL, `nextAttemptAt` INTEGER NOT NULL, `leaseToken` TEXT, `leaseUntil` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chatId",
+            "columnName": "chatId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageId",
+            "columnName": "messageId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "messageThreadId",
+            "columnName": "messageThreadId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mediaAlbumId",
+            "columnName": "mediaAlbumId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "groupKey",
+            "columnName": "groupKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawMessage",
+            "columnName": "rawMessage",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawText",
+            "columnName": "rawText",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceCreatedAt",
+            "columnName": "sourceCreatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceEditedAt",
+            "columnName": "sourceEditedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "receivedAt",
+            "columnName": "receivedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contentHash",
+            "columnName": "contentHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "verifyAfter",
+            "columnName": "verifyAfter",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "verifiedAt",
+            "columnName": "verifiedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mediaManifest",
+            "columnName": "mediaManifest",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextAttemptAt",
+            "columnName": "nextAttemptAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "leaseToken",
+            "columnName": "leaseToken",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "leaseUntil",
+            "columnName": "leaseUntil",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_incoming_telegram_messages_chatId_messageId",
+            "unique": true,
+            "columnNames": [
+              "chatId",
+              "messageId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_incoming_telegram_messages_chatId_messageId` ON `${TABLE_NAME}` (`chatId`, `messageId`)"
+          },
+          {
+            "name": "index_incoming_telegram_messages_groupKey",
+            "unique": false,
+            "columnNames": [
+              "groupKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_incoming_telegram_messages_groupKey` ON `${TABLE_NAME}` (`groupKey`)"
+          },
+          {
+            "name": "index_incoming_telegram_messages_status_verifyAfter",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "verifyAfter"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_incoming_telegram_messages_status_verifyAfter` ON `${TABLE_NAME}` (`status`, `verifyAfter`)"
+          }
+        ]
+      },
+      {
+        "tableName": "listings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `groupKey` TEXT NOT NULL, `chatId` INTEGER NOT NULL, `messageId` INTEGER, `messageThreadId` INTEGER NOT NULL, `mediaAlbumId` INTEGER NOT NULL, `rawMessage` TEXT NOT NULL, `sourceRevision` TEXT NOT NULL, `title` TEXT NOT NULL, `description` TEXT NOT NULL, `location` TEXT, `address` TEXT, `district` TEXT, `typeOfRealty` TEXT, `transactionType` TEXT NOT NULL, `tags` TEXT NOT NULL, `primeParams` TEXT NOT NULL, `secondaryParams` TEXT NOT NULL, `governmentPrograms` TEXT NOT NULL, `governmentProgramsKnown` INTEGER NOT NULL, `googleDriveUrl` TEXT, `googleDriveUrls` TEXT NOT NULL, `price` INTEGER, `currency` TEXT, `pricePeriod` TEXT NOT NULL, `areaM2` REAL, `landAreaSotka` REAL, `rooms` INTEGER, `floor` INTEGER, `totalFloors` INTEGER, `photos` TEXT NOT NULL, `coverPhotoId` TEXT, `status` TEXT NOT NULL, `sourceCreatedAt` INTEGER NOT NULL, `receivedAt` INTEGER NOT NULL, `cdt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `publishedAt` INTEGER, `tiktokReposted` INTEGER NOT NULL, `threadsReposted` INTEGER NOT NULL, `tiktokRepostedAt` INTEGER, `threadsRepostedAt` INTEGER, `tiktokStatus` TEXT NOT NULL, `threadsStatus` TEXT NOT NULL, `tiktokPublishId` TEXT, `threadsPublishId` TEXT, `tiktokState` TEXT NOT NULL, `threadsState` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "groupKey",
+            "columnName": "groupKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chatId",
+            "columnName": "chatId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageId",
+            "columnName": "messageId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "messageThreadId",
+            "columnName": "messageThreadId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mediaAlbumId",
+            "columnName": "mediaAlbumId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawMessage",
+            "columnName": "rawMessage",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceRevision",
+            "columnName": "sourceRevision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "location",
+            "columnName": "location",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "address",
+            "columnName": "address",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "district",
+            "columnName": "district",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "typeOfRealty",
+            "columnName": "typeOfRealty",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "transactionType",
+            "columnName": "transactionType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tags",
+            "columnName": "tags",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "primeParams",
+            "columnName": "primeParams",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "secondaryParams",
+            "columnName": "secondaryParams",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "governmentPrograms",
+            "columnName": "governmentPrograms",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "governmentProgramsKnown",
+            "columnName": "governmentProgramsKnown",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "googleDriveUrl",
+            "columnName": "googleDriveUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "googleDriveUrls",
+            "columnName": "googleDriveUrls",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "price",
+            "columnName": "price",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "currency",
+            "columnName": "currency",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "pricePeriod",
+            "columnName": "pricePeriod",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "areaM2",
+            "columnName": "areaM2",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "landAreaSotka",
+            "columnName": "landAreaSotka",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "rooms",
+            "columnName": "rooms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "floor",
+            "columnName": "floor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "totalFloors",
+            "columnName": "totalFloors",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "photos",
+            "columnName": "photos",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "coverPhotoId",
+            "columnName": "coverPhotoId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceCreatedAt",
+            "columnName": "sourceCreatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "receivedAt",
+            "columnName": "receivedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cdt",
+            "columnName": "cdt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "publishedAt",
+            "columnName": "publishedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tiktokReposted",
+            "columnName": "tiktokReposted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "threadsReposted",
+            "columnName": "threadsReposted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tiktokRepostedAt",
+            "columnName": "tiktokRepostedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "threadsRepostedAt",
+            "columnName": "threadsRepostedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tiktokStatus",
+            "columnName": "tiktokStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "threadsStatus",
+            "columnName": "threadsStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tiktokPublishId",
+            "columnName": "tiktokPublishId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "threadsPublishId",
+            "columnName": "threadsPublishId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tiktokState",
+            "columnName": "tiktokState",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "threadsState",
+            "columnName": "threadsState",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_listings_groupKey",
+            "unique": true,
+            "columnNames": [
+              "groupKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_listings_groupKey` ON `${TABLE_NAME}` (`groupKey`)"
+          },
+          {
+            "name": "index_listings_chatId_messageId",
+            "unique": true,
+            "columnNames": [
+              "chatId",
+              "messageId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_listings_chatId_messageId` ON `${TABLE_NAME}` (`chatId`, `messageId`)"
+          },
+          {
+            "name": "index_listings_status_sourceCreatedAt_id",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "sourceCreatedAt",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_listings_status_sourceCreatedAt_id` ON `${TABLE_NAME}` (`status`, `sourceCreatedAt`, `id`)"
+          },
+          {
+            "name": "index_listings_status_location_typeOfRealty_currency_price",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "location",
+              "typeOfRealty",
+              "currency",
+              "price"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_listings_status_location_typeOfRealty_currency_price` ON `${TABLE_NAME}` (`status`, `location`, `typeOfRealty`, `currency`, `price`)"
+          },
+          {
+            "name": "index_listings_status_tiktokStatus_sourceCreatedAt",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "tiktokStatus",
+              "sourceCreatedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_listings_status_tiktokStatus_sourceCreatedAt` ON `${TABLE_NAME}` (`status`, `tiktokStatus`, `sourceCreatedAt`)"
+          },
+          {
+            "name": "index_listings_status_threadsStatus_sourceCreatedAt",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "threadsStatus",
+              "sourceCreatedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_listings_status_threadsStatus_sourceCreatedAt` ON `${TABLE_NAME}` (`status`, `threadsStatus`, `sourceCreatedAt`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd8628c9f6bbb47a162b169222bc21008')"
+    ]
+  }
+}
