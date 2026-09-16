@@ -122,7 +122,11 @@ class TelegramClientAdapter(
     }
 
     private fun onNewMessage(update: TdApi.UpdateNewMessage) {
-        if (isMonitored(update.message)) save(update.message)
+        val message = update.message
+        if (!isMonitored(message)) return
+
+        logger.info("threadId={}, messageId={}| {}", message.messageThreadId, message.id, message.summary())
+        save(message)
     }
 
     private fun save(message: TdApi.Message) {
@@ -227,4 +231,8 @@ internal fun Throwable.telegramRefreshFailure(): TelegramRefreshFailure? {
     return null
 }
 
-
+internal fun TdApi.Message.summary(): String = when (val content = content) {
+    is TdApi.MessageText -> content.text.text.replace('\n', ' ')
+    is TdApi.MessagePhoto -> "photo: ${content.caption.text}".replace('\n', ' ')
+    else -> content.javaClass.simpleName.removePrefix("Message")
+}

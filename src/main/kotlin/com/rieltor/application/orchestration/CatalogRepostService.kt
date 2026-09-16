@@ -15,6 +15,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
 
 class CatalogRepostService(
     private val repository: CatalogRepository, private val settings: JsonSettingsStore,
@@ -29,7 +31,7 @@ class CatalogRepostService(
             while (isActive) {
                 try { runOnce() } catch (error: CancellationException) { throw error }
                 catch (error: Throwable) { logger.error("Repost dispatch failed", error) }
-                delay(1_000)
+                delay(1_000.milliseconds)
             }
         }
         scope.launch {
@@ -38,7 +40,7 @@ class CatalogRepostService(
                     try { publisher.pendingDiagnostics() } catch (error: CancellationException) { throw error }
                     catch (error: Throwable) { logger.warn("Pending reconciliation unavailable: {}", error.javaClass.simpleName) }
                 }
-                delay(60_000)
+                delay(1.hours)
             }
         }
     }
