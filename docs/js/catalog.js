@@ -6,6 +6,18 @@
     const more = document.querySelector('[data-load-more]');
     const retry = document.querySelector('[data-retry]');
     let controller, cursor = null, total = 0;
+    const updateRelevantFilters = () => {
+        const propertyType = form.elements.propertyType.value;
+        const rooms = form.elements.rooms;
+        const condition = form.elements.condition;
+        rooms.disabled = !['', 'APARTMENT'].includes(propertyType);
+        if (rooms.disabled) rooms.value = '';
+        condition.disabled = propertyType === 'LAND';
+        if (condition.disabled) condition.value = '';
+        const oldStock = condition.querySelector('[value="OLD_STOCK"]');
+        oldStock.disabled = ['APARTMENT', 'DUPLEX'].includes(propertyType);
+        if (oldStock.disabled && condition.value === oldStock.value) condition.value = '';
+    };
     const restore = () => {
         const params = new URLSearchParams(location.search);
         for (const field of form.elements) {
@@ -13,6 +25,7 @@
             if (field.type === 'checkbox') field.checked = params.getAll(field.name).flatMap(v => v.split(',')).includes(field.value);
             else field.value = params.get(field.name) || field.dataset.default || '';
         }
+        updateRelevantFilters();
     };
     function filters() {
         const result = {};
@@ -21,11 +34,18 @@
         }
         return result;
     }
+    function apiFilters(selected) {
+        const {propertyType, condition, rooms, ...result} = selected;
+        const typeOfRealty = Listings.typeCodes({propertyType, condition, rooms});
+        if (typeOfRealty) result.typeOfRealty = typeOfRealty;
+        return result;
+    }
     async function render(append = false) {
         controller?.abort(); controller = new AbortController();
-        const params = filters();
+        const selected = filters();
+        const params = apiFilters(selected);
         if (!append) { cursor = null; total = 0; grid.replaceChildren(); }
-        if (Number(params.priceMin || 0) > Number(params.priceMax || Infinity)) {
+        if (Number(selected.priceMin || 0) > Number(selected.priceMax || Infinity)) {
             status.textContent = 'Мінімальна ціна має бути не більшою за максимальну.'; more.hidden = true; return;
         }
         status.textContent = 'Завантажуємо оголошення…';
@@ -44,6 +64,7 @@
     form.addEventListener('submit', event => {
         event.preventDefault(); history.pushState(null, '', `?${new URLSearchParams(filters())}`); render();
     });
+    form.elements.propertyType.addEventListener('change', updateRelevantFilters);
     form.addEventListener('reset', () => { history.pushState(null, '', location.pathname); setTimeout(() => { restore(); render(); }); });
     more.addEventListener('click', () => render(true));
     retry.addEventListener('click', () => render());

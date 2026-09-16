@@ -150,13 +150,7 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
             listOfNotNull(city.takeIf { it.isNotEmpty() }, row.address).joinToString(", "),
             row.location,
             row.typeOfRealty,
-            mapOf(
-                "APARTMENT" to "apartments",
-                "NEW_BUILD" to "new-buildings",
-                "HOUSE" to "houses",
-                "LAND" to "land",
-                "COMMERCIAL" to "commercial"
-            )[row.typeOfRealty].orEmpty(),
+            CatalogCodes.category(row.typeOfRealty),
             requireNotNull(row.price).toString(),
             row.currency,
             "TOTAL",

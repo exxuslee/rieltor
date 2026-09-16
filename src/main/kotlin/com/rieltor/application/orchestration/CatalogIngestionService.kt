@@ -119,9 +119,7 @@ class CatalogIngestionService(
             val topic = config.topicNames[topicKey]
             listing.copy(
                 tags = Json.encodeToString(
-                    Json.decodeFromString<List<String>>(listing.tags) + listOfNotNull(
-                        topic
-                    )
+                    Json.decodeFromString<List<String>>(listing.tags) + listOfNotNull(topic)
                 )
             )
         }

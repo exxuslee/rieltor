@@ -13,7 +13,9 @@
 <section class="section catalog-section"><div class="container">
 <form class="catalog-filters" data-catalog-filters>
     <label class="field">Локація<select name="location"><option value="">Усі локації</option><option value="IRPIN">Ірпінь</option><option value="BUCHA">Буча</option><option value="VORZEL">Ворзель</option><option value="HOSTOMEL">Гостомель</option></select></label>
-    <label class="field">Тип нерухомості<select name="typeOfRealty"><option value="">Усі типи</option><option value="APARTMENT">Квартири</option><option value="NEW_BUILD">Новобудови</option><option value="HOUSE">Будинки</option><option value="LAND">Земля</option><option value="COMMERCIAL">Комерція</option></select></label>
+    <label class="field">Тип нерухомості<select name="propertyType"><option value="">Усі типи</option><option value="APARTMENT">Квартири</option><option value="HOUSE">Будинки</option><option value="DUPLEX">Таунхауси й дуплекси</option><option value="LAND">Земля</option></select></label>
+    <label class="field">Стан<select name="condition"><option value="">Будь-який стан</option><option value="RENOVATED">З ремонтом</option><option value="UNFINISHED">Без ремонту</option><option value="OLD_STOCK">Старий фонд</option></select></label>
+    <label class="field">Кількість кімнат<select name="rooms"><option value="">Будь-яка</option><option value="1">1 кімната</option><option value="2">2 кімнати</option><option value="3">3+ кімнати</option></select></label>
     <label class="field">Ціна від, $<input inputmode="decimal" min="0" name="priceMin" step="0.01" type="number"></label>
     <label class="field">Ціна до, $<input inputmode="decimal" min="0" name="priceMax" step="0.01" type="number"></label>
     <label class="field">Сортування<select data-default="newest" name="sort"><option value="newest">Спочатку нові</option><option value="priceAsc">Ціна за зростанням</option><option value="priceDesc">Ціна за спаданням</option></select></label>
@@ -31,5 +33,5 @@
 <div class="property-grid" data-property-grid></div>
 <button class="btn" data-load-more hidden type="button">Показати ще</button>
 </div></section></main><site-footer></site-footer>
-<script src="js/data.js"></script><script src="js/components.js?v=4"></script><script src="js/catalog.js"></script>
+<script src="js/data.js?v=2"></script><script src="js/components.js?v=4"></script><script src="js/catalog.js?v=2"></script>
 </body></html>

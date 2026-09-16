@@ -34,7 +34,30 @@ data class PublishAttempt(val attemptId: String, val status: String = "PREPARED"
 data class PublicationState(val attempts: List<PublishAttempt> = emptyList())
 
 object CatalogCodes {
-    val types = setOf("APARTMENT", "NEW_BUILD", "HOUSE", "LAND", "COMMERCIAL")
+    val detailedTypes = setOf(
+        "APARTMENT 1", "APARTMENT 1+",
+        "APARTMENT 2", "APARTMENT 2+",
+        "APARTMENT 3", "APARTMENT 3+",
+        "HOUSE", "HOUSE+", "HOUSE-",
+        "DUPLEX", "DUPLEX+",
+        "LAND",
+    )
+    // Legacy values remain readable while previously imported listings are being refreshed.
+    val legacyTypes = setOf("APARTMENT", "NEW_BUILD", "COMMERCIAL")
+    val types = detailedTypes + legacyTypes
     val locations = setOf("IRPIN", "BUCHA", "VORZEL", "HOSTOMEL", "OTHER")
     val programs = setOf("EOSELIA", "VOUCHER", "CERTIFICATE", "POSTANOVA")
+
+    fun category(type: String?): String = when {
+        type?.startsWith("APARTMENT") == true -> "apartments"
+        type?.startsWith("HOUSE") == true -> "houses"
+        type?.startsWith("DUPLEX") == true -> "duplexes"
+        type == "NEW_BUILD" -> "new-buildings"
+        type == "LAND" -> "land"
+        type == "COMMERCIAL" -> "commercial"
+        else -> ""
+    }
+
+    fun apartmentRooms(type: String?): Int? = Regex("^APARTMENT ([123])(?:\\+)?$")
+        .matchEntire(type.orEmpty())?.groupValues?.get(1)?.toInt()
 }

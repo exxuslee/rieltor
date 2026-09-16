@@ -44,7 +44,8 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
         fun decimal(pattern: String, source: String = text): Double? = Regex(pattern, RegexOption.IGNORE_CASE).find(source)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull()
         val areaText = text.lineSequence().filterNot { priceMatch != null && it.contains(priceMatch.value) }.joinToString("\n")
         val area = decimal("""(?:площа|площадь)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)""")
-        val rooms = decimal("""(\d+)\s*[- ]?(?:кімнат|комнат)""")?.toInt()
+        val rooms = CatalogCodes.apartmentRooms(type)
+            ?: decimal("""(\d+)\s*[- ]?(?:кімнат|комнат)""")?.toInt()
         val floor = Regex("""(?iu)(?:поверх|этаж)\s*[:\-]?\s*(\d+)\s*(?:/|із|з|из)\s*(\d+)""").find(text)
         val transaction = if (Regex("(?iu)оренд|аренд").containsMatchIn(text)) "RENT" else "SALE"
         val priceSuffix = priceMatch?.let { text.substring(it.range.last + 1).lineSequence().first() }.orEmpty()

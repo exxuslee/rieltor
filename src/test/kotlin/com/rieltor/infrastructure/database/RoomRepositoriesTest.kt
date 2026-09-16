@@ -16,10 +16,11 @@ class RoomPersistenceTest {
     private fun path() = Files.createTempDirectory("catalog-test").resolve("test.db")
     private fun source(id: Long = 1, text: String = "Ірпінь\nКвартира\nЦіна: 82 000 USD") =
         SourceMessage(-100, id, 20, text = text, raw = text, sourceCreatedAt = id * 1000)
-    private fun listing(id: Long, price: Long = 82_000, city: String = "IRPIN", programs: String = "[]") =
+    private fun listing(id: Long, price: Long = 82_000, city: String = "IRPIN", programs: String = "[]",
+        type: String = "APARTMENT 1") =
         ListingEntity(groupKey = "test:$id", chatId = -100, messageId = id, messageThreadId = 20,
             sourceRevision = "1", title = "Квартира $id", location = city,
-            typeOfRealty = "APARTMENT", price = price, currency = "USD", governmentPrograms = programs,
+            typeOfRealty = type, price = price, currency = "USD", governmentPrograms = programs,
             sourceCreatedAt = id * 1000, createdAt = 1000, updatedAt = 1000, status = "ACTIVE")
 
     @Test fun `inbox survives restart and edits reset deadline without dropping old messages`() {
@@ -122,6 +123,27 @@ class RoomPersistenceTest {
         RoomDatabaseStore(path).use { db ->
             db.settings.update { it.copy(uahPerUsd = 50.0) }
             assertEquals(50_500, CatalogRepository(db).listings().first { it.messageId == 3L }.price)
+        }
+    }
+
+    @Test fun `filters detailed property types and exposes their frontend categories`() {
+        RoomDatabaseStore(path()).use { db ->
+            val repo = CatalogRepository(db)
+            repo.save(listing(1, type = "APARTMENT 1+"))
+            repo.save(listing(2, type = "APARTMENT 2"))
+            repo.save(listing(3, type = "HOUSE-"))
+            repo.save(listing(4, type = "DUPLEX+"))
+            repo.save(listing(5, type = "LAND"))
+            val api = CatalogQuery(repo, "http://localhost")
+
+            val apartments = api.list(Parameters.build {
+                append("typeOfRealty", "APARTMENT 1+,APARTMENT 2")
+            }).items
+            assertEquals(setOf("APARTMENT 1+", "APARTMENT 2"), apartments.map { it.typeOfRealty }.toSet())
+            assertTrue(apartments.all { it.category == "apartments" })
+            assertEquals("houses", api.list(Parameters.build { append("typeOfRealty", "HOUSE-") }).items.single().category)
+            assertEquals("duplexes", api.list(Parameters.build { append("typeOfRealty", "DUPLEX+") }).items.single().category)
+            assertEquals("land", api.list(Parameters.build { append("typeOfRealty", "LAND") }).items.single().category)
         }
     }
 
