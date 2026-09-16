@@ -1311,6 +1311,16 @@ textarea.control {
     font-size: 1.15rem;
 }
 
+body[data-page="catalog"] .page-hero {
+    padding-top: 58px;
+}
+
+body[data-page="catalog"] .page-hero h1 {
+    max-width: none;
+    font-size: clamp(2.5rem, 4.4vw, 5rem);
+    white-space: nowrap;
+}
+
 .catalog-layout {
     display: grid;
     grid-template-columns: 280px 1fr;
@@ -2005,6 +2015,10 @@ textarea.control {
 }
 
 @media (max-width: 800px) {
+    body[data-page="catalog"] .page-hero h1 {
+        white-space: normal;
+    }
+
     .header-inner {
         min-height: 78px;
     }
