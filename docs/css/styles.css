@@ -1275,7 +1275,7 @@ textarea.control {
 .page-hero h1 {
     max-width: 980px;
     margin: 0;
-    font: 400 clamp(3.2rem, 6vw, 6.3rem)/.96 var(--serif);
+    font: 360 clamp(3.2rem, 6vw, 6.3rem)/.96 var(--serif);
     letter-spacing: var(--display-tracking);
     overflow-wrap: anywhere;
 }
