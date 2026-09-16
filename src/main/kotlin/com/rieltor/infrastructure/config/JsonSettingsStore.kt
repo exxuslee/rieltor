@@ -24,13 +24,13 @@ data class LocalSettings(
     val driveMaxAttempts: Int = 5, val driveRetryBaseMs: Long = 60_000, val maxCatalogPhotos: Int = 50,
     val minIntervalMs: Long = 20 * 60_000, val maxMessagesPer24Hours: Int = 36,
     val tiktokEnabled: Boolean = true, val threadsEnabled: Boolean = false, val blockedUntil: Long = 0,
-    val slotReservations: List<SlotReservation> = emptyList(), val migratedDatabases: Set<String> = emptySet(),
+    val slotReservations: List<SlotReservation> = emptyList(),
     val orphanGraceMs: Long = 4 * 86_400_000L,
 )
 
 /** The process lock covers JSON state and workers sharing its database. */
 class JsonSettingsStore(val path: Path, defaults: LocalSettings = LocalSettings()) : AutoCloseable {
-    private val json = Json { prettyPrint = true; encodeDefaults = true }
+    private val json = Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }
     private val lockChannel: FileChannel
     private val processLock: java.nio.channels.FileLock
     private var state: LocalSettings

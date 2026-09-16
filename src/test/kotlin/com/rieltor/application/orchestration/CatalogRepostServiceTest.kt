@@ -26,8 +26,8 @@ class CatalogRepostServiceTest {
             val fileName = "00000000-0000-0000-0000-000000000001.jpg"
             Files.write(directory.resolve("media").resolve(fileName), byteArrayOf(1))
             fun add(message: Long) = repo.save(ListingEntity(groupKey = "g$message", chatId = -1, messageId = message, messageThreadId = 1,
-                rawMessage = "private", sourceRevision = "1", title = "Listing $message", price = 10000, currency = "USD",
-                sourceCreatedAt = message, receivedAt = message, cdt = message, updatedAt = message, status = "ACTIVE",
+                sourceRevision = "1", title = "Listing $message", price = 10000, currency = "USD",
+                sourceCreatedAt = message, createdAt = message, updatedAt = message, status = "ACTIVE",
                 photos = Json.encodeToString(listOf(CatalogPhoto(fileName, "file", "1", 1, 1, "hash")))))
             add(1)
             val captions = mutableListOf<String>()

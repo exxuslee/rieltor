@@ -45,6 +45,5 @@
   "threadsEnabled": false,
   "blockedUntil": 0,
   "slotReservations": [],
-  "migratedDatabases": [],
   "orphanGraceMs": 345600000
 }

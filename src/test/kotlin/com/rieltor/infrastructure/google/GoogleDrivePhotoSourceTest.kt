@@ -60,7 +60,7 @@ class GoogleDrivePhotoSourceTest {
             val renewed = repo.listings().first { it.messageId == 3L }
             assertEquals(2, repo.listings().size)
             assertEquals(original.id, renewed.id)
-            assertEquals(7_500_000L, renewed.price)
+            assertEquals(75_000L, renewed.price)
             assertEquals(original.photos, renewed.photos)
             assertEquals(2, downloads) // No repeat download for unchanged Drive version.
             assertNull(repo.source(-100, 2))

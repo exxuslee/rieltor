@@ -1,36 +1,36 @@
 package com.rieltor.domain.service
 
-import com.rieltor.infrastructure.database.model.ListingEntity
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-/** Prices are persisted as cents of USD for the whole property, rounded once. */
+/** Source-only price metadata. Never persisted as a catalog listing. */
+data class ImportedPrice(
+    val amount: Long?, val currency: String?, val transactionType: String = "SALE",
+    val period: String = "TOTAL", val areaM2: Double? = null, val landAreaSotka: Double? = null,
+)
+
+/** Converts a sale price to whole USD for the entire property before persistence. */
 class CatalogPriceNormalizer(private val uahPerUsd: Double = 45.0, private val usdPerEur: Double = 1.1) {
-    fun normalize(row: ListingEntity): ListingEntity {
-        if (row.price == null) return row
-        val cents = runCatching {
-            require(row.transactionType == "SALE") { "Only sale listings are supported" }
-            require(row.price > 0) { "Price must be positive" }
-            val quantity = when (row.pricePeriod) {
-                "TOTAL" -> BigDecimal.ONE
-                "PER_M2" -> quantity(row.areaM2)
-                "PER_SOTKA" -> quantity(row.landAreaSotka)
-                else -> error("Unsupported price period")
-            }
-            val total = BigDecimal(row.price).multiply(quantity)
-            val converted = when (row.currency) {
-                "USD" -> total
-                "UAH" -> total.divide(quantity(uahPerUsd), 0, RoundingMode.HALF_UP)
-                "EUR" -> total.multiply(quantity(usdPerEur))
-                else -> error("Unsupported currency")
-            }.setScale(0, RoundingMode.HALF_UP).longValueExact()
-            require(converted > 0) { "Normalized price must be positive" }
-            converted
-        }.getOrElse {
-            return row.copy(status = if (row.status == "ACTIVE") "NEEDS_REVIEW" else row.status)
+    fun normalize(source: ImportedPrice): Long? = runCatching {
+        require(source.transactionType == "SALE") { "Only sale listings are supported" }
+        val amount = requireNotNull(source.amount)
+        require(amount > 0) { "Price must be positive" }
+        val units = when (source.period) {
+            "TOTAL" -> BigDecimal.ONE
+            "PER_M2" -> quantity(source.areaM2)
+            "PER_SOTKA" -> quantity(source.landAreaSotka)
+            else -> error("Unsupported price period")
         }
-        return row.copy(price = cents, currency = "USD", pricePeriod = "TOTAL")
-    }
+        val total = BigDecimal(amount).multiply(units)
+        val converted = when (source.currency) {
+            "USD" -> total
+            "UAH" -> total.divide(quantity(uahPerUsd), 0, RoundingMode.HALF_UP)
+            "EUR" -> total.multiply(quantity(usdPerEur))
+            else -> error("Unsupported currency")
+        }.setScale(0, RoundingMode.HALF_UP).longValueExact()
+        require(converted > 0) { "Normalized price must be positive" }
+        converted
+    }.getOrNull()
 
     private fun quantity(value: Double?): BigDecimal {
         require(value != null && value.isFinite() && value > 0) { "Missing or invalid area / exchange rate" }

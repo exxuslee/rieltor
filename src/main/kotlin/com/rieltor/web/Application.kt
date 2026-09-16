@@ -39,6 +39,7 @@ import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
 import org.slf4j.event.Level
 import java.nio.file.Path
+import kotlin.time.Duration.Companion.milliseconds
 import io.ktor.server.cio.CIO as ServerCIO
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation as ServerContentNegotiation
 
@@ -119,11 +120,9 @@ fun Application.module(dotenv: Dotenv) {
         catalogRoutes(CatalogQuery(catalog, get<com.rieltor.infrastructure.config.ApplicationSettings>().publicBaseUrl))
     }
 
-    // TDLib needs time to reopen its local session. Start it before every other worker,
-    // then let it authorize for a minute without delaying the HTTP server itself.
     ingestion.startTelegramSession()
     delayedStartupScope.launch {
-        delay(STARTUP_AFTER_TELEGRAM_DELAY_MILLIS)
+        delay(STARTUP_AFTER_TELEGRAM_DELAY_MILLIS.milliseconds)
         catalog.recover(System.currentTimeMillis())
         ingestion.startWorkers()
         repostCoordinator.start()

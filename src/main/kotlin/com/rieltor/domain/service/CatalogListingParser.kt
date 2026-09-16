@@ -6,8 +6,10 @@ import com.rieltor.infrastructure.database.model.IncomingEntity
 import com.rieltor.infrastructure.database.model.ListingEntity
 import kotlinx.serialization.json.*
 import java.math.BigDecimal
+import java.math.RoundingMode
 
-class CatalogListingParser(private val formatter: ListingCaptionFormatter = ListingCaptionFormatter()) {
+class CatalogListingParser(private val formatter: ListingCaptionFormatter = ListingCaptionFormatter(),
+    private val priceNormalizer: CatalogPriceNormalizer = CatalogPriceNormalizer()) {
     fun parse(rows: List<IncomingEntity>, type: String?, now: Long): ListingEntity {
         val first = rows.first()
         val text = rows.map { it.rawText }.filter { it.isNotBlank() }.distinct().joinToString("\n")
@@ -30,12 +32,10 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
         if (links.isEmpty()) warnings += "Missing Google Drive URL"
         if (clean == null) warnings += "Missing public content"
         val programs = linkedSetOf<String>()
-        var programsKnown = false
         val programPatterns = mapOf("EOSELIA" to "[єе]осел[яію]", "VOUCHER" to "ваучер", "CERTIFICATE" to "сертиф[іи]кат", "POSTANOVA" to "постанов")
         text.lineSequence().forEach { line ->
             programPatterns.forEach { (code, pattern) ->
                 if (Regex(pattern, RegexOption.IGNORE_CASE).containsMatchIn(line)) {
-                    programsKnown = true
                     // A negative clause never becomes an asserted eligibility claim.
                     if (!Regex("(?iu)(?:\\bне\\b|без|ні\\b|нет\\b|не підход|не розгляда)").containsMatchIn(line)) programs += code
                 }
@@ -54,21 +54,24 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
             transaction == "RENT" -> "MONTH"
             else -> "TOTAL"
         }
+        val landArea = decimal("""(\d+(?:[.,]\d+)?)\s*сот""", areaText)
+        val totalPrice = priceNormalizer.normalize(ImportedPrice(price, currency, transaction, period, area, landArea))
+        if (totalPrice == null) warnings += "Unsupported or invalid sale price"
         return ListingEntity(groupKey = first.groupKey, chatId = first.chatId, messageId = first.messageId,
-            messageThreadId = first.messageThreadId, mediaAlbumId = first.mediaAlbumId,
-            rawMessage = Json.encodeToString(rows.map { it.rawMessage }), sourceRevision = sha256(rows.joinToString { "${it.id}:${it.revision}" }),
+            messageThreadId = first.messageThreadId,
+            sourceRevision = sha256(rows.joinToString { "${it.id}:${it.revision}" }),
             title = clean?.title.orEmpty(), description = clean?.additionalParameters?.joinToString("\n").orEmpty(),
-            location = location, address = clean?.address, typeOfRealty = type, transactionType = transaction,
+            location = location, address = clean?.address, typeOfRealty = type,
             tags = Json.encodeToString(clean?.hashtags.orEmpty()),
             primeParams = buildJsonObject { put("details", JsonArray(clean?.keyParameters.orEmpty().map(::JsonPrimitive))) }.toString(),
             secondaryParams = buildJsonObject { clean?.registration?.let { put("registration", it) } }.toString(),
-            governmentPrograms = Json.encodeToString(programs.toList()), governmentProgramsKnown = programsKnown,
-            googleDriveUrl = links.firstOrNull(), googleDriveUrls = Json.encodeToString(links), price = price, currency = currency,
-            pricePeriod = period, areaM2 = area, rooms = rooms, floor = floor?.groupValues?.get(1)?.toIntOrNull(),
+            governmentPrograms = Json.encodeToString(programs.toList()),
+            googleDriveUrls = Json.encodeToString(links), price = totalPrice, currency = "USD",
+            areaM2 = area, rooms = rooms, floor = floor?.groupValues?.get(1)?.toIntOrNull(),
             totalFloors = floor?.groupValues?.get(2)?.toIntOrNull(),
-            landAreaSotka = decimal("""(\d+(?:[.,]\d+)?)\s*сот""", areaText),
+            landAreaSotka = landArea,
             status = if (warnings.isEmpty()) "ACTIVE" else "NEEDS_REVIEW",
-            sourceCreatedAt = rows.maxOf { maxOf(it.sourceCreatedAt, it.sourceEditedAt) }, receivedAt = first.receivedAt, cdt = now, updatedAt = now,
+            sourceCreatedAt = rows.maxOf { maxOf(it.sourceCreatedAt, it.sourceEditedAt) }, createdAt = now, updatedAt = now,
             publishedAt = now.takeIf { warnings.isEmpty() })
     }
 
@@ -76,6 +79,6 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
         var normalized = raw.trim().replace(Regex("[\\s\\u00a0']"), "")
         normalized = if (Regex("\\d{1,3}([,.]\\d{3})+").matches(normalized)) normalized.replace(Regex("[,.]"), "")
         else normalized.replace(',', '.')
-        BigDecimal(normalized).movePointRight(2).longValueExact()
+        BigDecimal(normalized).setScale(0, RoundingMode.HALF_UP).longValueExact()
     }.getOrNull()
 }

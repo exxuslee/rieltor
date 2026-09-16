@@ -4,7 +4,7 @@ import androidx.room.RoomRawQuery
 import com.rieltor.domain.model.CatalogCodes
 import com.rieltor.domain.model.CatalogPhoto
 import com.rieltor.domain.model.sha256
-import com.rieltor.infrastructure.database.model.ListingEntity
+import com.rieltor.infrastructure.database.model.CatalogListingRow
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import io.ktor.http.*
 import io.ktor.server.response.*
@@ -14,6 +14,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.*
 
 @Serializable
@@ -24,11 +25,13 @@ data class PublicListing(
     val area: Double?, val rooms: Int?, val floor: String?, val landAreaSotka: Double?,
     val image: String, val photos: List<String>, val governmentPrograms: List<String>,
     val tags: List<String>, val primeParams: JsonObject, val secondaryParams: JsonObject,
+    // Keep the existing API key while the database uses the clearer createdAt name.
     val cdt: Long,
 )
 
 @Serializable
 data class ListingPage(val items: List<PublicListing>, val nextCursor: String?)
+
 @Serializable
 private data class CatalogCursor(val signature: String, val value: Long, val id: Long)
 
@@ -37,9 +40,7 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
     fun list(parameters: Parameters): ListingPage {
         val where = mutableListOf(
             "status = 'ACTIVE'",
-            "transactionType = 'SALE'",
             "currency = 'USD'",
-            "pricePeriod = 'TOTAL'",
             "price > 0"
         )
         val arguments = mutableListOf<Any>()
@@ -64,7 +65,7 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
             *programs.toTypedArray()
         )
         fun money(key: String): Long? = parameters[key]?.takeIf { it.isNotEmpty() }?.let {
-            val result = runCatching { BigDecimal(it).movePointRight(2).longValueExact() }.getOrNull()
+            val result = runCatching { BigDecimal(it).setScale(0, RoundingMode.HALF_UP).longValueExact() }.getOrNull()
             require(result != null && result >= 0) { "Invalid $key" }; result
         }
 
@@ -107,7 +108,7 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
             )
         }
         val query =
-            RoomRawQuery("SELECT * FROM listings WHERE ${where.joinToString(" AND ")} ORDER BY $column ${if (ascending) "ASC" else "DESC"}, id DESC LIMIT ?") { statement ->
+            RoomRawQuery("SELECT ${CatalogListingRow.COLUMNS} FROM listings WHERE ${where.joinToString(" AND ")} ORDER BY $column ${if (ascending) "ASC" else "DESC"}, id DESC LIMIT ?") { statement ->
                 (arguments + (limit + 1).toLong()).forEachIndexed { index, value ->
                     when (value) {
                         is Long -> statement.bindLong(index + 1, value); is Int -> statement.bindLong(
@@ -131,12 +132,9 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
         return ListingPage(shown.map(::public), cursor)
     }
 
-    fun one(id: Long): PublicListing? = repository.listing(id)?.takeIf {
-        it.status == "ACTIVE" && it.transactionType == "SALE" && it.currency == "USD" && it.pricePeriod == "TOTAL" && (it.price
-            ?: 0) > 0
-    }?.let(::public)
+    fun one(id: Long): PublicListing? = repository.publicListing(id)?.let(::public)
 
-    fun public(row: ListingEntity): PublicListing {
+    fun public(row: CatalogListingRow): PublicListing {
         val city = mapOf(
             "IRPIN" to "Ірпінь",
             "BUCHA" to "Буча",
@@ -159,10 +157,10 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
                 "LAND" to "land",
                 "COMMERCIAL" to "commercial"
             )[row.typeOfRealty].orEmpty(),
-            BigDecimal(requireNotNull(row.price)).movePointLeft(2).toPlainString(),
+            requireNotNull(row.price).toString(),
             row.currency,
-            row.pricePeriod,
-            row.transactionType,
+            "TOTAL",
+            "SALE",
             row.areaM2,
             row.rooms,
             row.floor?.let { "$it${row.totalFloors?.let { total -> " із $total" }.orEmpty()}" },
@@ -173,7 +171,7 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
             json.decodeFromString(row.tags),
             json.parseToJsonElement(row.primeParams).jsonObject,
             json.parseToJsonElement(row.secondaryParams).jsonObject,
-            row.cdt
+            row.createdAt
         )
     }
 }

@@ -7,7 +7,6 @@ import com.rieltor.application.model.SkipReason
 import com.rieltor.application.model.TelegramSourceState
 import com.rieltor.application.port.PhotoRepostHandler
 import com.rieltor.application.port.TelegramMessageSource
-import com.rieltor.application.usecase.RepostPublishException
 import com.rieltor.domain.model.*
 import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.domain.repository.PublisherPendingDiagnostics

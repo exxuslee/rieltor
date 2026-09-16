@@ -10,7 +10,7 @@ class CatalogListingParserTest {
         val row = IncomingEntity(chatId = -1, messageId = 1, messageThreadId = 2, groupKey = "g",
             rawMessage = text, rawText = text, sourceCreatedAt = 0, receivedAt = 0, contentHash = "h", verifyAfter = 0)
         val result = CatalogListingParser().parse(listOf(row), "APARTMENT", 1)
-        assertEquals(8_200_050, result.price)
+        assertEquals(82_001, result.price)
         assertEquals("ACTIVE", result.status)
         assertEquals("[\"EOSELIA\"]", result.governmentPrograms)
         assertEquals(64.0, result.areaM2)

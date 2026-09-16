@@ -3,7 +3,6 @@ package com.rieltor.infrastructure.database.repository
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
 import com.rieltor.domain.model.*
-import com.rieltor.domain.service.CatalogPriceNormalizer
 import com.rieltor.domain.service.GoogleDriveLinkExtractor
 import com.rieltor.infrastructure.database.local.CatalogDao
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
@@ -14,20 +13,6 @@ import java.util.*
 
 class CatalogRepository(private val database: RoomDatabaseStore) {
     private val json = Json { encodeDefaults = true }
-    fun normalizePrice(row: ListingEntity): ListingEntity = database.settings.snapshot().let {
-        CatalogPriceNormalizer(it.uahPerUsd, it.usdPerEur).normalize(row)
-    }
-
-    init {
-        // Upgrade existing prices once; canonical USD totals remain unchanged on restart.
-        transaction { dao ->
-            dao.listings().forEach { row ->
-                val normalized = normalizePrice(row)
-                if (normalized != row) dao.saveListing(normalized)
-            }
-        }
-    }
-
     @Synchronized
     private fun <T> transaction(block: suspend (CatalogDao) -> T): T = database.blocking { room ->
         room.useWriterConnection { it.immediateTransaction { block(room.catalogDao()) } }
@@ -70,6 +55,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     fun groups() =
         transaction { it.sources() }.groupBy { it.groupKey }.values.map { it.sortedBy { row -> row.messageId } }
 
+    fun publicListing(id: Long) = database.blocking { it.catalogDao().publicListing(id) }
     fun listing(id: Long) = transaction { it.listing(id) }
     fun listings() = transaction { it.listings() }
     private fun sameProperty(a: ListingEntity, b: ListingEntity): Boolean {
@@ -124,8 +110,19 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         MediaRetention(remaining, before - remaining)
     }
 
+    private fun validate(row: ListingEntity): ListingEntity {
+        require(row.status != "ACTIVE" || (row.currency == "USD" && (row.price ?: 0) > 0)) {
+            "Active listings require a positive total price in USD"
+        }
+        return row
+    }
+
+    fun nextRepost(tiktok: Boolean, threads: Boolean) = database.blocking {
+        it.catalogDao().nextRepost(tiktok, threads)
+    }
+
     fun save(row: ListingEntity): Long =
-        transaction { it.saveListing(normalizePrice(row)).takeIf { id -> id > 0 } ?: row.id }
+        transaction { it.saveListing(validate(row)).takeIf { id -> id > 0 } ?: row.id }
 
     fun query(query: androidx.room.RoomRawQuery) = database.blocking { it.catalogDao().query(query) }
 
@@ -200,14 +197,14 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
             matches.filter { it.id != old?.id }.forEach { dao.deleteListing(it.id) }
             matches.filter { it.groupKey != prepared.groupKey }.forEach { dao.deleteGroup(it.groupKey) }
             val row = if (old == null) prepared else prepared.copy(
-                id = old.id, cdt = old.cdt, publishedAt = old.publishedAt ?: now,
+                id = old.id, createdAt = old.createdAt, publishedAt = old.publishedAt ?: now,
                 tiktokReposted = old.tiktokReposted, threadsReposted = old.threadsReposted,
                 tiktokRepostedAt = old.tiktokRepostedAt, threadsRepostedAt = old.threadsRepostedAt,
                 tiktokStatus = old.tiktokStatus, threadsStatus = old.threadsStatus,
                 tiktokPublishId = old.tiktokPublishId, threadsPublishId = old.threadsPublishId,
                 tiktokState = old.tiktokState, threadsState = old.threadsState
             )
-            val id = dao.saveListing(normalizePrice(row)).takeIf { it > 0 } ?: row.id
+            val id = dao.saveListing(validate(row)).takeIf { it > 0 } ?: row.id
             current.forEach { dao.saveSource(it.copy(status = "PROMOTED", leaseToken = null, leaseUntil = 0)) }
             true
         }

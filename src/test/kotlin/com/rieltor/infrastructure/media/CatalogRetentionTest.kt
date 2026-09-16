@@ -13,6 +13,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.*
+import com.rieltor.infrastructure.job.CleanupJob as MediaCleanupJob
 
 class CatalogRetentionTest {
     private val now = Instant.parse("2026-09-16T12:00:00Z")
@@ -64,7 +65,7 @@ class CatalogRetentionTest {
             assertTrue(promote(repo, fresh, listOf(photo("kept.jpg"))))
             val current = repo.listings().single()
             assertEquals(old.id, current.id)
-            assertEquals(7_900_000L, current.price)
+            assertEquals(79_000L, current.price)
             assertEquals(now.toEpochMilli(), current.sourceCreatedAt)
             assertTrue(current.tiktokReposted)
             assertNull(repo.source(-100, 1))

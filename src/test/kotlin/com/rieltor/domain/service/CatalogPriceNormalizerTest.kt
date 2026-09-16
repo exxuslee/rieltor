@@ -5,31 +5,39 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class CatalogPriceNormalizerTest {
-    private fun parse(price: String, area: String = "Площа: 50,5 м²") = CatalogListingParser().parse(listOf(
+    private fun parse(price: String, area: String = "Площа: 50,5 м²", normalizer: CatalogPriceNormalizer = CatalogPriceNormalizer()) = CatalogListingParser(priceNormalizer = normalizer).parse(listOf(
         IncomingEntity(chatId = -1, messageId = 1, messageThreadId = 2, groupKey = "g",
             rawMessage = "original",
             rawText = "Ірпінь\nКвартира\n$price\n$area\nhttps://drive.google.com/drive/folders/example",
             sourceCreatedAt = 0, receivedAt = 0, contentHash = "h", verifyAfter = 0)
     ), "APARTMENT", 1)
 
-    @Test fun `converts currency and area then rounds once to cents`() {
-        val row = parse("Ціна: 1 грн за 1 м²")
-        val result = CatalogPriceNormalizer().normalize(row)
-        assertEquals(112, result.price)
-        assertEquals("USD", result.currency)
-        assertEquals("TOTAL", result.pricePeriod)
-        assertEquals(result, CatalogPriceNormalizer().normalize(result))
-        assertEquals(126, CatalogPriceNormalizer(uahPerUsd = 40.0).normalize(row).price)
-        assertEquals(125, CatalogPriceNormalizer(usdPerEur = 1.25).normalize(parse("Ціна: 1 EUR")).price)
+    @Test fun `converts currency and area then rounds once to whole dollars`() {
+        assertEquals(1, parse("Ціна: 1 грн за 1 м²").price)
+        assertEquals("USD", parse("Ціна: 1 EUR").currency)
+        assertEquals(1, parse("Ціна: 1 грн за 1 м²", normalizer = CatalogPriceNormalizer(uahPerUsd = 40.0)).price)
+        assertEquals(1, parse("Ціна: 1 EUR", normalizer = CatalogPriceNormalizer(usdPerEur = 1.25)).price)
+    }
+
+    @Test fun `rejects rent unknown currency and invalid quantities`() {
+        val normalizer = CatalogPriceNormalizer()
+        listOf(
+            ImportedPrice(100, "USD", transactionType = "RENT"),
+            ImportedPrice(100, "USD", period = "MONTH"),
+            ImportedPrice(100, "GBP"), ImportedPrice(-1, "USD"), ImportedPrice(null, "USD"),
+            ImportedPrice(100, "USD", period = "PER_M2", areaM2 = Double.NaN),
+            ImportedPrice(Long.MAX_VALUE, "USD", period = "PER_M2", areaM2 = 2.0),
+        ).forEach { kotlin.test.assertNull(normalizer.normalize(it)) }
+        assertEquals("NEEDS_REVIEW", parse("Оренда. Ціна: 100 USD").status)
     }
 
     @Test fun `recognizes unit prices after Ukrainian and Russian price labels`() {
         listOf("Ціна: 1000 USD / м²", "Цена: 1000 USD за 1 м2", "Вартість: 1000 USD за кв. м").forEach {
-            assertEquals(5_050_000, CatalogPriceNormalizer().normalize(parse(it)).price, it)
+            assertEquals(50_500, parse(it).price, it)
         }
         val land = parse("Ціна: 1000 USD за 1 сотку", "Ділянка: 6,5 соток")
-        assertEquals(650_000, CatalogPriceNormalizer().normalize(land).price)
-        assertEquals("NEEDS_REVIEW", CatalogPriceNormalizer().normalize(parse("Ціна: 1000 USD /м²", "")).status)
-        assertEquals(101, CatalogPriceNormalizer(usdPerEur = 1.005).normalize(parse("Ціна: 1 EUR")).price)
+        assertEquals(6_500, land.price)
+        assertEquals("NEEDS_REVIEW", parse("Ціна: 1000 USD /м²", "").status)
+        assertEquals(1, parse("Ціна: 1 EUR", normalizer = CatalogPriceNormalizer(usdPerEur = 1.005)).price)
     }
 }
