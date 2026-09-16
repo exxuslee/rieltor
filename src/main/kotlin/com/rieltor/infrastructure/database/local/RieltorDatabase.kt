@@ -39,6 +39,7 @@ class RoomDatabaseStore(path: Path, val settings: com.rieltor.infrastructure.con
         }
         room = Room.databaseBuilder<RieltorDatabase>(name = path.toAbsolutePath().toString())
             .setDriver(BundledSQLiteDriver())
+//            .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
             .setQueryCoroutineContext(Dispatchers.IO)
             .addMigrations(*LEGACY_MIGRATIONS, CatalogMigration(settings, path))
             .addCallback(object : RoomDatabase.Callback() {

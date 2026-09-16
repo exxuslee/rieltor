@@ -3,6 +3,7 @@ package com.rieltor.infrastructure.database.repository
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
 import com.rieltor.domain.model.*
+import com.rieltor.domain.service.CatalogPriceNormalizer
 import com.rieltor.domain.service.GoogleDriveLinkExtractor
 import com.rieltor.infrastructure.database.local.CatalogDao
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
@@ -13,6 +14,16 @@ import java.util.*
 
 class CatalogRepository(private val database: RoomDatabaseStore) {
     private val json = Json { encodeDefaults = true }
+    fun normalizePrice(row: ListingEntity): ListingEntity = database.settings.snapshot().let {
+        CatalogPriceNormalizer(it.uahPerUsd, it.usdPerEur).normalize(row)
+    }
+    init {
+        // Upgrade existing prices once; canonical USD totals remain unchanged on restart.
+        transaction { dao -> dao.listings().forEach { row ->
+            val normalized = normalizePrice(row)
+            if (normalized != row) dao.saveListing(normalized)
+        } }
+    }
     @Synchronized private fun <T> transaction(block: suspend (CatalogDao) -> T): T = database.blocking { room ->
         room.useWriterConnection { it.immediateTransaction { block(room.catalogDao()) } }
     }
@@ -48,7 +59,54 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     fun groups() = transaction { it.sources() }.groupBy { it.groupKey }.values.map { it.sortedBy { row -> row.messageId } }
     fun listing(id: Long) = transaction { it.listing(id) }
     fun listings() = transaction { it.listings() }
-    fun save(row: ListingEntity): Long = transaction { it.saveListing(row).takeIf { id -> id > 0 } ?: row.id }
+    private fun sameProperty(a: ListingEntity, b: ListingEntity): Boolean {
+        val extractor = GoogleDriveLinkExtractor()
+        val ids = extractor.identities(json.decodeFromString(a.googleDriveUrls))
+        return a.chatId == b.chatId && a.messageThreadId == b.messageThreadId && ids.isNotEmpty() &&
+            ids == extractor.identities(json.decodeFromString(b.googleDriveUrls))
+    }
+    fun cachedPhotos(prepared: ListingEntity): List<CatalogPhoto> = transaction { dao ->
+        dao.listings().filter { it.groupKey == prepared.groupKey || sameProperty(it, prepared) }
+            .flatMap { json.decodeFromString<List<CatalogPhoto>>(it.photos) }.distinctBy { it.fileName }
+    }
+    fun discard(rows: List<IncomingEntity>): Boolean = transaction { dao ->
+        if (revision(dao.group(rows.first().groupKey)) != revision(rows)) return@transaction false
+        dao.listingForGroup(rows.first().groupKey)?.let { dao.deleteListing(it.id) }
+        dao.deleteGroup(rows.first().groupKey)
+        true
+    }
+
+    data class MediaRetention(val referenced: Set<String>, val removed: Set<String>)
+
+    fun <T> withMediaCleanup(cutoff: Long, sweep: (MediaRetention) -> T): T = synchronized(this) {
+        // Serialize the snapshot + file sweep with claims, manifests and promotions.
+        sweep(cleanExpired(cutoff))
+    }
+
+    /** Source dates only: verification, retries and social publication never extend retention. */
+    fun cleanExpired(cutoff: Long): MediaRetention = transaction { dao ->
+        val sources = dao.allSources()
+        val listings = dao.listings()
+        fun files(sources: List<IncomingEntity>, listings: List<ListingEntity>) =
+            (sources.flatMap { json.decodeFromString<List<CatalogPhoto>>(it.mediaManifest) } +
+                listings.flatMap { json.decodeFromString<List<CatalogPhoto>>(it.photos) }).map { it.fileName }.toSet()
+        val before = files(sources, listings)
+        val expired = listings.filter { listing ->
+            maxOf(listing.sourceCreatedAt, sources.filter { it.groupKey == listing.groupKey }
+                .maxOfOrNull { maxOf(it.sourceCreatedAt, it.sourceEditedAt) } ?: 0) < cutoff
+        }
+        expired.forEach { dao.deleteListing(it.id) }
+        sources.groupBy { it.groupKey }.forEach { (key, rows) ->
+            if (rows.maxOf { maxOf(it.sourceCreatedAt, it.sourceEditedAt) } < cutoff ||
+                rows.all { it.status in setOf("DELETED", "NEEDS_REVIEW") }) {
+                dao.deleteGroup(key)
+                dao.listingForGroup(key)?.takeIf { it.status != "ACTIVE" }?.let { dao.deleteListing(it.id) }
+            }
+        }
+        val remaining = files(dao.allSources(), dao.listings())
+        MediaRetention(remaining, before - remaining)
+    }
+    fun save(row: ListingEntity): Long = transaction { it.saveListing(normalizePrice(row)).takeIf { id -> id > 0 } ?: row.id }
     fun query(query: androidx.room.RoomRawQuery) = database.blocking { it.catalogDao().query(query) }
     fun revision(rows: List<IncomingEntity>) = sha256(rows.joinToString("|") { "${it.id}:${it.revision}:${it.contentHash}" })
 
@@ -77,14 +135,22 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     fun promote(rows: List<IncomingEntity>, token: String, prepared: ListingEntity, now: Long): Boolean = transaction { dao ->
         val current = dao.group(rows.first().groupKey)
         if (revision(current) != revision(rows) || current.any { it.leaseToken != token || it.status != "DOWNLOADING" }) return@transaction false
-        val old = dao.listingForGroup(prepared.groupKey)
+        val matches = dao.listings().filter { it.groupKey == prepared.groupKey || sameProperty(it, prepared) }
+        val old = matches.maxByOrNull { it.sourceCreatedAt }
+        // An old queued/replayed message must not overwrite a newer price or extend its lifetime.
+        if (old != null && old.sourceCreatedAt > prepared.sourceCreatedAt) {
+            if (old.groupKey != prepared.groupKey) dao.deleteGroup(prepared.groupKey)
+            return@transaction false
+        }
+        matches.filter { it.id != old?.id }.forEach { dao.deleteListing(it.id) }
+        matches.filter { it.groupKey != prepared.groupKey }.forEach { dao.deleteGroup(it.groupKey) }
         val row = if (old == null) prepared else prepared.copy(id = old.id, cdt = old.cdt, publishedAt = old.publishedAt ?: now,
             tiktokReposted = old.tiktokReposted, threadsReposted = old.threadsReposted,
             tiktokRepostedAt = old.tiktokRepostedAt, threadsRepostedAt = old.threadsRepostedAt,
             tiktokStatus = old.tiktokStatus, threadsStatus = old.threadsStatus,
             tiktokPublishId = old.tiktokPublishId, threadsPublishId = old.threadsPublishId,
             tiktokState = old.tiktokState, threadsState = old.threadsState)
-        val id = dao.saveListing(row).takeIf { it > 0 } ?: row.id
+        val id = dao.saveListing(normalizePrice(row)).takeIf { it > 0 } ?: row.id
         current.forEach { dao.saveSource(it.copy(status = "PROMOTED", listingId = id, promotedAt = now, leaseToken = null, leaseUntil = 0)) }
         true
     }

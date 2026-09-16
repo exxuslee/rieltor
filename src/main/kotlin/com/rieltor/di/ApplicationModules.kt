@@ -57,13 +57,15 @@ private fun configurationModule(dotenv: Dotenv) = module {
 }
 
 private val persistenceModule = module {
-        single {
+    single {
         val app = get<ApplicationSettings>()
         val root = java.nio.file.Path.of(System.getenv("APP_PROJECT_ROOT") ?: ".").toAbsolutePath().normalize()
-        JsonSettingsStore(root.resolve("settings.json"), LocalSettings(
-            minIntervalMs = app.repostMinIntervalMinutes * 60_000,
-            maxMessagesPer24Hours = app.repostMaxMessagesPer24Hours, threadsEnabled = app.threadsEnabled,
-        ))
+        JsonSettingsStore(
+            root.resolve("settings.json"), LocalSettings(
+                minIntervalMs = app.repostMinIntervalMinutes * 60_000,
+                maxMessagesPer24Hours = app.repostMaxMessagesPer24Hours, threadsEnabled = app.threadsEnabled,
+            )
+        )
     }
     single { RoomDatabaseStore(databasePath(get()), get(), ownsSettings = false) }
     single { CatalogRepository(get()) }
@@ -134,12 +136,9 @@ private val integrationModule = module {
         LocalPublicMediaStorage(settings.mediaDirectory, settings.publicBaseUrl)
     }
     single<PublicMediaStorage> { get<LocalPublicMediaStorage>() }
-    single { MediaCleanupJob(get<ApplicationSettings>().mediaDirectory, referencedFiles = {
-        val repo = get<CatalogRepository>()
-        val json = kotlinx.serialization.json.Json
-        (repo.listings().flatMap { json.decodeFromString<List<com.rieltor.domain.model.CatalogPhoto>>(it.photos).map { photo -> photo.fileName } } +
-            repo.groups().flatten().flatMap { json.decodeFromString<List<com.rieltor.domain.model.CatalogPhoto>>(it.mediaManifest).map { photo -> photo.fileName } }).toSet()
-    }) }
+    single {
+        MediaCleanupJob(get<ApplicationSettings>().mediaDirectory, catalogRepository = get())
+    }
 
     single {
         TikTokPhotoPublisher(
@@ -160,10 +159,12 @@ private val integrationModule = module {
             apiHash = settings.telegramApiHash,
             sessionDirectory = settings.telegramSessionDirectory,
             monitoredTopics = settings.monitoredTelegramTopics + get<JsonSettingsStore>().snapshot().topicTypeMapping.keys.map { key ->
-                val parts = key.split(':'); com.rieltor.domain.model.TelegramMonitoredTopic(parts[0].toLong(), parts[1].toLong())
+                val parts = key.split(':'); com.rieltor.domain.model.TelegramMonitoredTopic(
+                parts[0].toLong(),
+                parts[1].toLong()
+            )
             },
             repository = get(), settings = get(),
         )
     }
 }
-

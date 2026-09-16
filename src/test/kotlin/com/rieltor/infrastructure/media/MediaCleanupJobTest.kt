@@ -14,8 +14,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MediaCleanupJobTest {
+
     @Test
-    fun `deletes only supported images older than one day`() {
+    fun `deletes only supported images older than thirty days`() {
         val directory = Files.createTempDirectory("media-cleanup-test")
         val now = Instant.parse("2026-08-28T12:00:00Z")
         val oldImage = directory.resolve("old.jpg").createFile()
@@ -24,7 +25,7 @@ class MediaCleanupJobTest {
         val nestedDirectory = directory.resolve("nested").createDirectory()
         val nestedOldImage = nestedDirectory.resolve("old.png").createFile()
 
-        FileTime.from(now.minus(Duration.ofHours(25))).also { oldTime ->
+        FileTime.from(now.minus(Duration.ofDays(35))).also { oldTime ->
             Files.setLastModifiedTime(oldImage, oldTime)
             Files.setLastModifiedTime(oldOtherFile, oldTime)
             Files.setLastModifiedTime(nestedOldImage, oldTime)
@@ -33,7 +34,6 @@ class MediaCleanupJobTest {
 
         val cleanup = MediaCleanupJob(
             directory = directory,
-            maxAge = Duration.ofDays(1),
             clock = Clock.fixed(now, ZoneOffset.UTC),
         )
 

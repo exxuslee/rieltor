@@ -19,6 +19,7 @@ data class LocalSettings(
     val schemaVersion: Int = 1, val generation: Long = 0,
     val stabilityWindowMinutes: Long = 20, val topicTypeMapping: Map<String, String> = emptyMap(),
     val topicNames: Map<String, String> = emptyMap(),
+    val uahPerUsd: Double = 45.0, val usdPerEur: Double = 1.1,
     val driveFileDelayMs: Long = 500, val driveJobDelayMs: Long = 1_000,
     val driveMaxAttempts: Int = 5, val driveRetryBaseMs: Long = 60_000, val maxCatalogPhotos: Int = 50,
     val minIntervalMs: Long = 20 * 60_000, val maxMessagesPer24Hours: Int = 36,
@@ -71,6 +72,7 @@ class JsonSettingsStore(val path: Path, defaults: LocalSettings = LocalSettings(
     fun reserveAnonymous(now: Long, window: Long, max: Int, interval: Long) =
         reserve(UUID.randomUUID().toString(), 0, now, window, max, interval)
     private fun validate(value: LocalSettings) {
+        require(value.uahPerUsd.isFinite() && value.uahPerUsd > 0 && value.usdPerEur.isFinite() && value.usdPerEur > 0)
         require(value.schemaVersion == 1 && value.stabilityWindowMinutes >= 20)
         require(value.minIntervalMs >= 0 && value.maxMessagesPer24Hours > 0)
         require(value.driveMaxAttempts > 0 && value.driveRetryBaseMs > 0 && value.maxCatalogPhotos in 1..1000)

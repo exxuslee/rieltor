@@ -67,17 +67,18 @@ class CatalogIngestionService(
         if (!verify(rows)) return true
         val config = settings.snapshot()
         val topicKey = "${rows.first().chatId}:${rows.first().messageThreadId}"
-        val parsed = parser.parse(rows, config.topicTypeMapping[topicKey], now()).let { listing ->
+        val parsed = repository.normalizePrice(parser.parse(rows, config.topicTypeMapping[topicKey], now())).let { listing ->
             val topic = config.topicNames[topicKey]
             listing.copy(tags = Json.encodeToString(Json.decodeFromString<List<String>>(listing.tags) + listOfNotNull(topic)))
         }
         if (parsed.status != "ACTIVE") {
-            repository.stage(rows, "NEEDS_REVIEW", now(), parsed.parseWarnings)
+            repository.discard(rows)
             return true
         }
         val token = repository.claim(rows, now()) ?: return true
         try {
-            val existing = Json.decodeFromString<List<CatalogPhoto>>(rows.first().mediaManifest)
+            val existing = (Json.decodeFromString<List<CatalogPhoto>>(rows.first().mediaManifest) +
+                repository.cachedPhotos(parsed)).distinctBy { it.fileName }
             val photos = mutableListOf<CatalogPhoto>()
             drive.downloadCatalogPhotos(Json.decodeFromString(parsed.googleDriveUrls), config.maxCatalogPhotos, config.driveFileDelayMs,
                 cached = { file -> existing.any { it.sourceFileId == file.id && it.sourceVersion == file.version && media.resolve(it.fileName) != null } }) { file, content ->
@@ -95,12 +96,17 @@ class CatalogIngestionService(
             }
             check(photos.isNotEmpty()) { "No Google Drive photos" }
             if (!verify(rows)) return true
-            repository.promote(rows, token, parsed.copy(photos = Json.encodeToString(photos), coverPhotoId = photos.first().fileName), now())
+            if (repository.promote(rows, token, parsed.copy(photos = Json.encodeToString(photos), coverPhotoId = photos.first().fileName), now())) {
+                photos.forEach { photo -> media.resolve(photo.fileName)?.let {
+                    Files.setLastModifiedTime(it, java.nio.file.attribute.FileTime.fromMillis(parsed.sourceCreatedAt))
+                } }
+            }
         } catch (error: CancellationException) { throw error }
         catch (error: Throwable) {
             val attempts = rows.first().attemptCount + 1
             val delay = (config.driveRetryBaseMs * (1L shl attempts.coerceAtMost(10))).coerceAtMost(3_600_000) + kotlin.random.Random.nextLong(1000)
-            repository.stage(rows, if (attempts >= config.driveMaxAttempts) "NEEDS_REVIEW" else "MEDIA_RETRY", now(),
+            if (attempts >= config.driveMaxAttempts) repository.discard(rows)
+            else repository.stage(rows, "MEDIA_RETRY", now(),
                 error.javaClass.simpleName + ": " + error.message.orEmpty().replace(Regex("https?://\\S+"), "[URL]").take(400), now() + delay)
         }
         return true

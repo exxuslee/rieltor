@@ -30,7 +30,7 @@ class GoogleDrivePhotoSourceTest {
             var time = 0L
             var unavailable = false
             val messages = (1L..2L).associateWith { id -> com.rieltor.domain.model.SourceMessage(-100, id, 20,
-                text = "Ірпінь\nКвартира\nЦіна: 80 000 USD\nhttps://drive.google.com/drive/folders/example", raw = "source-$id", sourceCreatedAt = id * 1000) }
+                text = "Ірпінь\nКвартира\nЦіна: 80 000 USD\nhttps://drive.google.com/drive/folders/example$id", raw = "source-$id", sourceCreatedAt = id * 1000) }.toMutableMap()
             val telegram = object : com.rieltor.application.port.TelegramInboxSource {
                 override fun start() = Unit
                 override fun close() = Unit
@@ -49,6 +49,29 @@ class GoogleDrivePhotoSourceTest {
             assertEquals(2, repo.listings().single().messageId); assertEquals(1, downloads)
             assertTrue(service.downloadNext()); assertEquals(2, repo.listings().size)
             assertTrue(repo.listings().all { it.status == "ACTIVE" && !it.tiktokReposted })
+            val original = repo.listings().first { it.messageId == 2L }
+            val originalPhotos = Json.decodeFromString<List<com.rieltor.domain.model.CatalogPhoto>>(original.photos)
+            time += 7 * 86_400_000
+            messages[3] = messages.getValue(2).copy(messageId = 3, sourceCreatedAt = time,
+                text = messages.getValue(2).text.replace("80 000", "75 000"))
+            repo.receive(messages.getValue(3), time, 1_200_000)
+            time += 1_200_000
+            service.verifyDue(); assertTrue(service.downloadNext())
+            val renewed = repo.listings().first { it.messageId == 3L }
+            assertEquals(2, repo.listings().size)
+            assertEquals(original.id, renewed.id)
+            assertEquals(7_500_000L, renewed.price)
+            assertEquals(original.photos, renewed.photos)
+            assertEquals(2, downloads) // No repeat download for unchanged Drive version.
+            assertNull(repo.source(-100, 2))
+            assertEquals(messages.getValue(3).sourceCreatedAt,
+                java.nio.file.Files.getLastModifiedTime(storage.resolve(originalPhotos.single().fileName)!!).toMillis())
+
+            messages[4] = messages.getValue(3).copy(messageId = 4, text = "Квартира без ціни")
+            repo.receive(messages.getValue(4), time, 0)
+            service.verifyDue(); assertTrue(service.downloadNext())
+            assertNull(repo.source(-100, 4))
+            assertEquals(2, downloads)
             service.close()
         }
         client.close()

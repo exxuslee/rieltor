@@ -41,14 +41,16 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
                 }
             }
         }
-        fun decimal(pattern: String): Double? = Regex(pattern, RegexOption.IGNORE_CASE).find(text)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull()
+        fun decimal(pattern: String, source: String = text): Double? = Regex(pattern, RegexOption.IGNORE_CASE).find(source)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull()
+        val areaText = text.lineSequence().filterNot { priceMatch != null && it.contains(priceMatch.value) }.joinToString("\n")
         val area = decimal("""(?:площа|площадь)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)""")
         val rooms = decimal("""(\d+)\s*[- ]?(?:кімнат|комнат)""")?.toInt()
         val floor = Regex("""(?iu)(?:поверх|этаж)\s*[:\-]?\s*(\d+)\s*(?:/|із|з|из)\s*(\d+)""").find(text)
         val transaction = if (Regex("(?iu)оренд|аренд").containsMatchIn(text)) "RENT" else "SALE"
+        val priceSuffix = priceMatch?.let { text.substring(it.range.last + 1).lineSequence().first() }.orEmpty()
         val period = when {
-            Regex("(?iu)(?:/|за\\s*)м[²2]").containsMatchIn(priceMatch?.value.orEmpty() + text.lineSequence().firstOrNull { it.contains("ціна", true) }.orEmpty()) -> "PER_M2"
-            Regex("(?iu)(?:/|за\\s*)сот").containsMatchIn(text) -> "PER_SOTKA"
+            Regex("""(?iu)^\s*(?:/|за)\s*(?:1\s*)?(?:м[²2]|кв\.?\s*м|квадратн\p{L}*\s+метр)""").containsMatchIn(priceSuffix) -> "PER_M2"
+            Regex("""(?iu)^\s*(?:/|за)\s*(?:1\s*)?сот""").containsMatchIn(priceSuffix) -> "PER_SOTKA"
             transaction == "RENT" -> "MONTH"
             else -> "TOTAL"
         }
@@ -64,9 +66,9 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
             googleDriveUrl = links.firstOrNull(), googleDriveUrls = Json.encodeToString(links), price = price, currency = currency,
             pricePeriod = period, areaM2 = area, rooms = rooms, floor = floor?.groupValues?.get(1)?.toIntOrNull(),
             totalFloors = floor?.groupValues?.get(2)?.toIntOrNull(),
-            landAreaSotka = decimal("""(\d+(?:[.,]\d+)?)\s*сот"""),
+            landAreaSotka = decimal("""(\d+(?:[.,]\d+)?)\s*сот""", areaText),
             status = if (warnings.isEmpty()) "ACTIVE" else "NEEDS_REVIEW",
-            sourceCreatedAt = first.sourceCreatedAt, receivedAt = first.receivedAt, cdt = now, updatedAt = now,
+            sourceCreatedAt = rows.maxOf { maxOf(it.sourceCreatedAt, it.sourceEditedAt) }, receivedAt = first.receivedAt, cdt = now, updatedAt = now,
             publishedAt = now.takeIf { warnings.isEmpty() }, parseWarnings = Json.encodeToString(warnings))
     }
 

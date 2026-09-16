@@ -28,11 +28,6 @@
         if (Number(params.priceMin || 0) > Number(params.priceMax || Infinity)) {
             status.textContent = 'Мінімальна ціна має бути не більшою за максимальну.'; more.hidden = true; return;
         }
-        if ((params.priceMin || params.priceMax || (params.sort && params.sort !== 'newest')) &&
-            (!params.currency || !params.transactionType || !params.pricePeriod)) {
-            status.textContent = 'Для порівняння цін оберіть валюту, тип угоди та ціну за об’єкт, місяць або одиницю площі.';
-            more.hidden = true; return;
-        }
         status.textContent = 'Завантажуємо оголошення…';
         grid.setAttribute('aria-busy', 'true'); more.disabled = true; retry.hidden = true;
         try {

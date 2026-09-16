@@ -1,5 +1,6 @@
 package com.rieltor.infrastructure.media
 
+import com.rieltor.infrastructure.database.repository.CatalogRepository
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import java.io.Closeable
@@ -7,16 +8,17 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
-import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 
 class MediaCleanupJob(
     private val directory: Path,
-    private val maxAge: Duration = Duration.ofDays(4),
-    private val interval: Duration = Duration.ofHours(8),
+    private val maxAge: Duration = Duration.ofDays(30),
+    private val interval: Duration = Duration.ofDays(1),
     private val clock: Clock = Clock.systemUTC(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val referencedFiles: () -> Set<String> = { emptySet() },
+    private val catalogRepository: CatalogRepository? = null,
+    private val orphanGrace: Duration = Duration.ofHours(1),
 ) : Closeable {
     private val logger = LoggerFactory.getLogger(MediaCleanupJob::class.java)
     private var job: Job? = null
@@ -24,7 +26,6 @@ class MediaCleanupJob(
     fun start() {
         check(job == null) { "Media cleanup job is already started" }
         job = scope.launch {
-            delay(8.hours)
             while (isActive) {
                 runCatching { cleanNow() }.onFailure { logger.error("Media cleanup failed", it) }
                 delay(interval.toMillis().milliseconds)
@@ -33,23 +34,32 @@ class MediaCleanupJob(
     }
 
     internal fun cleanNow(): Int {
-        if (!Files.isDirectory(directory)) return 0
-
         val cutoff = clock.instant().minus(maxAge)
-        val protectedFiles = referencedFiles()
+        return catalogRepository?.withMediaCleanup(cutoff.toEpochMilli()) { cleanFiles(it) }
+            ?: cleanFiles(null)
+    }
+
+    private fun cleanFiles(retention: CatalogRepository.MediaRetention?): Int {
+        if (!Files.isDirectory(directory)) return 0
+        val protectedFiles = retention?.referenced ?: referencedFiles()
+        // Fresh unreferenced files may still be downloading or serving a social publication.
+        val orphanCutoff = clock.instant().minus(if (retention != null) orphanGrace else maxAge)
         var deletedCount = 0
         Files.list(directory).use { paths ->
             paths
                 .filter(Files::isRegularFile)
                 .filter(::isSupportedImage)
                 .filter { it.fileName.toString() !in protectedFiles }
-                .filter { Files.getLastModifiedTime(it).toInstant().isBefore(cutoff) }
+                .filter {
+                    it.fileName.toString() in retention?.removed.orEmpty() ||
+                            Files.getLastModifiedTime(it).toInstant().isBefore(orphanCutoff)
+                }
                 .forEach { path ->
                     if (Files.deleteIfExists(path)) deletedCount++
                 }
         }
         if (deletedCount > 0) {
-            logger.info("Deleted {} media file(s) older than {}", deletedCount, maxAge)
+            logger.info("Deleted {} expired or unreferenced media file(s)", deletedCount)
         }
         return deletedCount
     }

@@ -102,15 +102,48 @@ class RoomPersistenceTest {
             val api = CatalogQuery(repo, "http://localhost")
             val params = Parameters.build {
                 append("location", "IRPIN"); append("governmentPrograms", "EOSELIA,CERTIFICATE")
-                append("currency", "USD"); append("transactionType", "SALE"); append("pricePeriod", "TOTAL")
                 append("priceMin", "82000"); append("priceMax", "82000"); append("limit", "1")
             }
             val first = api.list(params); assertEquals("Квартира 2", first.items.single().title)
             val second = api.list(Parameters.build { appendAll(params); append("cursor", assertNotNull(first.nextCursor)) })
             assertEquals("Квартира 1", second.items.single().title); assertNull(second.nextCursor)
             assertFalse(Json.encodeToString(first).contains("private phone"))
-            assertFailsWith<IllegalArgumentException> { api.list(Parameters.build { append("priceMin", "1") }) }
+            assertEquals(4, api.list(Parameters.build { append("priceMin", "1") }).items.size)
             assertFailsWith<IllegalArgumentException> { api.list(Parameters.build { append("location", "INVALID") }) }
+        }
+    }
+
+    @Test fun `normalizes persisted prices and queries only sales in USD totals`() {
+        val path = path()
+        RoomDatabaseStore(path).use { db ->
+            val repo = CatalogRepository(db)
+            repo.save(listing(1, price = 4_500_000).copy(currency = "UAH", pricePeriod = "PER_M2", areaM2 = 50.5))
+            repo.save(listing(2, price = 5_000_000).copy(currency = "EUR"))
+            val rent = repo.save(listing(3).copy(transactionType = "RENT", pricePeriod = "MONTH"))
+            val missingArea = repo.save(listing(4).copy(pricePeriod = "PER_M2"))
+            val api = CatalogQuery(repo, "http://localhost")
+            val result = api.list(Parameters.build { append("sort", "priceAsc") })
+            assertEquals(listOf("50500.00", "55000.00"), result.items.map { it.price })
+            assertTrue(result.items.all { it.currency == "USD" && it.pricePeriod == "TOTAL" })
+            assertNull(api.one(rent)); assertNull(api.one(missingArea))
+            assertEquals("NEEDS_REVIEW", repo.listing(missingArea)?.status)
+        }
+        RoomDatabaseStore(path).use { db ->
+            assertEquals(5_050_000, CatalogRepository(db).listings().first { it.messageId == 1L }.price)
+        }
+    }
+
+    @Test fun `existing prices are upgraded once on repository startup`() {
+        val path = path()
+        RoomDatabaseStore(path).use { db ->
+            db.blocking { it.catalogDao().saveListing(listing(1, price = 450_000).copy(currency = "UAH")) }
+            val repo = CatalogRepository(db)
+            assertEquals(10_000, repo.listings().single().price)
+            assertEquals("USD", repo.listings().single().currency)
+        }
+        RoomDatabaseStore(path).use { db ->
+            db.settings.update { it.copy(uahPerUsd = 50.0) }
+            assertEquals(10_000, CatalogRepository(db).listings().single().price)
         }
     }
 

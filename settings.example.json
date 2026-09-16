@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "uahPerUsd": 45.0,
+  "usdPerEur": 1.1,
   "generation": 0,
   "stabilityWindowMinutes": 20,
   "topicTypeMapping": {

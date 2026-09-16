@@ -33,7 +33,7 @@ data class PublicListing(
 class CatalogQuery(private val repository: CatalogRepository, private val publicBaseUrl: String) {
     private val json = Json
     fun list(parameters: Parameters): ListingPage {
-        val where = mutableListOf("status = 'ACTIVE'")
+        val where = mutableListOf("status = 'ACTIVE'", "transactionType = 'SALE'", "currency = 'USD'", "pricePeriod = 'TOTAL'", "price > 0")
         val arguments = mutableListOf<Any>()
         fun add(sql: String, vararg values: Any) { where += sql; arguments.addAll(values) }
         fun values(name: String, allowed: Set<String>, column: String = name) {
@@ -43,9 +43,6 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
         }
         values("location", CatalogCodes.locations)
         values("typeOfRealty", CatalogCodes.types)
-        values("currency", setOf("USD", "UAH", "EUR"))
-        values("transactionType", setOf("SALE", "RENT"))
-        values("pricePeriod", setOf("TOTAL", "MONTH", "PER_M2", "PER_SOTKA"))
         val programs = parameters.getAll("governmentPrograms").orEmpty().flatMap { it.split(',') }.filter { it.isNotEmpty() }.distinct()
         require(programs.all { it in CatalogCodes.programs }) { "Invalid governmentPrograms" }
         if (programs.isNotEmpty()) add("EXISTS (SELECT 1 FROM json_each(listings.governmentPrograms) WHERE value IN (${programs.joinToString { "?" }}))", *programs.toTypedArray())
@@ -57,11 +54,6 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
         require(min == null || max == null || min <= max) { "priceMin must not exceed priceMax" }
         val sort = parameters["sort"] ?: "newest"
         require(sort in setOf("newest", "priceAsc", "priceDesc")) { "Invalid sort" }
-        if (min != null || max != null || sort != "newest") {
-            listOf("currency", "transactionType", "pricePeriod").forEach { key ->
-                require(parameters.getAll(key)?.size == 1 && !parameters[key].orEmpty().contains(',')) { "$key is required for price comparison" }
-            }
-        }
         if (min != null) add("price >= ?", min)
         if (max != null) add("price <= ?", max)
         parameters["rooms"]?.takeIf { it.isNotBlank() }?.let {
@@ -95,7 +87,9 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
         } else null
         return ListingPage(shown.map(::public), cursor)
     }
-    fun one(id: Long): PublicListing? = repository.listing(id)?.takeIf { it.status == "ACTIVE" }?.let(::public)
+    fun one(id: Long): PublicListing? = repository.listing(id)?.takeIf {
+        it.status == "ACTIVE" && it.transactionType == "SALE" && it.currency == "USD" && it.pricePeriod == "TOTAL" && (it.price ?: 0) > 0
+    }?.let(::public)
     fun public(row: ListingEntity): PublicListing {
         val city = mapOf("IRPIN" to "Ірпінь", "BUCHA" to "Буча", "VORZEL" to "Ворзель", "HOSTOMEL" to "Гостомель")[row.location].orEmpty()
         val urls = json.decodeFromString<List<CatalogPhoto>>(row.photos).map { "${publicBaseUrl.trimEnd('/')}/media/${it.fileName}" }

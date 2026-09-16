@@ -13,7 +13,7 @@
         one: (id, signal) => request(`/api/listings/${encodeURIComponent(id)}`, signal),
         types: {apartments: 'APARTMENT', 'new-buildings': 'NEW_BUILD', houses: 'HOUSE', land: 'LAND', commercial: 'COMMERCIAL'},
         programs: {EOSELIA: 'єОселя', VOUCHER: 'Ваучер', CERTIFICATE: 'Сертифікат', POSTANOVA: 'Постанова'},
-        price: item => `${Number(item.price).toLocaleString('uk-UA', {maximumFractionDigits: 2})} ${item.currency || ''}${{MONTH: '/міс.', PER_M2: '/м²', PER_SOTKA: '/сотка'}[item.pricePeriod] || ''}`,
+        price: item => `${Number(item.price).toLocaleString('uk-UA', {maximumFractionDigits: 2})} $`,
         escape: value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]))
     };
 })();

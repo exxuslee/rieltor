@@ -9,6 +9,9 @@ import com.rieltor.infrastructure.database.model.ListingEntity
 
 @Dao
 internal interface CatalogDao {
+    @Query("SELECT * FROM incoming_telegram_messages") suspend fun allSources(): List<IncomingEntity>
+    @Query("DELETE FROM incoming_telegram_messages WHERE groupKey=:key") suspend fun deleteGroup(key: String)
+    @Query("DELETE FROM listings WHERE id=:id") suspend fun deleteListing(id: Long)
     @Query("SELECT * FROM incoming_telegram_messages WHERE chatId=:chat AND messageId=:message")
     suspend fun source(chat: Long, message: Long): IncomingEntity?
     @Query("SELECT * FROM incoming_telegram_messages WHERE groupKey=:key ORDER BY messageId")

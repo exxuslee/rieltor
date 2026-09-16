@@ -2,6 +2,11 @@ package com.rieltor.domain.service
 
 /** Extracts supported Google Drive URLs from the original Telegram text. */
 class GoogleDriveLinkExtractor {
+    /** Stable identity across folder/file URLs and open?id= / uc?id= aliases. */
+    fun identities(urls: List<String>): Set<String> = urls.mapNotNull { url ->
+        Regex("(?:/folders/|/file/d/|[?&]id=)([A-Za-z0-9_-]+)").find(url)?.groupValues?.get(1)
+    }.toSet()
+
     fun extract(text: String?): List<String> {
         if (text.isNullOrBlank()) return emptyList()
         return driveUrl.findAll(text)
