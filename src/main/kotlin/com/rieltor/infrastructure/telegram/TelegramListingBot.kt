@@ -1,8 +1,8 @@
 package com.rieltor.infrastructure.telegram
 
-import com.rieltor.application.port.TelegramBotIncomingMessage
 import com.rieltor.application.port.TelegramBotReplySender
 import com.rieltor.application.usecase.ReplyWithFormattedListingUseCase
+import com.rieltor.domain.model.TelegramBotIncomingMessage
 import com.rieltor.domain.model.TelegramPhoto
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory

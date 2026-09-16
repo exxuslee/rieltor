@@ -13,8 +13,8 @@ import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.database.repository.TikTokPublishThrottleRepositoryImpl
 import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.google.GoogleDrivePhotoSource
+import com.rieltor.infrastructure.job.CleanupJob
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
-import com.rieltor.infrastructure.media.MediaCleanupJob
 import com.rieltor.infrastructure.oauth.OAuthStateStore
 import com.rieltor.infrastructure.telegram.TelegramBotApiReplySender
 import com.rieltor.infrastructure.telegram.TelegramClientAdapter
@@ -137,7 +137,7 @@ private val integrationModule = module {
     }
     single<PublicMediaStorage> { get<LocalPublicMediaStorage>() }
     single {
-        MediaCleanupJob(get<ApplicationSettings>().mediaDirectory, catalogRepository = get())
+        CleanupJob(get<ApplicationSettings>().mediaDirectory, catalogRepository = get())
     }
 
     single {

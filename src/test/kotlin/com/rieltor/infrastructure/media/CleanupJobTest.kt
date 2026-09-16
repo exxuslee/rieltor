@@ -13,7 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class MediaCleanupJobTest {
+class CleanupJobTest {
 
     @Test
     fun `deletes only supported images older than thirty days`() {

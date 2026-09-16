@@ -1,7 +1,7 @@
 package com.rieltor.application.usecase
 
-import com.rieltor.application.port.TelegramBotIncomingMessage
 import com.rieltor.application.port.TelegramBotReplySender
+import com.rieltor.domain.model.TelegramBotIncomingMessage
 import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.domain.service.GoogleDriveLinkExtractor

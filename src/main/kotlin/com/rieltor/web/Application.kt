@@ -12,8 +12,8 @@ import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.google.GoogleDriveAuthException
 import com.rieltor.infrastructure.google.GoogleDriveAuthService
+import com.rieltor.infrastructure.job.CleanupJob
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
-import com.rieltor.infrastructure.media.MediaCleanupJob
 import com.rieltor.infrastructure.oauth.OAuthStateStore
 import com.rieltor.infrastructure.telegram.TelegramListingBot
 import com.rieltor.infrastructure.threads.ThreadsAuthException
@@ -64,7 +64,7 @@ fun Application.module(dotenv: Dotenv) {
     val threadsAuth = get<ThreadsAuthService>()
     val threadsStates = get<OAuthStateStore>(threadsOAuthState)
     val mediaStorage = get<LocalPublicMediaStorage>()
-    val mediaCleanupJob = get<MediaCleanupJob>()
+    val mediaCleanupJob = get<CleanupJob>()
     val catalog = get<CatalogRepository>()
     val ingestion = get<CatalogIngestionService>()
     val repostCoordinator = get<CatalogRepostService>()
