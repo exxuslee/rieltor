@@ -14,6 +14,12 @@
         types: {apartments: 'APARTMENT', 'new-buildings': 'NEW_BUILD', houses: 'HOUSE', land: 'LAND', commercial: 'COMMERCIAL'},
         programs: {EOSELIA: 'єОселя', VOUCHER: 'Ваучер', CERTIFICATE: 'Сертифікат', POSTANOVA: 'Постанова'},
         price: item => `${Number(item.price).toLocaleString('uk-UA', {maximumFractionDigits: 2})} $`,
+        pricePerSquareMeter: item => {
+            const price = Number(item.price);
+            const area = Number(item.area);
+            if (!Number.isFinite(price) || !Number.isFinite(area) || price <= 0 || area <= 0) return '';
+            return `${Math.round(price / area).toLocaleString('uk-UA')} $/м²`;
+        },
         escape: value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]))
     };
 })();

@@ -581,11 +581,19 @@ textarea.control {
 
 .property-card {
     min-width: 0;
+    display: flex;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     overflow: hidden;
     background: var(--surface-strong);
     transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.property-card > a {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
 }
 
 .property-card:hover {
@@ -610,6 +618,9 @@ textarea.control {
 }
 
 .property-card__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
     padding: 23px;
 }
 
@@ -626,6 +637,7 @@ textarea.control {
 }
 
 .property-card__meta {
+    margin-top: auto;
     padding-top: 18px;
     border-top: 1px solid var(--border);
     display: flex;
@@ -635,10 +647,22 @@ textarea.control {
 }
 
 .property-card__price {
-    margin-right: auto;
     color: var(--accent);
     font-size: 1.45rem;
     font-weight: 750;
+}
+
+.property-card__price-group {
+    display: flex;
+    flex-direction: column;
+    margin-right: auto;
+    gap: 2px;
+}
+
+.property-card__price-per-meter {
+    color: var(--muted);
+    font-size: .8rem;
+    line-height: 1.2;
 }
 
 .property-card__spec {
