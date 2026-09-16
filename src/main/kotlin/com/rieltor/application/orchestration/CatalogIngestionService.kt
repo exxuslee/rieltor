@@ -14,6 +14,7 @@ import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.imageio.ImageIO
 
 class CatalogIngestionService(
@@ -25,8 +26,21 @@ class CatalogIngestionService(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val logger = LoggerFactory.getLogger(javaClass)
     private val parser = CatalogListingParser()
-    fun start() {
+
+    private val workersStarted = AtomicBoolean(false)
+
+    /** Starts only the TDLib Telegram session so it can authorize before background work begins. */
+    fun startTelegramSession() {
         source.start()
+    }
+
+    fun start() {
+        startTelegramSession()
+        startWorkers()
+    }
+
+    fun startWorkers() {
+        if (!workersStarted.compareAndSet(false, true)) return
         scope.launch { loop(5_000) { verifyDue() } }
         scope.launch { loop(settings.snapshot().driveJobDelayMs.coerceAtLeast(1_000)) { downloadNext() } }
     }

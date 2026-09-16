@@ -6,6 +6,8 @@ map $uri $rieltor_route_allowed {
     "/" 1;
     "/health" 1;
     "/v1/landing/leads" 1;
+    "/api/listings" 1;
+    ~^/api/listings/[0-9]+$ 1;
     ~^/auth/tiktok/(?:login|callback)$ 1;
     ~^/auth/google/(?:login|callback)$ 1;
     ~^/auth/threads/(?:login|callback)$ 1;

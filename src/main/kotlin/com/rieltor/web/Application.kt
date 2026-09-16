@@ -32,6 +32,7 @@ import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.*
 import kotlinx.serialization.json.Json
 import org.koin.ktor.ext.get
 import org.koin.ktor.plugin.Koin
@@ -48,6 +49,8 @@ fun main() {
 }
 
 fun Application.module(dotenv: Dotenv) {
+    val delayedStartupScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     install(Koin) {
         slf4jLogger()
         modules(applicationModules(dotenv))
@@ -116,14 +119,21 @@ fun Application.module(dotenv: Dotenv) {
         catalogRoutes(CatalogQuery(catalog, get<com.rieltor.infrastructure.config.ApplicationSettings>().publicBaseUrl))
     }
 
-    catalog.recover(System.currentTimeMillis())
-    ingestion.start()
-    repostCoordinator.start()
-    telegramListingBot.start()
-    mediaCleanupJob.start()
+    // TDLib needs time to reopen its local session. Start it before every other worker,
+    // then let it authorize for a minute without delaying the HTTP server itself.
+    ingestion.startTelegramSession()
+    delayedStartupScope.launch {
+        delay(STARTUP_AFTER_TELEGRAM_DELAY_MILLIS)
+        catalog.recover(System.currentTimeMillis())
+        ingestion.startWorkers()
+        repostCoordinator.start()
+        telegramListingBot.start()
+        mediaCleanupJob.start()
+    }
 
 
     monitor.subscribe(ApplicationStopping) {
+        delayedStartupScope.cancel()
         mediaCleanupJob.close()
         ingestion.close()
         repostCoordinator.close()
@@ -135,3 +145,4 @@ fun Application.module(dotenv: Dotenv) {
 
 }
 
+private const val STARTUP_AFTER_TELEGRAM_DELAY_MILLIS = 60_000L
