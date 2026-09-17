@@ -235,6 +235,8 @@ node docs/scripts/check-seo.mjs
 
 ```powershell
 .\gradlew.bat importTelegramHistory
+
+java -cp rieltorSite-all.jar com.rieltor.tools.TelegramHistoryMainKt
 ```
 
 Отдельный main: `com.rieltor.tools.TelegramHistoryMainKt`. Он загружает сообщения
