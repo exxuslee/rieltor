@@ -3,6 +3,7 @@ package com.rieltor.infrastructure.database.local
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
@@ -15,12 +16,20 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
 
 @Database(
-    entities = [IncomingEntity::class, ListingEntity::class], version = 17,
+    entities = [IncomingEntity::class, ListingEntity::class], version = 18,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
     abstract fun catalogDao(): CatalogDao
 }
+
+private val migrations = arrayOf(
+    object : Migration(17, 18) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE listings ADD COLUMN rawText TEXT NOT NULL DEFAULT ''")
+        }
+    },
+)
 
 class RoomDatabaseStore(
     path: Path,
@@ -36,6 +45,7 @@ class RoomDatabaseStore(
         room = Room.databaseBuilder<RieltorDatabase>(name = path.toAbsolutePath().toString())
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)
+            .addMigrations(*migrations)
             .fallbackToDestructiveMigration(true)
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(connection: SQLiteConnection) {

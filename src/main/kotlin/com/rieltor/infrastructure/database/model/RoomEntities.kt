@@ -48,7 +48,7 @@ data class ListingEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val groupKey: String, val chatId: Long, val messageId: Long?, val messageThreadId: Long,
     val sourceRevision: String,
-    val title: String = "", val description: String = "", val location: String? = null,
+    val title: String = "", val description: String = "", val rawText: String = "", val location: String? = null,
     val address: String? = null, val typeOfRealty: String? = null,
     val tags: String = "[]",
     val primeParams: String = "{}", val secondaryParams: String = "{}",

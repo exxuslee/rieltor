@@ -19,7 +19,7 @@ import java.util.*
 
 @Serializable
 data class PublicListing(
-    val id: String, val title: String, val description: String, val location: String,
+    val id: String, val title: String, val description: String, val rawText: String, val location: String,
     val locationCode: String?, val typeOfRealty: String?, val category: String,
     val price: String, val currency: String?, val pricePeriod: String, val transactionType: String,
     val area: Double?, val rooms: Int?, val floor: String?, val landAreaSotka: Double?,
@@ -148,6 +148,7 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
             row.id.toString(),
             row.title,
             row.description,
+            row.rawText,
             listOfNotNull(city.takeIf { it.isNotEmpty() }, row.address).joinToString(", "),
             row.location,
             row.typeOfRealty,

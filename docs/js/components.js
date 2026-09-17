@@ -111,5 +111,6 @@ window.propertyCard = function (property) {
     return `<article class="property-card"><a href="/property.html?id=${encodeURIComponent(property.id)}" aria-label="Переглянути: ${e(property.title)}">
         <div class="property-card__image"><img src="${e(property.image)}" alt="${e(property.title)}" loading="lazy" width="768" height="512"></div>
         <div class="property-card__body"><h3 class="property-card__title">${e(property.title)}</h3><p class="property-card__location">${e(property.location)}</p>
+        ${property.rawText ? `<p class="property-card__raw-text">${e(property.rawText)}</p>` : ''}
         <div class="property-card__meta"><span class="property-card__price-group"><strong class="property-card__price">${e(Listings.price(property))}</strong>${pricePerSquareMeter ? `<span class="property-card__price-per-meter">${e(pricePerSquareMeter)}</span>` : ''}</span>${property.rooms ? `<span>${e(property.rooms)} кімн.</span>` : ''}<span>${e(area)}</span>${icon('arrow')}</div></div></a></article>`;
 };

@@ -8,14 +8,21 @@ import kotlinx.serialization.json.*
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-class CatalogListingParser(private val formatter: ListingCaptionFormatter = ListingCaptionFormatter(),
-    private val priceNormalizer: CatalogPriceNormalizer = CatalogPriceNormalizer()) {
+class CatalogListingParser(
+    private val formatter: ListingCaptionFormatter = ListingCaptionFormatter(),
+    private val priceNormalizer: CatalogPriceNormalizer = CatalogPriceNormalizer()
+) {
     fun parse(rows: List<IncomingEntity>, type: String?, now: Long): ListingEntity {
         val first = rows.first()
         val text = rows.map { it.rawText }.filter { it.isNotBlank() }.distinct().joinToString("\n")
         val clean = formatter.filter(text)
         val warnings = mutableListOf<String>()
-        val matchedLocations = listOf("IRPIN" to "ірп[іе]н|ирпен", "BUCHA" to "буч[аіи]", "VORZEL" to "ворзел|ворзель", "HOSTOMEL" to "гостомел")
+        val matchedLocations = listOf(
+            "IRPIN" to "ірп[іе]н|ирпен",
+            "BUCHA" to "буч[аіи]",
+            "VORZEL" to "ворзел|ворзель",
+            "HOSTOMEL" to "гостомел"
+        )
             .filter { Regex(it.second, RegexOption.IGNORE_CASE).containsMatchIn(text) }.map { it.first }
         val location = when (matchedLocations.size) {
             0 -> "OTHER"
@@ -25,8 +32,10 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
         val priceMatch = extractPrice(text)
         val price = priceMatch?.amount
         val currency = priceMatch?.currency?.lowercase()?.let {
-            when { it in setOf("usd", "$") || it.startsWith("долар") -> "USD"
-                it in setOf("uah", "₴", "грн") -> "UAH"; else -> "EUR" }
+            when {
+                it in setOf("usd", "$") || it.startsWith("долар") -> "USD"
+                it in setOf("uah", "₴", "грн") -> "UAH"; else -> "EUR"
+            }
         }
         if (price == null || price <= 0) warnings += "Missing or ambiguous price/currency"
         if (type !in CatalogCodes.types) warnings += "Configure topicTypeMapping for ${first.chatId}:${first.messageThreadId}"
@@ -35,7 +44,10 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
         if (links.isEmpty()) warnings += "Missing Google Drive URL"
         if (clean == null) warnings += "Missing public content"
         val programs = extractGovernmentPrograms(text)
-        fun decimal(pattern: String, source: String = text): Double? = Regex(pattern, RegexOption.IGNORE_CASE).find(source)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull()
+        fun decimal(pattern: String, source: String = text): Double? =
+            Regex(pattern, RegexOption.IGNORE_CASE).find(source)?.groupValues?.get(1)?.replace(',', '.')
+                ?.toDoubleOrNull()
+
         val areaText = text.lineSequence().filterNot { it == priceMatch?.line }.joinToString("\n")
         val area = decimal("""(?:площа|площадь)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)""")
         val rooms = CatalogCodes.apartmentRooms(type)
@@ -52,24 +64,39 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
         val landArea = decimal("""(\d+(?:[.,]\d+)?)\s*сот""", areaText)
         val totalPrice = priceNormalizer.normalize(ImportedPrice(price, currency, transaction, period, area, landArea))
         if (totalPrice == null) warnings += "Unsupported or invalid sale price"
-        return ListingEntity(groupKey = first.groupKey, chatId = first.chatId, messageId = first.messageId,
+        return ListingEntity(
+            groupKey = first.groupKey,
+            chatId = first.chatId,
+            messageId = first.messageId,
             messageThreadId = first.messageThreadId,
             sourceRevision = sha256(rows.joinToString { "${it.id}:${it.revision}" }),
-            title = clean?.title.orEmpty(), description = clean?.additionalParameters?.joinToString("\n").orEmpty(),
-            location = location, address = clean?.address, typeOfRealty = type,
+            title = clean?.title.orEmpty(),
+            description = clean?.additionalParameters?.joinToString("\n").orEmpty(),
+            rawText = text,
+            location = location,
+            address = clean?.address,
+            typeOfRealty = type,
             tags = Json.encodeToString(clean?.hashtags.orEmpty()),
-            primeParams = buildJsonObject { put("details", JsonArray(clean?.keyParameters.orEmpty().map(::JsonPrimitive))) }.toString(),
+            primeParams = buildJsonObject {
+                put("details", JsonArray(clean?.keyParameters.orEmpty().map(::JsonPrimitive)))
+            }.toString(),
             secondaryParams = buildJsonObject {
                 clean?.registration?.let { put("registration", it) }
                 if (hasBargain(text)) put("bargain", "Торг")
             }.toString(),
             governmentPrograms = Json.encodeToString(programs.toList()),
-            googleDriveUrls = Json.encodeToString(links), price = totalPrice, currency = "USD",
-            areaM2 = area, rooms = rooms, floor = floor?.groupValues?.get(1)?.toIntOrNull(),
+            googleDriveUrls = Json.encodeToString(links),
+            price = totalPrice,
+            currency = "USD",
+            areaM2 = area,
+            rooms = rooms,
+            floor = floor?.groupValues?.get(1)?.toIntOrNull(),
             totalFloors = floor?.groupValues?.get(2)?.toIntOrNull(),
             landAreaSotka = landArea,
             status = if (warnings.isEmpty()) "ACTIVE" else "NEEDS_REVIEW",
-            sourceCreatedAt = rows.maxOf { maxOf(it.sourceCreatedAt, it.sourceEditedAt) }, createdAt = now, updatedAt = now,
+            sourceCreatedAt = rows.maxOf { maxOf(it.sourceCreatedAt, it.sourceEditedAt) },
+            createdAt = now,
+            updatedAt = now,
             publishedAt = now.takeIf { warnings.isEmpty() })
     }
 
@@ -158,7 +185,8 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
         )
         val preferredPriceLabel = Regex("""(?iu)(?:нова|новая|акційна|акционная)\s+(?:ціна|цена|вартість|стоимость)""")
         val priceLabel = Regex("(?iu)(?:ціна|цена|вартість|стоимость)")
-        val barePriceLine = Regex("""(?iu)^\s*(?:[-–—•*]\s*)?(?:від\s*)?\d[\d\s\u00a0.,']*\s*(?:USD|UAH|EUR|\$|€|₴|грн|долар\p{L}*|євро)""")
+        val barePriceLine =
+            Regex("""(?iu)^\s*(?:[-–—•*]\s*)?(?:від\s*)?\d[\d\s\u00a0.,']*\s*(?:USD|UAH|EUR|\$|€|₴|грн|долар\p{L}*|євро)""")
         val discountOnlyLine = Regex("""(?iu)знижен\p{L}*\s+(?:ціни|цены).*-\s*\d""")
         val ancillaryPriceLine = Regex(
             """(?iu)(?:оформлен|переуступ|подат|налог|кот[её]л|кладов|комор|парком|лічильник|счетчик|договір|договор)"""

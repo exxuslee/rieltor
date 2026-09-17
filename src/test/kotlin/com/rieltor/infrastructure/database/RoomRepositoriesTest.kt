@@ -17,10 +17,10 @@ class RoomPersistenceTest {
     private fun source(id: Long = 1, text: String = "Ірпінь\nКвартира\nЦіна: 82 000 USD") =
         SourceMessage(-100, id, 20, text = text, raw = text, sourceCreatedAt = id * 1000)
     private fun listing(id: Long, price: Long = 82_000, city: String = "IRPIN", programs: String = "[]",
-        type: String = "APARTMENT 1") =
+        type: String = "APARTMENT 1", rawText: String = "") =
         ListingEntity(groupKey = "test:$id", chatId = -100, messageId = id, messageThreadId = 20,
             sourceRevision = "1", title = "Квартира $id", location = city,
-            typeOfRealty = type, price = price, currency = "USD", governmentPrograms = programs,
+            typeOfRealty = type, rawText = rawText, price = price, currency = "USD", governmentPrograms = programs,
             sourceCreatedAt = id * 1000, createdAt = 1000, updatedAt = 1000, status = "ACTIVE")
 
     @Test fun `inbox survives restart and edits reset deadline without dropping old messages`() {
@@ -123,6 +123,15 @@ class RoomPersistenceTest {
         RoomDatabaseStore(path).use { db ->
             db.settings.update { it.copy(uahPerUsd = 50.0) }
             assertEquals(50_500, CatalogRepository(db).listings().first { it.messageId == 3L }.price)
+        }
+    }
+
+    @Test fun `catalog exposes raw source text from listing`() {
+        RoomDatabaseStore(path()).use { db ->
+            val repo = CatalogRepository(db)
+            repo.save(listing(1, rawText = "Ірпінь\nЦіна: 82 000 USD"))
+
+            assertEquals("Ірпінь\nЦіна: 82 000 USD", CatalogQuery(repo, "http://localhost").list(Parameters.Empty).items.single().rawText)
         }
     }
 

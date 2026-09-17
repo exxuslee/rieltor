@@ -636,6 +636,16 @@ textarea.control {
     color: var(--muted);
 }
 
+.property-card__raw-text {
+    margin: 0;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: .9rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
 .property-card__meta {
     margin-top: auto;
     padding-top: 18px;
