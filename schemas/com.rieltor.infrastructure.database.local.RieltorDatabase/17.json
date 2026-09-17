@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 17,
-    "identityHash": "01fe9ca2cdd009e86d1e6508da4cf04a",
+    "identityHash": "e615795f5cd14b37e9d787d62cad93b6",
     "entities": [
       {
         "tableName": "incoming_telegram_messages",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `chatId` INTEGER NOT NULL, `messageId` INTEGER, `messageThreadId` INTEGER NOT NULL, `mediaAlbumId` INTEGER NOT NULL, `groupKey` TEXT NOT NULL, `rawMessage` TEXT NOT NULL, `rawText` TEXT NOT NULL, `sourceCreatedAt` INTEGER NOT NULL, `sourceEditedAt` INTEGER NOT NULL, `receivedAt` INTEGER NOT NULL, `contentHash` TEXT NOT NULL, `revision` INTEGER NOT NULL, `verifyAfter` INTEGER NOT NULL, `verifiedAt` INTEGER, `status` TEXT NOT NULL, `mediaManifest` TEXT NOT NULL, `attemptCount` INTEGER NOT NULL, `nextAttemptAt` INTEGER NOT NULL, `leaseToken` TEXT, `leaseUntil` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `chatId` INTEGER NOT NULL, `messageId` INTEGER, `messageThreadId` INTEGER NOT NULL, `groupKey` TEXT NOT NULL, `rawMessage` TEXT NOT NULL, `rawText` TEXT NOT NULL, `sourceCreatedAt` INTEGER NOT NULL, `sourceEditedAt` INTEGER NOT NULL, `receivedAt` INTEGER NOT NULL, `contentHash` TEXT NOT NULL, `revision` INTEGER NOT NULL, `verifyAfter` INTEGER NOT NULL, `verifiedAt` INTEGER, `status` TEXT NOT NULL, `mediaManifest` TEXT NOT NULL, `attemptCount` INTEGER NOT NULL, `nextAttemptAt` INTEGER NOT NULL, `leaseToken` TEXT, `leaseUntil` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -28,12 +28,6 @@
           {
             "fieldPath": "messageThreadId",
             "columnName": "messageThreadId",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "mediaAlbumId",
-            "columnName": "mediaAlbumId",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -470,7 +464,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '01fe9ca2cdd009e86d1e6508da4cf04a')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e615795f5cd14b37e9d787d62cad93b6')"
     ]
   }
 }

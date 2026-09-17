@@ -13,15 +13,25 @@ import androidx.room.PrimaryKey
 @kotlinx.serialization.Serializable
 data class IncomingEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val chatId: Long, val messageId: Long?, val messageThreadId: Long,
-    val mediaAlbumId: Long = 0, val groupKey: String,
-    val rawMessage: String, val rawText: String,
-    val sourceCreatedAt: Long, val sourceEditedAt: Long = 0,
-    val receivedAt: Long, val contentHash: String, val revision: Long = 1,
-    val verifyAfter: Long, val verifiedAt: Long? = null,
+    val chatId: Long,
+    val messageId: Long?,
+    val messageThreadId: Long,
+    val groupKey: String,
+    val rawMessage: String,
+    val rawText: String,
+    val sourceCreatedAt: Long,
+    val sourceEditedAt: Long = 0,
+    val receivedAt: Long,
+    val contentHash: String,
+    val revision: Long = 1,
+    val verifyAfter: Long,
+    val verifiedAt: Long? = null,
     val status: String = "WAITING_STABILITY",
-    val mediaManifest: String = "[]", val attemptCount: Int = 0, val nextAttemptAt: Long = 0,
-    val leaseToken: String? = null, val leaseUntil: Long = 0,
+    val mediaManifest: String = "[]",
+    val attemptCount: Int = 0,
+    val nextAttemptAt: Long = 0,
+    val leaseToken: String? = null,
+    val leaseUntil: Long = 0,
 )
 
 @Entity(

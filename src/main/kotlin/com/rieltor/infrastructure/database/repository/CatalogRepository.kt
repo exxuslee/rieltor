@@ -9,10 +9,13 @@ import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.model.IncomingEntity
 import com.rieltor.infrastructure.database.model.ListingEntity
 import kotlinx.serialization.json.Json
+import org.slf4j.LoggerFactory
 import java.util.*
 
 class CatalogRepository(private val database: RoomDatabaseStore) {
+    private val logger = LoggerFactory.getLogger(javaClass)
     private val json = Json { encodeDefaults = true }
+
     @Synchronized
     private fun <T> transaction(block: suspend (CatalogDao) -> T): T = database.blocking { room ->
         room.useWriterConnection { it.immediateTransaction { block(room.catalogDao()) } }
@@ -20,12 +23,18 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
 
     fun receive(message: SourceMessage, now: Long, stabilityMs: Long) = transaction { dao ->
         val old = dao.source(message.chatId, message.messageId)
-        if (old?.contentHash == message.fingerprint() || old?.status == "DELETED") return@transaction
-        if (old != null && message.sourceEditedAt < old.sourceEditedAt) return@transaction
+        if (old?.contentHash == message.fingerprint() || old?.status == "DELETED") {
+            logger.info("Old message ${message.groupKey} is unchanged or deleted, skipping.")
+            return@transaction
+        }
+        if (old != null && message.sourceEditedAt < old.sourceEditedAt) {
+            logger.info("Old message ${message.groupKey} is newer than incoming, skipping.")
+            return@transaction
+        }
         val row = IncomingEntity(
             id = old?.id ?: 0, chatId = message.chatId, messageId = message.messageId,
-            messageThreadId = message.messageThreadId, mediaAlbumId = message.mediaAlbumId, groupKey = message.groupKey,
-            rawMessage = message.raw, rawText = message.text,
+            messageThreadId = message.messageThreadId,
+            groupKey = message.groupKey, rawMessage = message.raw, rawText = message.text,
             sourceCreatedAt = message.sourceCreatedAt, sourceEditedAt = message.sourceEditedAt,
             receivedAt = old?.receivedAt ?: now, contentHash = message.fingerprint(),
             revision = (old?.revision ?: 0) + 1, verifyAfter = now + stabilityMs,

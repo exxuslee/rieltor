@@ -139,7 +139,8 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
             "IRPIN" to "Ірпінь",
             "BUCHA" to "Буча",
             "VORZEL" to "Ворзель",
-            "HOSTOMEL" to "Гостомель"
+            "HOSTOMEL" to "Гостомель",
+            "OTHER" to "Інша локація"
         )[row.location].orEmpty()
         val urls = json.decodeFromString<List<CatalogPhoto>>(row.photos)
             .map { "${publicBaseUrl.trimEnd('/')}/media/${it.fileName}" }

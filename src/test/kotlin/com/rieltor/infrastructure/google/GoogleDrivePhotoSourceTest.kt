@@ -25,7 +25,7 @@ class GoogleDrivePhotoSourceTest {
             }
         })
         com.rieltor.infrastructure.database.local.RoomDatabaseStore(directory.resolve("test.db")).use { db ->
-            db.settings.update { it.copy(topicTypeMapping = mapOf("-100:20" to "APARTMENT"), driveFileDelayMs = 0, tiktokEnabled = false, threadsEnabled = false) }
+            db.settings.update { it.copy(topicTypeMapping = mapOf("-100:20" to "APARTMENT 1"), driveFileDelayMs = 0, tiktokEnabled = false, threadsEnabled = false) }
             val repo = com.rieltor.infrastructure.database.repository.CatalogRepository(db)
             var time = 0L
             var unavailable = false

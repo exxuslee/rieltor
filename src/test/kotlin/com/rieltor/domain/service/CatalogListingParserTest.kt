@@ -27,4 +27,15 @@ class CatalogListingParserTest {
         assertEquals(3, result.rooms)
         assertEquals("ACTIVE", result.status)
     }
+
+    @Test fun `uses other location when city is not specified`() {
+        val text = "ЖК Сенсація\nКвартира з ремонтом\nЦіна: 35 000 USD\nПлоща: 24 м²\nhttps://drive.google.com/drive/folders/example"
+        val row = IncomingEntity(chatId = -1, messageId = 3, messageThreadId = 4, groupKey = "no-city",
+            rawMessage = text, rawText = text, sourceCreatedAt = 0, receivedAt = 0, contentHash = "h", verifyAfter = 0)
+
+        val result = CatalogListingParser().parse(listOf(row), "APARTMENT 1", 1)
+
+        assertEquals("OTHER", result.location)
+        assertEquals("ACTIVE", result.status)
+    }
 }

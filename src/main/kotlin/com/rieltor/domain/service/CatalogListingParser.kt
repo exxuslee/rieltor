@@ -15,8 +15,13 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
         val text = rows.map { it.rawText }.filter { it.isNotBlank() }.distinct().joinToString("\n")
         val clean = formatter.filter(text)
         val warnings = mutableListOf<String>()
-        val location = listOf("IRPIN" to "ірп[іе]н|ирпен", "BUCHA" to "буч[аіи]", "VORZEL" to "ворзел|ворзель", "HOSTOMEL" to "гостомел")
-            .filter { Regex(it.second, RegexOption.IGNORE_CASE).containsMatchIn(text) }.map { it.first }.singleOrNull()
+        val matchedLocations = listOf("IRPIN" to "ірп[іе]н|ирпен", "BUCHA" to "буч[аіи]", "VORZEL" to "ворзел|ворзель", "HOSTOMEL" to "гостомел")
+            .filter { Regex(it.second, RegexOption.IGNORE_CASE).containsMatchIn(text) }.map { it.first }
+        val location = when (matchedLocations.size) {
+            0 -> "OTHER"
+            1 -> matchedLocations.single()
+            else -> null
+        }
         val prices = Regex("""(?iu)(?:ціна|цена|вартість|стоимость)\s*[:.\-]?\s*(?:від\s*)?([\d][\d\s\u00a0.,']*)\s*(USD|UAH|EUR|\$|€|₴|грн|долар\p{L}*|євро)""")
             .findAll(text).toList()
         val priceMatch = prices.singleOrNull()
@@ -27,7 +32,7 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
         }
         if (price == null || price <= 0) warnings += "Missing or ambiguous price/currency"
         if (type !in CatalogCodes.types) warnings += "Configure topicTypeMapping for ${first.chatId}:${first.messageThreadId}"
-        if (location == null) warnings += "Missing or ambiguous location"
+        if (location == null) warnings += "Ambiguous location"
         val links = GoogleDriveLinkExtractor().extract(text)
         if (links.isEmpty()) warnings += "Missing Google Drive URL"
         if (clean == null) warnings += "Missing public content"

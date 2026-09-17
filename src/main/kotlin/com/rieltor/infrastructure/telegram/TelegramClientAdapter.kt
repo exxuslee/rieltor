@@ -93,30 +93,32 @@ class TelegramClientAdapter(
                     }
                 }
             }
+
             is TdApi.AuthorizationStateWaitOtherDeviceConfirmation -> {
                 mutableState.value = TelegramSourceState.AwaitingAuthorization
                 logger.warn(
-                    "Telegram session needs confirmation in an already authorized Telegram app. " +
-                        "Use the short-lived QR/login link printed by TDLight; do not share it."
+                    "Telegram session needs confirmation in an already authorized Telegram app. " + "Use the short-lived QR/login link printed by TDLight; do not share it."
                 )
             }
-            is TdApi.AuthorizationStateWaitPhoneNumber,
-            is TdApi.AuthorizationStateWaitCode,
-            is TdApi.AuthorizationStateWaitPassword -> {
+
+            is TdApi.AuthorizationStateWaitPhoneNumber, is TdApi.AuthorizationStateWaitCode, is TdApi.AuthorizationStateWaitPassword -> {
                 mutableState.value = TelegramSourceState.AwaitingAuthorization
                 logger.warn(
                     "Telegram session needs interactive authorization; use the QR/login link from an authorized device."
                 )
             }
+
             is TdApi.AuthorizationStateLoggingOut -> {
                 mutableState.value = TelegramSourceState.Starting
                 logger.warn("Telegram TDLib session is logging out")
             }
+
             is TdApi.AuthorizationStateClosed -> {
                 mutableState.value = TelegramSourceState.Stopped
-        
+
                 logger.warn("Telegram TDLib session is closed")
             }
+
             else -> logger.debug("Telegram authorization state: {}", update.authorizationState.javaClass.simpleName)
         }
     }
@@ -130,7 +132,9 @@ class TelegramClientAdapter(
     }
 
     private fun save(message: TdApi.Message) {
-        repository.receive(snapshot(message), System.currentTimeMillis(), settings.snapshot().stabilityWindowMinutes * 60_000)
+        repository.receive(
+            snapshot(message), System.currentTimeMillis(), settings.snapshot().stabilityWindowMinutes * 60_000
+        )
     }
 
     private fun onMessageContentUpdated(update: TdApi.UpdateMessageContent) {
@@ -141,10 +145,18 @@ class TelegramClientAdapter(
             is TdApi.MessagePhoto -> content.caption.textWithEmbeddedLinks()
             else -> ""
         }
-        repository.receive(SourceMessage(existing.chatId, requireNotNull(existing.messageId), existing.messageThreadId,
-            existing.mediaAlbumId, text, update.newContent.toString(), existing.sourceCreatedAt,
-            existing.sourceEditedAt, mediaIdentity(update.newContent)), System.currentTimeMillis(),
-            settings.snapshot().stabilityWindowMinutes * 60_000)
+        repository.receive(
+            SourceMessage(
+                existing.chatId,
+                requireNotNull(existing.messageId),
+                existing.messageThreadId,
+                text,
+                update.newContent.toString(),
+                existing.sourceCreatedAt,
+                existing.sourceEditedAt,
+                mediaIdentity(update.newContent)
+            ), System.currentTimeMillis(), settings.snapshot().stabilityWindowMinutes * 60_000
+        )
     }
 
     private fun onMessagesDeleted(update: TdApi.UpdateDeleteMessages) {
@@ -161,8 +173,9 @@ class TelegramClientAdapter(
                 telegram.send(TdApi.GetMessage(chatId, messageId)).get(30, TimeUnit.SECONDS)
             }
             SourceRefresh.Found(snapshot(message))
-        } catch (error: CancellationException) { throw error }
-        catch (error: Throwable) {
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
             // A failed read alone cannot prove permanent deletion (lost chat access looks similar).
             SourceRefresh.Unavailable
         }
@@ -174,15 +187,23 @@ class TelegramClientAdapter(
             is TdApi.MessagePhoto -> content.caption.textWithEmbeddedLinks()
             else -> ""
         }
-        return SourceMessage(message.chatId, message.id, message.messageThreadId, message.mediaAlbumId,
-            text, message.toString(), message.date.toLong() * 1000, message.editDate.toLong() * 1000,
-            mediaIdentity(message.content))
+        return SourceMessage(
+            message.chatId,
+            message.id,
+            message.messageThreadId,
+            text,
+            message.toString(),
+            message.date.toLong() * 1000,
+            message.editDate.toLong() * 1000,
+            mediaIdentity(message.content)
+        )
     }
 
     private fun mediaIdentity(content: TdApi.MessageContent): String = when (content) {
         is TdApi.MessagePhoto -> content.photo.sizes.joinToString { "${it.photo.remote.uniqueId}:${it.width}:${it.height}" }
         else -> content.javaClass.simpleName
     }
+
     private fun isMonitored(message: TdApi.Message): Boolean =
         monitoredTopics.any { monitored -> monitored.matches(message.chatId, message.messageThreadId) }
 
@@ -191,17 +212,19 @@ class TelegramClientAdapter(
 
         scope.cancel()
 
-        runCatching { client?.closeAndWait() }
-            .onFailure { logger.warn("Could not close Telegram client cleanly", it) }
-        runCatching { factory?.close() }
-            .onFailure { logger.warn("Could not close Telegram client factory cleanly", it) }
+        runCatching { client?.closeAndWait() }.onFailure { logger.warn("Could not close Telegram client cleanly", it) }
+        runCatching { factory?.close() }.onFailure {
+                logger.warn(
+                    "Could not close Telegram client factory cleanly",
+                    it
+                )
+            }
         client = null
         factory = null
         mutableState.value = TelegramSourceState.Stopped
     }
 
-    private fun Throwable.failureReason(): String = message?.takeIf(String::isNotBlank)
-        ?: javaClass.simpleName
+    private fun Throwable.failureReason(): String = message?.takeIf(String::isNotBlank) ?: javaClass.simpleName
 
     private companion object {
         const val STARTUP_MONITORING_LOG_DELAY_MILLIS = 500L
@@ -209,10 +232,8 @@ class TelegramClientAdapter(
 }
 
 
-
 internal enum class TelegramRefreshFailure {
-    MESSAGE_NOT_FOUND,
-    TIMEOUT,
+    MESSAGE_NOT_FOUND, TIMEOUT,
 }
 
 internal fun Throwable.telegramRefreshFailure(): TelegramRefreshFailure? {

@@ -5,11 +5,16 @@ import java.security.MessageDigest
 
 @Serializable
 data class SourceMessage(
-    val chatId: Long, val messageId: Long, val messageThreadId: Long,
-    val mediaAlbumId: Long = 0, val text: String, val raw: String,
-    val sourceCreatedAt: Long, val sourceEditedAt: Long = 0, val mediaIdentity: String = "",
+    val chatId: Long,
+    val messageId: Long,
+    val messageThreadId: Long,
+    val text: String,
+    val raw: String,
+    val sourceCreatedAt: Long,
+    val sourceEditedAt: Long = 0,
+    val mediaIdentity: String = "",
 ) {
-    val groupKey get() = "$chatId:${if (mediaAlbumId != 0L) "album:$mediaAlbumId" else "message:$messageId"}"
+    val groupKey get() = "$chatId:$messageId"
     fun fingerprint(): String = sha256("$text|$sourceEditedAt|$mediaIdentity|$messageThreadId")
 }
 
@@ -23,28 +28,26 @@ sealed interface SourceRefresh {
 }
 
 @Serializable
-data class CatalogPhoto(val fileName: String, val sourceFileId: String, val sourceVersion: String,
-    val width: Int, val height: Int, val checksum: String)
+data class CatalogPhoto(
+    val fileName: String, val sourceFileId: String, val sourceVersion: String,
+    val width: Int, val height: Int, val checksum: String
+)
 
 @Serializable
-data class PublishAttempt(val attemptId: String, val status: String = "PREPARED", val publishId: String? = null,
-    val mode: String = "POST", val createdAt: Long, val updatedAt: Long, val error: String? = null)
+data class PublishAttempt(
+    val attemptId: String, val status: String = "PREPARED", val publishId: String? = null,
+    val mode: String = "POST", val createdAt: Long, val updatedAt: Long, val error: String? = null
+)
 
 @Serializable
 data class PublicationState(val attempts: List<PublishAttempt> = emptyList())
 
 object CatalogCodes {
-    val detailedTypes = setOf(
-        "APARTMENT 1", "APARTMENT 1+",
-        "APARTMENT 2", "APARTMENT 2+",
-        "APARTMENT 3", "APARTMENT 3+",
-        "HOUSE", "HOUSE+", "HOUSE-",
-        "DUPLEX", "DUPLEX+",
-        "LAND",
+
+    val types = setOf(
+        "APARTMENT 1", "APARTMENT 1+", "APARTMENT 2", "APARTMENT 2+", "APARTMENT 3", "APARTMENT 3+",
+        "HOUSE", "HOUSE+", "HOUSE-", "DUPLEX", "DUPLEX+", "LAND",
     )
-    // Legacy values remain readable while previously imported listings are being refreshed.
-    val legacyTypes = setOf("APARTMENT", "NEW_BUILD", "COMMERCIAL")
-    val types = detailedTypes + legacyTypes
     val locations = setOf("IRPIN", "BUCHA", "VORZEL", "HOSTOMEL", "OTHER")
     val programs = setOf("EOSELIA", "VOUCHER", "CERTIFICATE", "POSTANOVA")
 

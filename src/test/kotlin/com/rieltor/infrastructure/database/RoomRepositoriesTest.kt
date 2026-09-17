@@ -40,18 +40,18 @@ class RoomPersistenceTest {
         }
     }
 
-    @Test fun `edit or album extension invalidates download token and stale promotion`() {
+    @Test fun `edit invalidates download token and stale promotion`() {
         RoomDatabaseStore(path()).use { db ->
             val repo = CatalogRepository(db)
-            val source = source().copy(mediaAlbumId = 99)
+            val source = source()
             repo.receive(source, 0, 1_200_000)
             val rows = repo.group(source.groupKey)
             assertTrue(repo.stage(rows, "READY_FOR_MEDIA", 1_200_001))
             val token = assertNotNull(repo.claim(rows, 1_200_001))
-            repo.receive(source.copy(messageId = 2), 1_200_002, 1_200_000)
+            repo.receive(source.copy(text = "Оновлена версія", raw = "Оновлена версія", sourceEditedAt = 1), 1_200_002, 1_200_000)
             assertFalse(repo.promote(rows, token, listing(1).copy(groupKey = source.groupKey), 1_200_003))
             assertTrue(repo.listings().isEmpty())
-            assertEquals(2, repo.group(source.groupKey).size)
+            assertEquals(1, repo.group(source.groupKey).size)
         }
     }
 
