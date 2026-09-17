@@ -22,6 +22,14 @@ application {
     mainClass.set("com.rieltor.web.ApplicationKt")
 }
 
+tasks.register<JavaExec>("importTelegramHistory") {
+    group = "application"
+    description = "Import the last calendar month of monitored Telegram messages into the inbox once"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.rieltor.tools.TelegramHistoryMainKt")
+    standardInput = System.`in`
+}
+
 repositories {
     google()
     mavenCentral()

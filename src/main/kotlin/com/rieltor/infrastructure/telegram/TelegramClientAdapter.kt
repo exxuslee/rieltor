@@ -16,6 +16,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -33,6 +34,7 @@ class TelegramClientAdapter(
     private val monitoredTopics: Set<TelegramMonitoredTopic>,
     private val repository: CatalogRepository,
     private val settings: JsonSettingsStore,
+    private val historyOnly: Boolean = false,
 ) : TelegramInboxSource {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -61,9 +63,11 @@ class TelegramClientAdapter(
             }
             val builder = clientFactory.builder(tdSettings)
             builder.addUpdateHandler(TdApi.UpdateAuthorizationState::class.java, ::onAuthorizationState)
-            builder.addUpdateHandler(TdApi.UpdateNewMessage::class.java, ::onNewMessage)
-            builder.addUpdateHandler(TdApi.UpdateMessageContent::class.java, ::onMessageContentUpdated)
-            builder.addUpdateHandler(TdApi.UpdateDeleteMessages::class.java, ::onMessagesDeleted)
+            if (!historyOnly) {
+                builder.addUpdateHandler(TdApi.UpdateNewMessage::class.java, ::onNewMessage)
+                builder.addUpdateHandler(TdApi.UpdateMessageContent::class.java, ::onMessageContentUpdated)
+                builder.addUpdateHandler(TdApi.UpdateDeleteMessages::class.java, ::onMessagesDeleted)
+            }
             builder.addUpdateExceptionHandler { error ->
                 logger.error("Telegram update handler failed", error)
             }
@@ -129,6 +133,20 @@ class TelegramClientAdapter(
 
         logger.info("threadId={}, messageId={}| {}", message.messageThreadId, message.id, message.summary())
         save(message)
+    }
+
+    /** Reads whole chat histories once, filtering topics locally to include forum/general topics alike. */
+    suspend fun importHistory(from: java.time.Instant, until: java.time.Instant): Long {
+        check(historyOnly) { "History import requires historyOnly mode" }
+        require(monitoredTopics.isNotEmpty()) { "No monitored Telegram topics configured" }
+        withTimeout(300_000) { state.first { it == TelegramSourceState.Ready } }
+        val telegram = checkNotNull(client)
+        return TelegramHistoryImporter(monitoredTopics, { chatId, cursor ->
+            withContext(Dispatchers.IO) {
+                telegram.send(TdApi.GetChatHistory(chatId, cursor, 0, 100, false))
+                    .get(60, TimeUnit.SECONDS).messages.filterNotNull().toList()
+            }
+        }, ::save).run(from, until)
     }
 
     private fun save(message: TdApi.Message) {

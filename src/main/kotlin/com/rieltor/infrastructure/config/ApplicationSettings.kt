@@ -228,7 +228,7 @@ private fun SecretRepository.require(name: String): String =
 private fun environmentOrDotenv(name: String, dotenv: Dotenv): String? =
     (System.getenv(name) ?: dotenv.get(name))?.takeIf { it.isNotBlank() }
 
-private fun parseTelegramMonitoredTopics(
+internal fun parseTelegramMonitoredTopics(
     chatIdValue: String?,
     messageThreadIdsValue: String?,
     legacyValue: String?,
