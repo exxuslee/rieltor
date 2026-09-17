@@ -24,11 +24,9 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     fun receive(message: SourceMessage, now: Long, stabilityMs: Long) = transaction { dao ->
         val old = dao.source(message.chatId, message.messageId)
         if (old?.contentHash == message.fingerprint() || old?.status == "DELETED") {
-            logger.info("Old message ${message.groupKey} is unchanged or deleted, skipping.")
             return@transaction
         }
         if (old != null && message.sourceEditedAt < old.sourceEditedAt) {
-            logger.info("Old message ${message.groupKey} is newer than incoming, skipping.")
             return@transaction
         }
         val row = IncomingEntity(

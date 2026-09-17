@@ -89,12 +89,12 @@ class ThreadsPhotoPublisher(
             }
             when (payload.status) {
                 "FINISHED" -> {
-                    logger.info(
-                        "Threads container status. containerId={}, attempt={}, status={}",
-                        containerId,
-                        attempt + 1,
-                        payload.status,
-                    )
+//                    logger.info(
+//                        "Threads container status. containerId={}, attempt={}, status={}",
+//                        containerId,
+//                        attempt + 1,
+//                        payload.status,
+//                    )
                     return
                 }
 

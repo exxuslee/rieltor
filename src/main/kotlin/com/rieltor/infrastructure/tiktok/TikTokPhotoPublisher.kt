@@ -193,7 +193,7 @@ class TikTokPhotoPublisher(
                             (error.message ?: error.javaClass.simpleName)
                     )
                 }
-            logger.info(
+            if ( index + 1 == photoUrls.size) logger.info(
                 "TikTok public photo preflight. photo={}/{}, host={}, httpStatus={}, contentType={}, contentLength={}",
                 index + 1,
                 photoUrls.size,

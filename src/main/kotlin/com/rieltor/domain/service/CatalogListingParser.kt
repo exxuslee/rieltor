@@ -22,11 +22,9 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
             1 -> matchedLocations.single()
             else -> null
         }
-        val prices = Regex("""(?iu)(?:ціна|цена|вартість|стоимость)\s*[:.\-]?\s*(?:від\s*)?([\d][\d\s\u00a0.,']*)\s*(USD|UAH|EUR|\$|€|₴|грн|долар\p{L}*|євро)""")
-            .findAll(text).toList()
-        val priceMatch = prices.singleOrNull()
-        val price = priceMatch?.groupValues?.get(1)?.let(::parseMoney)
-        val currency = priceMatch?.groupValues?.get(2)?.lowercase()?.let {
+        val priceMatch = extractPrice(text)
+        val price = priceMatch?.amount
+        val currency = priceMatch?.currency?.lowercase()?.let {
             when { it in setOf("usd", "$") || it.startsWith("долар") -> "USD"
                 it in setOf("uah", "₴", "грн") -> "UAH"; else -> "EUR" }
         }
@@ -36,24 +34,15 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
         val links = GoogleDriveLinkExtractor().extract(text)
         if (links.isEmpty()) warnings += "Missing Google Drive URL"
         if (clean == null) warnings += "Missing public content"
-        val programs = linkedSetOf<String>()
-        val programPatterns = mapOf("EOSELIA" to "[єе]осел[яію]", "VOUCHER" to "ваучер", "CERTIFICATE" to "сертиф[іи]кат", "POSTANOVA" to "постанов")
-        text.lineSequence().forEach { line ->
-            programPatterns.forEach { (code, pattern) ->
-                if (Regex(pattern, RegexOption.IGNORE_CASE).containsMatchIn(line)) {
-                    // A negative clause never becomes an asserted eligibility claim.
-                    if (!Regex("(?iu)(?:\\bне\\b|без|ні\\b|нет\\b|не підход|не розгляда)").containsMatchIn(line)) programs += code
-                }
-            }
-        }
+        val programs = extractGovernmentPrograms(text)
         fun decimal(pattern: String, source: String = text): Double? = Regex(pattern, RegexOption.IGNORE_CASE).find(source)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull()
-        val areaText = text.lineSequence().filterNot { priceMatch != null && it.contains(priceMatch.value) }.joinToString("\n")
+        val areaText = text.lineSequence().filterNot { it == priceMatch?.line }.joinToString("\n")
         val area = decimal("""(?:площа|площадь)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)""")
         val rooms = CatalogCodes.apartmentRooms(type)
             ?: decimal("""(\d+)\s*[- ]?(?:кімнат|комнат)""")?.toInt()
         val floor = Regex("""(?iu)(?:поверх|этаж)\s*[:\-]?\s*(\d+)\s*(?:/|із|з|из)\s*(\d+)""").find(text)
         val transaction = if (Regex("(?iu)оренд|аренд").containsMatchIn(text)) "RENT" else "SALE"
-        val priceSuffix = priceMatch?.let { text.substring(it.range.last + 1).lineSequence().first() }.orEmpty()
+        val priceSuffix = priceMatch?.suffix.orEmpty()
         val period = when {
             Regex("""(?iu)^\s*(?:/|за)\s*(?:1\s*)?(?:м[²2]|кв\.?\s*м|квадратн\p{L}*\s+метр)""").containsMatchIn(priceSuffix) -> "PER_M2"
             Regex("""(?iu)^\s*(?:/|за)\s*(?:1\s*)?сот""").containsMatchIn(priceSuffix) -> "PER_SOTKA"
@@ -70,7 +59,10 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
             location = location, address = clean?.address, typeOfRealty = type,
             tags = Json.encodeToString(clean?.hashtags.orEmpty()),
             primeParams = buildJsonObject { put("details", JsonArray(clean?.keyParameters.orEmpty().map(::JsonPrimitive))) }.toString(),
-            secondaryParams = buildJsonObject { clean?.registration?.let { put("registration", it) } }.toString(),
+            secondaryParams = buildJsonObject {
+                clean?.registration?.let { put("registration", it) }
+                if (hasBargain(text)) put("bargain", "Торг")
+            }.toString(),
             governmentPrograms = Json.encodeToString(programs.toList()),
             googleDriveUrls = Json.encodeToString(links), price = totalPrice, currency = "USD",
             areaM2 = area, rooms = rooms, floor = floor?.groupValues?.get(1)?.toIntOrNull(),
@@ -87,4 +79,100 @@ class CatalogListingParser(private val formatter: ListingCaptionFormatter = List
         else normalized.replace(',', '.')
         BigDecimal(normalized).setScale(0, RoundingMode.HALF_UP).longValueExact()
     }.getOrNull()
+
+    private fun extractPrice(text: String): PriceMatch? {
+        val candidates = text.lineSequence().mapIndexedNotNull { lineIndex, line ->
+            if (discountOnlyLine.containsMatchIn(line) || ancillaryPriceLine.containsMatchIn(line)) {
+                return@mapIndexedNotNull null
+            }
+            val amounts = moneyWithCurrency.findAll(line).mapNotNull { match ->
+                val amount = parseMoney(match.groupValues[1]) ?: return@mapNotNull null
+                PriceMatch(
+                    amount = amount,
+                    currency = match.groupValues[2],
+                    line = line,
+                    suffix = line.substring(match.range.last + 1),
+                    priority = when {
+                        preferredPriceLabel.containsMatchIn(line) -> 3
+                        priceLabel.containsMatchIn(line) -> 2
+                        barePriceLine.containsMatchIn(line) -> 1
+                        else -> 0
+                    },
+                    lineIndex = lineIndex,
+                )
+            }.toList()
+            // The property price is normally the largest currency amount on a line;
+            // smaller values in parentheses are commissions and assignment fees.
+            amounts.maxByOrNull { it.amount }
+        }.filter { it.priority > 0 }.toList()
+
+        return candidates.maxWithOrNull(compareBy<PriceMatch> { it.priority }.thenBy { it.lineIndex })
+    }
+
+    private fun extractGovernmentPrograms(text: String): Set<String> {
+        val explicitPositive = linkedSetOf<String>()
+        val explicitNegative = linkedSetOf<String>()
+        var allProgramsExplicitlyEnabled = false
+        var allProgramsExplicitlyDisabled = false
+
+        text.lineSequence().forEach { line ->
+            val negative = negativeClause.containsMatchIn(line)
+            if (genericProgramsLine.containsMatchIn(line)) {
+                if (negative) allProgramsExplicitlyDisabled = true
+                else if (positiveProgramsClause.containsMatchIn(line)) allProgramsExplicitlyEnabled = true
+            }
+            programPatterns.forEach { (code, pattern) ->
+                if (pattern.containsMatchIn(line)) {
+                    if (negative) explicitNegative += code else explicitPositive += code
+                }
+            }
+        }
+
+        val selected = when {
+            allProgramsExplicitlyDisabled -> linkedSetOf()
+            allProgramsExplicitlyEnabled -> linkedSetOf<String>().apply { addAll(ALL_PROGRAMS) }
+            explicitPositive.isNotEmpty() -> explicitPositive
+            else -> linkedSetOf<String>().apply { addAll(ALL_PROGRAMS) }
+        }
+        selected.removeAll(explicitNegative)
+        return selected
+    }
+
+    private fun hasBargain(text: String): Boolean = text.lineSequence().any { line ->
+        bargain.containsMatchIn(line) && !noBargain.containsMatchIn(line)
+    }
+
+    private data class PriceMatch(
+        val amount: Long,
+        val currency: String,
+        val line: String,
+        val suffix: String,
+        val priority: Int,
+        val lineIndex: Int,
+    )
+
+    private companion object {
+        val ALL_PROGRAMS = listOf("EOSELIA", "VOUCHER", "CERTIFICATE", "POSTANOVA")
+        val moneyWithCurrency = Regex(
+            """(?iu)(?<![\d.,])(?:від\s*)?(\d{1,3}(?:(?:[\s\u00a0']|[.,])\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(USD|UAH|EUR|\$|€|₴|грн|долар\p{L}*|євро)"""
+        )
+        val preferredPriceLabel = Regex("""(?iu)(?:нова|новая|акційна|акционная)\s+(?:ціна|цена|вартість|стоимость)""")
+        val priceLabel = Regex("(?iu)(?:ціна|цена|вартість|стоимость)")
+        val barePriceLine = Regex("""(?iu)^\s*(?:[-–—•*]\s*)?(?:від\s*)?\d[\d\s\u00a0.,']*\s*(?:USD|UAH|EUR|\$|€|₴|грн|долар\p{L}*|євро)""")
+        val discountOnlyLine = Regex("""(?iu)знижен\p{L}*\s+(?:ціни|цены).*-\s*\d""")
+        val ancillaryPriceLine = Regex(
+            """(?iu)(?:оформлен|переуступ|подат|налог|кот[её]л|кладов|комор|парком|лічильник|счетчик|договір|договор)"""
+        )
+        val programPatterns = linkedMapOf(
+            "EOSELIA" to Regex("""(?iu)[#\s]*[єе]осел\p{L}*|єоселя\s*впо"""),
+            "VOUCHER" to Regex("(?iu)ваучер"),
+            "CERTIFICATE" to Regex("(?iu)сертиф[іи]кат"),
+            "POSTANOVA" to Regex("(?iu)постанов"),
+        )
+        val genericProgramsLine = Regex("""(?iu)(?:держ(?:авн\p{L}*)?\s*програм\p{L}*|\bпрограм\p{L}*)""")
+        val positiveProgramsClause = Regex("""(?iu)(?:\bтак\b|\bда\b|всі|усі|все|підход|розгляда|обговорю)""")
+        val negativeClause = Regex("""(?iu)(?:\bне\b|без|\bні\b|\bнет\b|не\s+підход|не\s+розгляда)""")
+        val bargain = Regex("""(?iu)торг\p{L}*""")
+        val noBargain = Regex("""(?iu)(?:без\s+торг\p{L}*|торг\p{L}*\s*(?:не|ні|нет))""")
+    }
 }
