@@ -93,8 +93,14 @@ class SiteFooter extends HTMLElement {
       <div class="footer-grid"><div class="footer-brand"><a class="brand" href="${siteUrl('index.html')}"><img class="brand-mark" src="${siteUrl('images/rieltor-app-icon-v8.png')}" alt="" width="40" height="40"><span class="brand-name">Ірина Ліннік</span></a><p>Персональний супровід у купівлі та продажу нерухомості в Ірпені, Бучі та Гостомелі.</p><div class="footer-links"><a href="${siteUrl('about.html')}">Про Ірину</a><a href="${siteUrl('faq.html')}">Запитання й відповіді</a><a href="${siteUrl('privacy.html')}">Політика конфіденційності Rieltor</a><a href="${siteUrl('terms.html')}">Умови використання Rieltor</a></div></div>
       <div><h2 class="footer-title">Послуги</h2><div class="footer-links"><a href="${siteUrl('buy.html')}">Купівля нерухомості</a><a href="${siteUrl('sell-your-apartment.html')}">Продаж нерухомості</a><a href="${siteUrl('contacts.html')}">Консультація</a></div></div>
       <div><h2 class="footer-title">Зв’язок</h2><div class="footer-links"><a href="tel:+380663727102">+380 (66) 372 71 02</a><a href="mailto:irinalinnik.lee@gmail.com">irinalinnik.lee@gmail.com</a><a href="https://t.me/irynalinnik_rieltor" target="_blank" rel="noopener noreferrer">Telegram: @irynalinnik_rieltor</a><a href="https://www.tiktok.com/@irina_rieltor_novator" target="_blank" rel="noopener noreferrer">TikTok: @irina_rieltor_novator</a></div></div></div>
-      <div class="footer-bottom"><span>© ${new Date().getFullYear()} Ірина Ліннік</span><span>Вебзастосунок Rieltor</span></div>
+      <div class="footer-bottom"><span>© ${new Date().getFullYear()} Ірина Ліннік</span><button class="raw-text-toggle" type="button" aria-pressed="false" aria-label="Показати вихідний текст оголошень">Вебзастосунок Rieltor</button></div>
     </div></footer>`;
+        const rawTextToggle = this.querySelector('.raw-text-toggle');
+        rawTextToggle.addEventListener('click', () => {
+            const isVisible = document.body.classList.toggle('show-raw-text');
+            rawTextToggle.setAttribute('aria-pressed', String(isVisible));
+            rawTextToggle.setAttribute('aria-label', isVisible ? 'Сховати вихідний текст оголошень' : 'Показати вихідний текст оголошень');
+        });
     }
 }
 

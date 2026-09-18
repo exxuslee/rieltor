@@ -637,6 +637,7 @@ textarea.control {
 }
 
 .property-card__raw-text {
+    display: none;
     margin: 0;
     padding-top: 18px;
     border-top: 1px solid var(--border);
@@ -644,6 +645,10 @@ textarea.control {
     font-size: .9rem;
     line-height: 1.5;
     white-space: pre-wrap;
+}
+
+.show-raw-text .property-card__raw-text {
+    display: block;
 }
 
 .property-card__meta {
@@ -1988,6 +1993,28 @@ body[data-page="catalog"] .page-hero h1 {
     gap: 20px;
     color: var(--muted);
     font-size: .82rem;
+}
+
+.raw-text-toggle {
+    padding: 0;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+    opacity: .58;
+    transition: color .2s ease, opacity .2s ease;
+}
+
+.raw-text-toggle:hover,
+.raw-text-toggle:focus-visible {
+    color: var(--text);
+    opacity: 1;
+}
+
+.raw-text-toggle[aria-pressed="true"] {
+    color: var(--accent);
+    opacity: 1;
 }
 
 @media (max-width: 1380px) {
