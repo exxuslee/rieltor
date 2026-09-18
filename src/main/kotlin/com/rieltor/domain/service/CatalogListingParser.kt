@@ -49,7 +49,7 @@ class CatalogListingParser(
                 ?.toDoubleOrNull()
 
         val areaText = text.lineSequence().filterNot { it == priceMatch?.line }.joinToString("\n")
-        val area = decimal("""(?:площа|площадь)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)""")
+        val area = extractArea(areaText)
         val rooms = CatalogCodes.apartmentRooms(type)
             ?: decimal("""(\d+)\s*[- ]?(?:кімнат|комнат)""")?.toInt()
         val floor = Regex("""(?iu)(?:поверх|этаж)\s*[:\-]?\s*(\d+)\s*(?:/|із|з|из)\s*(\d+)""").find(text)
@@ -106,6 +106,19 @@ class CatalogListingParser(
         else normalized.replace(',', '.')
         BigDecimal(normalized).setScale(0, RoundingMode.HALF_UP).longValueExact()
     }.getOrNull()
+
+    private fun extractArea(text: String): Double? {
+        val labeled = labeledArea.find(text)?.groupValues?.get(1)?.toArea()
+        if (labeled != null) return labeled
+
+        return areaWithUnit.findAll(text).firstNotNullOfOrNull { match ->
+            val lineStart = text.lastIndexOf('\n', match.range.first).let { if (it < 0) 0 else it + 1 }
+            val before = text.substring(lineStart, match.range.first)
+            if (currencyBeforeArea.containsMatchIn(before)) null else match.groupValues[1].toArea()
+        }
+    }
+
+    private fun String.toArea(): Double? = replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 }
 
     private fun extractPrice(text: String): PriceMatch? {
         val candidates = text.lineSequence().mapIndexedNotNull { lineIndex, line ->
@@ -202,5 +215,8 @@ class CatalogListingParser(
         val negativeClause = Regex("""(?iu)(?:\bне\b|без|\bні\b|\bнет\b|не\s+підход|не\s+розгляда)""")
         val bargain = Regex("""(?iu)торг\p{L}*""")
         val noBargain = Regex("""(?iu)(?:без\s+торг\p{L}*|торг\p{L}*\s*(?:не|ні|нет))""")
+        val labeledArea = Regex("""(?iu)(?:площа|площадь)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)""")
+        val areaWithUnit = Regex("""(?iu)(?<![\d.,])(\d+(?:[.,]\d+)?)\s*(?:м[²2]|м\.?\s*кв\.?|кв\.?\s*м)(?!\p{L})""")
+        val currencyBeforeArea = Regex("""(?iu)(?:[$€₴]|\b(?:usd|uah|eur|грн|долар\p{L}*|євро))\s*$""")
     }
 }

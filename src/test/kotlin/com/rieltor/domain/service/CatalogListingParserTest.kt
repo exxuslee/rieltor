@@ -59,6 +59,20 @@ class CatalogListingParserTest {
         assertEquals("Торг", Json.parseToJsonElement(result.secondaryParams).jsonObject["bargain"]?.jsonPrimitive?.content)
     }
 
+    @Test fun `extracts unlabeled area with a square-meter unit from database examples`() {
+        mapOf(
+            "5 /15 поверх 54 м2" to 54.0,
+            "• 85 м², • 3 сотки" to 85.0,
+            "41,6м2 з гардеробом 6/9 поверх" to 41.6,
+        ).forEach { (details, expectedArea) ->
+            assertEquals(expectedArea, parse(baseListing(details)).areaM2, details)
+        }
+    }
+
+    @Test fun `does not use a price per square meter as the property area`() {
+        assertEquals(null, parse(baseListing("Право власності 500 грн м2")).areaM2)
+    }
+
     @Test fun `prefers new price and ignores commission and storage price`() {
         val result = parse("""
             Буча
