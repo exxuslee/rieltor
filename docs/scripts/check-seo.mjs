@@ -56,7 +56,7 @@ for (const file of ['index.html', 'about.html', 'contacts.html', 'sell-your-apar
 }
 
 const llms = fs.readFileSync(path.join(root, 'llms.txt'), 'utf8');
-for (const expected of ['Ірина Ліннік', 'https://rieltor.dpdns.org/sell-your-apartment.html', '+380 66 372 71 02', 'демонстраційні дані']) {
+for (const expected of ['Ірина Ліннік', 'https://rieltor.dpdns.org/sell-your-apartment.html', '+380 66 372 71 02', 'поточної бази оголошень']) {
     if (!llms.includes(expected)) errors.push(`llms.txt: missing ${expected}`);
 }
 if (!fs.existsSync(path.join(root, 'llms-full.txt'))) errors.push('missing llms-full.txt');

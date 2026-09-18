@@ -1,6 +1,8 @@
+# Public website of Iryna Linnik, real-estate agent
 User-agent: *
 Allow: /
 
+# AI search and assistant crawlers are welcome to access the public content.
 User-agent: GPTBot
 Allow: /
 
