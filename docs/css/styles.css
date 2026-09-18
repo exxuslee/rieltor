@@ -632,7 +632,7 @@ textarea.control {
     z-index: 1;
     max-width: calc(100% - 28px);
     margin: 0;
-    padding: 7px 12px;
+    padding: 7px 6px;
     border-radius: 6px;
     background: rgba(232, 234, 237, .45);
     backdrop-filter: blur(7px);
