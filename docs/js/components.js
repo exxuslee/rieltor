@@ -13,10 +13,7 @@ const siteUrl = path => `/${String(path).replace(/^\/+/, '')}`;
 class SiteHeader extends HTMLElement {
     connectedCallback() {
         const page = document.body.dataset.page || '';
-        const links = [
-            ['home', siteUrl('index.html'), 'ГОЛОВНА'], ['buy', siteUrl('buy.html'), 'КУПІВЛЯ'],
-            ['catalog', siteUrl('catalog.html'), 'ОБ’ЄКТИ'], ['sell', siteUrl('sell-your-apartment.html'), 'ПРОДАЖ'], ['faq', siteUrl('faq.html'), 'FAQ'], ['contacts', siteUrl('contacts.html'), 'КОНТАКТИ']
-        ];
+        const links = [['home', siteUrl('index.html'), 'ГОЛОВНА'], ['buy', siteUrl('buy.html'), 'КУПІВЛЯ'], ['catalog', siteUrl('catalog.html'), 'ОБ’ЄКТИ'], ['sell', siteUrl('sell-your-apartment.html'), 'ПРОДАЖ'], ['faq', siteUrl('faq.html'), 'FAQ'], ['contacts', siteUrl('contacts.html'), 'КОНТАКТИ']];
         this.innerHTML = `<header class="site-header"><div class="container header-inner">
       <a class="brand" href="${siteUrl('index.html')}" aria-label="Ірина Ліннік — головна"><img class="brand-mark" src="${siteUrl('images/rieltor-app-icon-v8.png')}" alt="" width="40" height="40"><span class="brand-name">Ірина Ліннік</span></a>
       <nav class="nav" id="main-nav" aria-label="Головна навігація">${links.map(([key, href, label]) => `<a href="${href}" ${page === key ? 'aria-current="page"' : ''}>${label}</a>`).join('')}</nav>
@@ -112,7 +109,7 @@ window.propertyCard = function (property) {
     return `<article class="property-card"><a href="/property.html?id=${encodeURIComponent(property.id)}" aria-label="Переглянути: ${e(property.title)}">
         <div class="property-card__image"><img src="${e(property.image)}" alt="${e(property.title)}" loading="lazy" width="768" height="512"></div>
         <div class="property-card__body"><h3 class="property-card__title">${e(property.title)}</h3><p class="property-card__location">${e(property.location)}</p>
-        ${telegramDate ? `<p class="property-card__date">Telegram: <time datetime="${e(telegramDate.iso)}">${e(telegramDate.text)}</time> (Київ)</p>` : ''}
         ${property.rawText ? `<p class="property-card__raw-text">${e(property.rawText)}</p>` : ''}
-        <div class="property-card__meta"><span class="property-card__price-group"><strong class="property-card__price">${e(Listings.price(property))}</strong>${pricePerSquareMeter ? `<span class="property-card__price-per-meter">${e(pricePerSquareMeter)}</span>` : ''}</span>${property.rooms ? `<span>${e(property.rooms)} кімн.</span>` : ''}<span>${e(area)}</span>${icon('arrow')}</div></div></a></article>`;
+        <div class="property-card__meta"><span class="property-card__price-group"><strong class="property-card__price">${e(Listings.price(property))}</strong>${pricePerSquareMeter ? `<span class="property-card__price-per-meter">${e(pricePerSquareMeter)}</span>` : ''}</span>
+        <span class="property-card__meta-right">${property.rooms ? `<span>${e(property.rooms)} кімн.</span>` : ''}<span>${e(area)}</span>${telegramDate ? `<time class="property-card__date" datetime="${e(telegramDate.iso)}">${e(telegramDate.text)}</time>` : ''}${icon('arrow')}</span></div></div></a></article>`;
 };
