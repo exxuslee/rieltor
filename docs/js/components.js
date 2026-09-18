@@ -110,6 +110,10 @@ window.propertyCard = function (property) {
         <div class="property-card__image"><img src="${e(property.image)}" alt="${e(property.title)}" loading="lazy" width="768" height="512"></div>
         <div class="property-card__body"><h3 class="property-card__title">${e(property.title)}</h3><p class="property-card__location">${e(property.location)}</p>
         ${property.rawText ? `<p class="property-card__raw-text">${e(property.rawText)}</p>` : ''}
-        <div class="property-card__meta"><span class="property-card__price-group"><strong class="property-card__price">${e(Listings.price(property))}</strong>${pricePerSquareMeter ? `<span class="property-card__price-per-meter">${e(pricePerSquareMeter)}</span>` : ''}</span>
-        <span class="property-card__meta-right">${property.rooms ? `<span>${e(property.rooms)} кімн.</span>` : ''}<span>${e(area)}</span>${telegramDate ? `<time class="property-card__date" datetime="${e(telegramDate.iso)}">${e(telegramDate.text)}</time>` : ''}${icon('arrow')}</span></div></div></a></article>`;
+        <div class="property-card__meta">
+            <strong class="property-card__price">${e(Listings.price(property))}</strong>
+            <span class="property-card__meta-top">${property.rooms ? `<span class="property-card__rooms">${e(property.rooms)} кімн.</span>` : ''}${area ? `<span class="property-card__area">${e(area)}</span>` : ''}</span>
+            ${pricePerSquareMeter ? `<span class="property-card__price-per-meter">${e(pricePerSquareMeter)}</span>` : ''}
+            <span class="property-card__meta-bottom">${telegramDate ? `<time class="property-card__date" datetime="${e(telegramDate.iso)}">${e(telegramDate.text)}</time>` : ''}${icon('arrow')}</span>
+        </div></div></a></article>`;
 };

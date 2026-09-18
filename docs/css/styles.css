@@ -647,29 +647,28 @@ textarea.control {
 }
 
 .property-card__meta {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-auto-rows: auto;
+    align-items: baseline;
+    row-gap: 4px;
+    column-gap: 12px;
     margin-top: auto;
     padding-top: 18px;
     border-top: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
 }
 
 .property-card__price {
+    grid-column: 1;
+    grid-row: 1;
     color: var(--accent);
     font-size: 1.45rem;
     font-weight: 750;
 }
 
-.property-card__price-group {
-    display: flex;
-    flex-direction: column;
-    margin-right: auto;
-    gap: 2px;
-}
-
 .property-card__price-per-meter {
+    grid-column: 1;
+    grid-row: 2;
     color: var(--muted);
     font-size: .8rem;
     line-height: 1.2;
@@ -2495,19 +2494,6 @@ body[data-page="catalog"] .page-hero h1 {
     cursor: default;
 }
 
-.property-card__date {
-    color: var(--muted);
-    font-size: 0.85em;
-    opacity: 0.7;
-}
-
-.property-card__meta-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-left: auto;
-}
-
 .catalog-filters .field {
     min-width: 0;
 }
@@ -2545,4 +2531,28 @@ body[data-page="catalog"] .page-hero h1 {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.property-card__meta-top {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.property-card__meta-bottom {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.property-card__date {
+    color: var(--muted);
+    font-size: 0.85em;
+    opacity: 0.7;
 }
