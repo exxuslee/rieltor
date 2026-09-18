@@ -634,7 +634,7 @@ textarea.control {
     margin: 0;
     padding: 7px 12px;
     border-radius: 6px;
-    background: rgba(232, 234, 237, .8);
+    background: rgba(232, 234, 237, .45);
     backdrop-filter: blur(7px);
     -webkit-backdrop-filter: blur(7px);
     font: 500 1.05rem/1.3 var(--sans);
