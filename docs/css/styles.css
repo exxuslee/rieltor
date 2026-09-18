@@ -1516,50 +1516,6 @@ body[data-page="catalog"] .page-hero h1 {
     background: var(--surface);
 }
 
-.catalog-programs {
-    grid-column: 1 / -1;
-    min-width: 0;
-    border: 0;
-    padding: 0;
-    margin: 0;
-}
-
-.catalog-programs legend {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-}
-
-.catalog-programs__options {
-    display: flex;
-    align-items: center;
-    flex-wrap: nowrap;
-    gap: 12px 24px;
-    overflow-x: auto;
-    padding-bottom: 8px;
-}
-
-.catalog-programs__options > span {
-    flex-shrink: 0;
-    white-space: nowrap;
-}
-
-.catalog-programs label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-    white-space: nowrap;
-}
-
-.catalog-programs input {
-    width: auto;
-}
-
 .listing-gallery {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

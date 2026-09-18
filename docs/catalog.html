@@ -72,16 +72,21 @@
                     <option value="priceAsc">Ціна за зростанням</option>
                     <option value="priceDesc">Ціна за спаданням</option>
                 </select></label>
-                <fieldset class="catalog-programs">
-                    <legend class="sr-only">Державні програми</legend>
-                    <div class="catalog-programs__options">
-                        <span aria-hidden="true">Державні програми</span>
-                        <label><input name="governmentPrograms" type="checkbox" value="EOSELIA"> єОселя</label>
-                        <label><input name="governmentPrograms" type="checkbox" value="VOUCHER"> Ваучер</label>
-                        <label><input name="governmentPrograms" type="checkbox" value="CERTIFICATE"> Сертифікат</label>
-                        <label><input name="governmentPrograms" type="checkbox" value="POSTANOVA"> Постанова</label>
-                    </div>
-                </fieldset>
+                <div class="field"><span id="governmentPrograms-label">Державні програми</span>
+                    <details class="filter-multi" data-filter="governmentPrograms">
+                        <summary aria-labelledby="governmentPrograms-label governmentPrograms-summary"><span
+                                data-empty="Усі програми"
+                                id="governmentPrograms-summary">Усі програми</span>
+                        </summary>
+                        <div aria-labelledby="governmentPrograms-label" class="filter-multi__options" role="group">
+                            <label><input
+                                    name="governmentPrograms" type="checkbox" value="EOSELIA">
+                                єОселя</label><label><input
+                                name="governmentPrograms" type="checkbox" value="VOUCHER"> Ваучер</label><label><input
+                                name="governmentPrograms" type="checkbox" value="CERTIFICATE"> Сертифікат</label><label><input
+                                name="governmentPrograms" type="checkbox" value="POSTANOVA"> Постанова</label></div>
+                    </details>
+                </div>
                 <div class="catalog-filters__actions">
                     <button class="btn" type="submit">Знайти</button>
                     <button class="btn btn--outline" type="reset">Скинути фільтри</button>
