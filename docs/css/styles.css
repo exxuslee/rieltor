@@ -602,6 +602,7 @@ textarea.control {
 }
 
 .property-card__image {
+    position: relative;
     aspect-ratio: 4 / 3;
     overflow: hidden;
     background: var(--surface);
@@ -625,14 +626,27 @@ textarea.control {
 }
 
 .property-card__title {
-    min-height: 2.5em;
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 1;
+    max-width: 75%;
     margin: 0;
     font: 400 1.5rem/1.18 var(--serif);
     letter-spacing: var(--display-tracking);
+    text-align: right;
+    color: #d9d9d9;
+    text-shadow:
+            -1px -1px 0 #000,
+            1px -1px 0 #000,
+            -1px  1px 0 #000,
+            1px  1px 0 #000,
+            0 0 8px rgba(0, 0, 0, .55);
+    -webkit-text-stroke: .6px #000;
 }
 
 .property-card__location {
-    margin: 10px 0 18px;
+    margin: 0 0 18px;
     color: var(--muted);
 }
 
@@ -2191,7 +2205,9 @@ body[data-page="catalog"] .page-hero h1 {
     }
 
     .property-card__title {
-        min-height: 0;
+        font-size: 1.25rem;
+        top: 12px;
+        right: 12px;
     }
 
     .service-strip, .section-top {

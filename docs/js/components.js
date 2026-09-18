@@ -113,8 +113,11 @@ window.propertyCard = function (property) {
     const area = property.category === 'land' ? (property.landAreaSotka ? `${property.landAreaSotka} соток` : '') : (property.area ? `${property.area} м²` : '');
     const pricePerSquareMeter = property.category === 'land' ? '' : Listings.pricePerSquareMeter(property);
     return `<article class="property-card"><a href="/property.html?id=${encodeURIComponent(property.id)}" aria-label="Переглянути: ${e(property.title)}">
-        <div class="property-card__image"><img src="${e(property.image)}" alt="${e(property.title)}" loading="lazy" width="768" height="512"></div>
-        <div class="property-card__body"><h3 class="property-card__title">${e(property.title)}</h3><p class="property-card__location">${e(property.location)}</p>
+        <div class="property-card__image">
+            <img src="${e(property.image)}" alt="${e(property.title)}" loading="lazy" width="768" height="512">
+            <h3 class="property-card__title">${e(property.title)}</h3>
+        </div>
+        <div class="property-card__body"><p class="property-card__location">${e(property.location)}</p>
         ${property.rawText ? `<p class="property-card__raw-text">${e(property.rawText)}</p>` : ''}
         <div class="property-card__meta">
             <strong class="property-card__price">${e(Listings.price(property))}</strong>
