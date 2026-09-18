@@ -20,13 +20,23 @@
     <section class="section catalog-section">
         <div class="container">
             <form class="catalog-filters" data-catalog-filters>
-                <label class="field">Локація<select name="location">
-                    <option value="">Усі локації</option>
-                    <option value="IRPIN">Ірпінь</option>
-                    <option value="BUCHA">Буча</option>
-                    <option value="VORZEL">Ворзель</option>
-                    <option value="HOSTOMEL">Гостомель</option>
-                </select></label>
+                <div class="field"><span id="location-label">Локація</span>
+                    <details class="filter-multi" data-filter="location">
+                        <summary aria-labelledby="location-label location-summary"><span data-empty="Усі локації"
+                                id="location-summary">Усі локації</span></summary>
+                        <div aria-labelledby="location-label" class="filter-multi__options" role="group">
+                            <label><input name="location" type="checkbox" value="IRPIN"> Ірпінь</label><label><input
+                                name="location" type="checkbox" value="BUCHA"> Буча</label><label><input
+                                name="location" type="checkbox" value="VORZEL"> Ворзель</label><label><input
+                                name="location" type="checkbox" value="HOSTOMEL"> Гостомель</label><label><input
+                                name="location" type="checkbox" value="STOYANKA"> Стоянка</label><label><input
+                                name="location" type="checkbox" value="HORENYCHI"> Гореничі</label><label><input
+                                name="location" type="checkbox" value="MYKHAILIVKA_RUBEZHIVKA"> Михайлівка-Рубежівка</label><label><input
+                                name="location" type="checkbox" value="BILOHORODKA"> Білогородка</label><label><input
+                                name="location" type="checkbox" value="DMYTRIVKA"> Дмитрівка</label>
+                        </div>
+                    </details>
+                </div>
                 <div class="field"><span id="propertyType-label">Тип нерухомості</span>
                     <details class="filter-multi" data-filter="propertyType">
                         <summary aria-labelledby="propertyType-label propertyType-summary"><span

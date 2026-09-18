@@ -141,6 +141,11 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
             "BUCHA" to "Буча",
             "VORZEL" to "Ворзель",
             "HOSTOMEL" to "Гостомель",
+            "STOYANKA" to "Стоянка",
+            "HORENYCHI" to "Гореничі",
+            "MYKHAILIVKA_RUBEZHIVKA" to "Михайлівка-Рубежівка",
+            "BILOHORODKA" to "Білогородка",
+            "DMYTRIVKA" to "Дмитрівка",
             "OTHER" to "Інша локація"
         )[row.location].orEmpty()
         val urls = json.decodeFromString<List<CatalogPhoto>>(row.photos)

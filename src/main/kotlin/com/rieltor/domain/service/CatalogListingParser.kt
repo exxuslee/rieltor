@@ -21,7 +21,12 @@ class CatalogListingParser(
             "IRPIN" to "ірп[іе]н|ирпен",
             "BUCHA" to "буч[аіи]",
             "VORZEL" to "ворзел|ворзель",
-            "HOSTOMEL" to "гостомел"
+            "HOSTOMEL" to "гостомел",
+            "STOYANKA" to "стоянк",
+            "HORENYCHI" to "горенич",
+            "MYKHAILIVKA_RUBEZHIVKA" to "михайл[іи]вк[аіи][ -]рубеж[іе]вк",
+            "BILOHORODKA" to "б[іи]логородк",
+            "DMYTRIVKA" to "дмитр[іи]вк"
         )
             .filter { Regex(it.second, RegexOption.IGNORE_CASE).containsMatchIn(text) }.map { it.first }
         val location = when (matchedLocations.size) {

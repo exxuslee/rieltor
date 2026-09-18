@@ -48,7 +48,10 @@ object CatalogCodes {
         "APARTMENT 1", "APARTMENT 1+", "APARTMENT 2", "APARTMENT 2+", "APARTMENT 3", "APARTMENT 3+",
         "HOUSE", "HOUSE+", "HOUSE-", "DUPLEX", "DUPLEX+", "LAND",
     )
-    val locations = setOf("IRPIN", "BUCHA", "VORZEL", "HOSTOMEL", "OTHER")
+    val locations = setOf(
+        "IRPIN", "BUCHA", "VORZEL", "HOSTOMEL", "STOYANKA", "HORENYCHI",
+        "MYKHAILIVKA_RUBEZHIVKA", "BILOHORODKA", "DMYTRIVKA", "OTHER"
+    )
     val programs = setOf("EOSELIA", "VOUCHER", "CERTIFICATE", "POSTANOVA")
 
     fun category(type: String?): String = when {

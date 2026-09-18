@@ -42,6 +42,18 @@ class CatalogListingParserTest {
         assertEquals("ACTIVE", result.status)
     }
 
+    @Test fun `recognizes the additional catalog locations`() {
+        mapOf(
+            "Стоянка" to "STOYANKA",
+            "Гореничі" to "HORENYCHI",
+            "Михайлівка-Рубежівка" to "MYKHAILIVKA_RUBEZHIVKA",
+            "Білогородка" to "BILOHORODKA",
+            "Дмитрівка" to "DMYTRIVKA",
+        ).forEach { (location, code) ->
+            assertEquals(code, parse(baseListing().replace("Ірпінь", location)).location, location)
+        }
+    }
+
     @Test fun `recognizes unlabeled price and bargain from real listing wording`() {
         val result = parse("""
             Ірпінь
