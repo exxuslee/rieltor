@@ -27,6 +27,7 @@ data class PublicListing(
     val tags: List<String>, val primeParams: JsonObject, val secondaryParams: JsonObject,
     // Keep the existing API key while the database uses the clearer createdAt name.
     val cdt: Long,
+    val sourceCreatedAt: Long,
 )
 
 @Serializable
@@ -167,7 +168,8 @@ class CatalogQuery(private val repository: CatalogRepository, private val public
             json.decodeFromString(row.tags),
             json.parseToJsonElement(row.primeParams).jsonObject,
             json.parseToJsonElement(row.secondaryParams).jsonObject,
-            row.createdAt
+            row.createdAt,
+            row.sourceCreatedAt
         )
     }
 }

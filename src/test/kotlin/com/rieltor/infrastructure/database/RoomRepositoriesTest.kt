@@ -156,6 +156,41 @@ class RoomPersistenceTest {
         }
     }
 
+    @Test fun `duplicate uses latest Telegram date for display and paginated sorting`() {
+        RoomDatabaseStore(path()).use { db ->
+            val repo = CatalogRepository(db)
+            fun promote(id: Long): Boolean {
+                val message = source(id)
+                repo.receive(message, 100_000, 0)
+                val rows = repo.group(message.groupKey)
+                repo.stage(rows, "READY_FOR_MEDIA", 100_000)
+                val token = assertNotNull(repo.claim(rows, 100_000))
+                return repo.promote(rows, token, listing(id).copy(
+                    groupKey = message.groupKey,
+                    googleDriveUrls = "[\"https://drive.google.com/drive/folders/same-folder\"]"
+                ), 100_001)
+            }
+            assertTrue(promote(1))
+            val originalId = repo.listings().single().id
+            repo.save(listing(2).copy(createdAt = 999_999))
+            assertTrue(promote(3))
+            assertFalse(promote(1))
+            assertEquals(2, repo.listings().size)
+            val api = CatalogQuery(repo, "http://localhost")
+            val params = Parameters.build { append("sort", "newest"); append("limit", "1") }
+            val first = api.list(params)
+            assertEquals(originalId.toString(), first.items.single().id)
+            assertEquals(3000L, first.items.single().sourceCreatedAt)
+            assertEquals(1000L, first.items.single().cdt)
+            assertEquals(3000L, api.one(originalId)?.sourceCreatedAt)
+            val second = api.list(Parameters.build {
+                appendAll(params); append("cursor", assertNotNull(first.nextCursor))
+            })
+            assertEquals(2000L, second.items.single().sourceCreatedAt)
+            assertNull(second.nextCursor)
+        }
+    }
+
     @Test fun `SQL repost selection respects destinations statuses and deterministic order`() {
         RoomDatabaseStore(path()).use { db ->
             val repo = CatalogRepository(db)

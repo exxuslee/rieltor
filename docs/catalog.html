@@ -1,37 +1,102 @@
 <!doctype html>
 <html lang="uk">
 <head>
-    <meta charset="utf-8"><meta content="width=device-width,initial-scale=1" name="viewport">
+    <meta charset="utf-8">
+    <meta content="width=device-width,initial-scale=1" name="viewport">
     <title>Каталог нерухомості — Ірина Ліннік</title>
-    <meta content="Актуальні квартири, будинки та ділянки в Ірпені, Бучі, Ворзелі й Гостомелі. Пошук за ціною та державними програмами." name="description">
+    <meta content="Актуальні квартири, будинки та ділянки в Ірпені, Бучі, Ворзелі й Гостомелі. Пошук за ціною та державними програмами."
+          name="description">
     <link href="https://rieltor.dpdns.org/catalog.html" rel="canonical">
-    <script src="js/theme.js"></script><link href="css/styles.css?v=8.2" rel="stylesheet">
+    <script src="js/theme.js"></script>
+    <link href="css/styles.css?v=8.3" rel="stylesheet">
 </head>
-<body data-page="catalog"><site-header></site-header>
-<main><section class="page-hero"><div class="container"><h1>Знайдіть свою нерухомість</h1>
-<p>Актуальні пропозиції. Оберіть локацію, бюджет і зручні умови придбання.</p></div></section>
-<section class="section catalog-section"><div class="container">
-<form class="catalog-filters" data-catalog-filters>
-    <label class="field">Локація<select name="location"><option value="">Усі локації</option><option value="IRPIN">Ірпінь</option><option value="BUCHA">Буча</option><option value="VORZEL">Ворзель</option><option value="HOSTOMEL">Гостомель</option></select></label>
-    <label class="field">Тип нерухомості<select name="propertyType"><option value="">Усі типи</option><option value="APARTMENT">Квартири</option><option value="HOUSE">Будинки</option><option value="DUPLEX">Таунхауси й дуплекси</option><option value="LAND">Земля</option></select></label>
-    <label class="field">Стан<select name="condition"><option value="">Будь-який стан</option><option value="RENOVATED">З ремонтом</option><option value="UNFINISHED">Без ремонту</option><option value="OLD_STOCK">Старий фонд</option></select></label>
-    <label class="field">Кількість кімнат<select name="rooms"><option value="">Будь-яка</option><option value="1">1 кімната</option><option value="2">2 кімнати</option><option value="3">3+ кімнати</option></select></label>
-    <label class="field">Ціна від, $<input inputmode="decimal" min="0" name="priceMin" step="0.01" type="number"></label>
-    <label class="field">Ціна до, $<input inputmode="decimal" min="0" name="priceMax" step="0.01" type="number"></label>
-    <label class="field">Сортування<select data-default="newest" name="sort"><option value="newest">Спочатку нові</option><option value="priceAsc">Ціна за зростанням</option><option value="priceDesc">Ціна за спаданням</option></select></label>
-    <fieldset class="catalog-programs"><legend class="sr-only">Державні програми</legend><div class="catalog-programs__options">
-        <span aria-hidden="true">Державні програми</span>
-        <label><input name="governmentPrograms" type="checkbox" value="EOSELIA"> єОселя</label>
-        <label><input name="governmentPrograms" type="checkbox" value="VOUCHER"> Ваучер</label>
-        <label><input name="governmentPrograms" type="checkbox" value="CERTIFICATE"> Сертифікат</label>
-        <label><input name="governmentPrograms" type="checkbox" value="POSTANOVA"> Постанова</label>
-    </div></fieldset>
-    <div class="catalog-filters__actions"><button class="btn" type="submit">Знайти</button><button class="btn btn--outline" type="reset">Скинути фільтри</button></div>
-</form>
-<p aria-live="polite" data-result-status role="status">Завантажуємо оголошення…</p>
-<button class="btn" data-retry hidden type="button">Спробувати ще раз</button>
-<div class="property-grid" data-property-grid></div>
-<button class="btn" data-load-more hidden type="button">Показати ще</button>
-</div></section></main><site-footer></site-footer>
-<script src="js/data.js?v=2"></script><script src="js/components.js?v=4"></script><script src="js/catalog.js?v=2"></script>
-</body></html>
+<body data-page="catalog">
+<site-header></site-header>
+<main>
+    <section class="page-hero">
+        <div class="container"><h1>Знайдіть свою нерухомість</h1>
+            <p>Актуальні пропозиції. Оберіть локацію, бюджет і зручні умови придбання.</p></div>
+    </section>
+    <section class="section catalog-section">
+        <div class="container">
+            <form class="catalog-filters" data-catalog-filters>
+                <label class="field">Локація<select name="location">
+                    <option value="">Усі локації</option>
+                    <option value="IRPIN">Ірпінь</option>
+                    <option value="BUCHA">Буча</option>
+                    <option value="VORZEL">Ворзель</option>
+                    <option value="HOSTOMEL">Гостомель</option>
+                </select></label>
+                <div class="field"><span id="propertyType-label">Тип нерухомості</span>
+                    <details class="filter-multi" data-filter="propertyType">
+                        <summary aria-labelledby="propertyType-label propertyType-summary"><span
+                                data-empty="Усі типи" id="propertyType-summary">Усі типи</span></summary>
+                        <div aria-labelledby="propertyType-label" class="filter-multi__options" role="group">
+                            <label><input name="propertyType" type="checkbox" value="APARTMENT"> Квартири</label><label><input
+                                name="propertyType" type="checkbox" value="HOUSE"> Будинки</label><label><input
+                                name="propertyType" type="checkbox" value="DUPLEX"> Таунхауси й
+                            дуплекси</label><label><input name="propertyType" type="checkbox" value="LAND">
+                            Земля</label></div>
+                    </details>
+                </div>
+                <div class="field"><span id="condition-label">Стан</span>
+                    <details class="filter-multi" data-filter="condition">
+                        <summary aria-labelledby="condition-label condition-summary"><span data-empty="Будь-який стан"
+                                                                                           id="condition-summary">Будь-який стан</span>
+                        </summary>
+                        <div aria-labelledby="condition-label" class="filter-multi__options" role="group"><label><input
+                                name="condition" type="checkbox" value="RENOVATED"> З ремонтом</label><label><input
+                                name="condition" type="checkbox" value="UNFINISHED"> Без ремонту</label><label><input
+                                name="condition" type="checkbox" value="OLD_STOCK"> Старий фонд</label></div>
+                    </details>
+                </div>
+                <div class="field"><span id="rooms-label">Кількість кімнат</span>
+                    <details class="filter-multi" data-filter="rooms">
+                        <summary aria-labelledby="rooms-label rooms-summary"><span data-empty="Будь-яка"
+                                                                                   id="rooms-summary">Будь-яка</span>
+                        </summary>
+                        <div aria-labelledby="rooms-label" class="filter-multi__options" role="group"><label><input
+                                name="rooms" type="checkbox" value="1"> 1 кімната</label><label><input name="rooms"
+                                                                                                       type="checkbox"
+                                                                                                       value="2"> 2
+                            кімнати</label><label><input name="rooms" type="checkbox" value="3"> 3+ кімнати</label>
+                        </div>
+                    </details>
+                </div>
+                <label class="field">Ціна від, $<input inputmode="decimal" min="0" name="priceMin" step="0.01"
+                                                       type="number"></label>
+                <label class="field">Ціна до, $<input inputmode="decimal" min="0" name="priceMax" step="0.01"
+                                                      type="number"></label>
+                <label class="field">Сортування<select data-default="newest" name="sort">
+                    <option value="newest">Останні повідомлення Telegram</option>
+                    <option value="priceAsc">Ціна за зростанням</option>
+                    <option value="priceDesc">Ціна за спаданням</option>
+                </select></label>
+                <fieldset class="catalog-programs">
+                    <legend class="sr-only">Державні програми</legend>
+                    <div class="catalog-programs__options">
+                        <span aria-hidden="true">Державні програми</span>
+                        <label><input name="governmentPrograms" type="checkbox" value="EOSELIA"> єОселя</label>
+                        <label><input name="governmentPrograms" type="checkbox" value="VOUCHER"> Ваучер</label>
+                        <label><input name="governmentPrograms" type="checkbox" value="CERTIFICATE"> Сертифікат</label>
+                        <label><input name="governmentPrograms" type="checkbox" value="POSTANOVA"> Постанова</label>
+                    </div>
+                </fieldset>
+                <div class="catalog-filters__actions">
+                    <button class="btn" type="submit">Знайти</button>
+                    <button class="btn btn--outline" type="reset">Скинути фільтри</button>
+                </div>
+            </form>
+            <p aria-live="polite" data-result-status role="status">Завантажуємо оголошення…</p>
+            <button class="btn" data-retry hidden type="button">Спробувати ще раз</button>
+            <div class="property-grid" data-property-grid></div>
+            <button class="btn" data-load-more hidden type="button">Показати ще</button>
+        </div>
+    </section>
+</main>
+<site-footer></site-footer>
+<script src="js/data.js?v=3"></script>
+<script src="js/components.js?v=5"></script>
+<script src="js/catalog.js?v=3"></script>
+</body>
+</html>
