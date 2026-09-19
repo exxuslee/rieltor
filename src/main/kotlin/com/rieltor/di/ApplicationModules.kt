@@ -24,7 +24,6 @@ import com.rieltor.infrastructure.threads.ThreadsPhotoPublisher
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
 import com.rieltor.infrastructure.tiktok.TikTokPhotoPublisher
 import com.rieltor.web.LandingLeadSender
-import io.github.cdimascio.dotenv.Dotenv
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
@@ -39,37 +38,23 @@ val tikTokOAuthState = named("tiktok-oauth-state")
 val googleOAuthState = named("google-oauth-state")
 val threadsOAuthState = named("threads-oauth-state")
 
-fun applicationModules(dotenv: Dotenv): List<Module> = listOf(
-    configurationModule(dotenv),
+fun applicationModules(settingsStore: JsonSettingsStore): List<Module> = listOf(
+    configurationModule(settingsStore),
     persistenceModule,
     networkModule,
     applicationModule,
     integrationModule,
 )
 
-private fun configurationModule(dotenv: Dotenv) = module {
-    single { dotenv }
-    single {
-        val secrets = get<SecretRepository>()
-        bootstrapSecrets(secrets, get())
-        ApplicationSettings.load(secrets, get())
-    }
+private fun configurationModule(settingsStore: JsonSettingsStore) = module {
+    single { settingsStore }
+    single { ApplicationSettings.load(get(), get<JsonSettingsStore>().snapshot()) }
 }
 
 private val persistenceModule = module {
-    single {
-        val app = get<ApplicationSettings>()
-        val root = java.nio.file.Path.of(System.getenv("APP_PROJECT_ROOT") ?: ".").toAbsolutePath().normalize()
-        JsonSettingsStore(
-            root.resolve("settings.json"), LocalSettings(
-                minIntervalMs = app.repostMinIntervalMinutes * 60_000,
-                maxMessagesPer24Hours = app.repostMaxMessagesPer24Hours, threadsEnabled = app.threadsEnabled,
-            )
-        )
-    }
-    single { RoomDatabaseStore(databasePath(get()), get(), ownsSettings = false) }
+    single { RoomDatabaseStore(databasePath(get<JsonSettingsStore>().snapshot()), get(), ownsSettings = false) }
     single { CatalogRepository(get()) }
-    single { JsonCredentialStore(credentialsPath(get())) }
+    single { JsonCredentialStore(credentialsPath(get<JsonSettingsStore>().snapshot())) }
     single<SecretRepository> { get<JsonCredentialStore>() }
     single<TikTokTokenRepository> { JsonTikTokTokenRepository(get()) }
     single<TikTokPublishThrottleRepository> { TikTokPublishThrottleRepositoryImpl(get()) }

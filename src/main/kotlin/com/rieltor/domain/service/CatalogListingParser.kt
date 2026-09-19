@@ -1,6 +1,8 @@
 package com.rieltor.domain.service
 
 import com.rieltor.domain.model.CatalogCodes
+import com.rieltor.domain.model.adId
+import com.rieltor.domain.model.senderFromRaw
 import com.rieltor.domain.model.sha256
 import com.rieltor.infrastructure.database.model.IncomingEntity
 import com.rieltor.infrastructure.database.model.ListingEntity
@@ -70,7 +72,8 @@ class CatalogListingParser(
         val totalPrice = priceNormalizer.normalize(ImportedPrice(price, currency, transaction, period, area, landArea))
         if (totalPrice == null) warnings += "Unsupported or invalid sale price"
         return ListingEntity(
-            groupKey = first.groupKey,
+            adId = adId(first.userId?.toString() ?: senderFromRaw(first.rawMessage) ?: "unknown-${first.chatId}:${first.messageId}",
+                location, type, totalPrice, area, landArea),
             chatId = first.chatId,
             messageId = first.messageId,
             messageThreadId = first.messageThreadId,

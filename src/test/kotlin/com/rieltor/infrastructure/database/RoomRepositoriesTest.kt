@@ -18,7 +18,7 @@ class RoomPersistenceTest {
         SourceMessage(-100, id, 20, text = text, raw = text, sourceCreatedAt = id * 1000)
     private fun listing(id: Long, price: Long = 82_000, city: String = "IRPIN", programs: String = "[]",
         type: String = "APARTMENT 1", rawText: String = "") =
-        ListingEntity(groupKey = "test:$id", chatId = -100, messageId = id, messageThreadId = 20,
+        ListingEntity(adId = "test-ad:$id", chatId = -100, messageId = id, messageThreadId = 20,
             sourceRevision = "1", title = "Квартира $id", location = city,
             typeOfRealty = type, rawText = rawText, price = price, currency = "USD", governmentPrograms = programs,
             sourceCreatedAt = id * 1000, createdAt = 1000, updatedAt = 1000, status = "ACTIVE")
@@ -45,13 +45,13 @@ class RoomPersistenceTest {
             val repo = CatalogRepository(db)
             val source = source()
             repo.receive(source, 0, 1_200_000)
-            val rows = repo.group(source.groupKey)
+            val rows = repo.group(source.chatId, source.messageId)
             assertTrue(repo.stage(rows, "READY_FOR_MEDIA", 1_200_001))
             val token = assertNotNull(repo.claim(rows, 1_200_001))
             repo.receive(source.copy(text = "Оновлена версія", raw = "Оновлена версія", sourceEditedAt = 1), 1_200_002, 1_200_000)
-            assertFalse(repo.promote(rows, token, listing(1).copy(groupKey = source.groupKey), 1_200_003))
+            assertFalse(repo.promote(rows, token, listing(1), 1_200_003))
             assertTrue(repo.listings().isEmpty())
-            assertEquals(1, repo.group(source.groupKey).size)
+            assertEquals(1, repo.group(source.chatId, source.messageId).size)
         }
     }
 
@@ -59,18 +59,18 @@ class RoomPersistenceTest {
         RoomDatabaseStore(path()).use { db ->
             val repo = CatalogRepository(db); val source = source()
             repo.receive(source, 0, 1_200_000)
-            val rows = repo.group(source.groupKey)
+            val rows = repo.group(source.chatId, source.messageId)
             repo.stage(rows, "READY_FOR_MEDIA", 1_200_001)
             val token = assertNotNull(repo.claim(rows, 1_200_001))
-            assertTrue(repo.promote(rows, token, listing(1).copy(groupKey = source.groupKey), 1_200_002))
-            assertFalse(repo.promote(rows, token, listing(1).copy(groupKey = source.groupKey), 1_200_003))
+            assertTrue(repo.promote(rows, token, listing(1), 1_200_002))
+            assertFalse(repo.promote(rows, token, listing(1), 1_200_003))
             assertEquals(1, repo.listings().size)
             repo.delete(-100, 1, 1_200_004)
             assertEquals("HIDDEN", repo.listings().single().status)
         }
     }
 
-    @Test fun `draft is not published and confirmation updates boolean atomically`() {
+    @Test fun `draft is not published and confirmation records publication time atomically`() {
         val path = path()
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db); val id = repo.save(listing(1))
@@ -78,13 +78,13 @@ class RoomPersistenceTest {
             val throttle = TikTokPublishThrottleRepositoryImpl(db, repo)
             throttle.trackPublishForListing(id, attempt, "pub-1", "DRAFT", 2000)
             throttle.updateTrackedStatus("pub-1", "SEND_TO_USER_INBOX", 3000)
-            assertFalse(repo.listing(id)!!.tiktokReposted)
+            assertNull(repo.listing(id)!!.tiktokRepostedAt)
         }
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db); val throttle = TikTokPublishThrottleRepositoryImpl(db, repo)
             assertEquals("pub-1", throttle.trackedPublishes(10_000, 86_400_000).single().publishId)
             throttle.updateTrackedStatus("pub-1", "PUBLISH_COMPLETE", 11_000)
-            assertTrue(repo.listings().single().tiktokReposted)
+            assertEquals(11_000, repo.listings().single().tiktokRepostedAt)
             assertTrue(throttle.trackedPublishes(12_000, 86_400_000).isEmpty())
         }
     }
@@ -162,11 +162,11 @@ class RoomPersistenceTest {
             fun promote(id: Long): Boolean {
                 val message = source(id)
                 repo.receive(message, 100_000, 0)
-                val rows = repo.group(message.groupKey)
+                val rows = repo.group(message.chatId, message.messageId)
                 repo.stage(rows, "READY_FOR_MEDIA", 100_000)
                 val token = assertNotNull(repo.claim(rows, 100_000))
                 return repo.promote(rows, token, listing(id).copy(
-                    groupKey = message.groupKey,
+                    adId = "same-ad",
                     googleDriveUrls = "[\"https://drive.google.com/drive/folders/same-folder\"]"
                 ), 100_001)
             }

@@ -13,9 +13,9 @@ data class SourceMessage(
     val sourceCreatedAt: Long,
     val sourceEditedAt: Long = 0,
     val mediaIdentity: String = "",
+    val userId: Long? = null,
 ) {
-    val groupKey get() = "$chatId:$messageId"
-    fun fingerprint(): String = sha256("$text|$sourceEditedAt|$mediaIdentity|$messageThreadId")
+    fun fingerprint(): String = sha256("$text|$sourceEditedAt|$mediaIdentity|$messageThreadId|$userId")
 }
 
 fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")

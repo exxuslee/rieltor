@@ -14,6 +14,13 @@ import java.util.*
 @Serializable
 data class SlotReservation(val attemptId: String, val listingId: Long, val reservedAt: Long)
 
+/** A Telegram chat and the forum topics to import from it. An empty list means the whole chat. */
+@Serializable
+data class MonitoredTelegramChat(
+    val chatId: Long,
+    val messageThreadIds: List<Long> = emptyList(),
+)
+
 @Serializable
 data class LocalSettings(
     val schemaVersion: Int = 1, val generation: Long = 0,
@@ -27,6 +34,15 @@ data class LocalSettings(
     val tiktokEnabled: Boolean = true, val threadsEnabled: Boolean = false, val blockedUntil: Long = 0,
     val slotReservations: List<SlotReservation> = emptyList(),
     val orphanGraceMs: Long = 4 * 86_400_000L,
+    val serverPort: Int = 8383,
+    val databasePath: String = "rieltor.db",
+    val secretsPath: String = "secrets.json",
+    val mediaDirectory: String = "media",
+    val tikTokMode: String = "POST",
+    val tikTokDailyLimitCooldownHours: Long = 8,
+    val repostMaxPhotoCount: Int = 10,
+    val telegramListingBotMaxPhotoCount: Int = 100,
+    val monitoredTelegramChats: List<MonitoredTelegramChat> = emptyList(),
 )
 
 /** The process lock covers JSON state and workers sharing its database. */
@@ -102,6 +118,16 @@ class JsonSettingsStore(val path: Path, defaults: LocalSettings = LocalSettings(
         require(value.minIntervalMs >= 0 && value.maxMessagesPer24Hours > 0)
         require(value.driveMaxAttempts > 0 && value.driveRetryBaseMs > 0 && value.maxCatalogPhotos in 1..1000)
         require(value.driveFileDelayMs >= 0 && value.driveJobDelayMs >= 0 && value.orphanGraceMs > 0)
+        require(value.serverPort in 1..65535)
+        require(value.databasePath.isNotBlank() && value.secretsPath.isNotBlank() && value.mediaDirectory.isNotBlank())
+        require(value.tikTokMode.uppercase() in setOf("POST", "DRAFT"))
+        require(value.tikTokDailyLimitCooldownHours in 1..48)
+        require(value.repostMaxPhotoCount in 1..35)
+        require(value.telegramListingBotMaxPhotoCount in 1..1000)
+        require(value.monitoredTelegramChats.map { it.chatId }.distinct().size == value.monitoredTelegramChats.size)
+        require(value.monitoredTelegramChats.all { chat ->
+            chat.messageThreadIds.all { it > 0 } && chat.messageThreadIds.distinct().size == chat.messageThreadIds.size
+        })
         require(value.topicTypeMapping.all { (key, type) -> key.matches(Regex("-?\\d+:\\d+")) && type in CatalogCodes.types })
     }
 

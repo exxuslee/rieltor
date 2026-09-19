@@ -1,9 +1,13 @@
 {
   "schemaVersion": 1,
+  "serverPort": 8383,
+  "databasePath": "rieltor.db",
+  "secretsPath": "secrets.json",
+  "mediaDirectory": "/var/www/rieltor/media",
   "uahPerUsd": 45.0,
   "usdPerEur": 1.1,
   "generation": 0,
-  "stabilityWindowMinutes": 20,
+  "stabilityWindowMinutes": 25,
   "topicTypeMapping": {
     "-1002681732909:52611252224": "HOUSE+",
     "-1002681732909:105906176": "APARTMENT 3+",
@@ -16,7 +20,22 @@
     "-1002681732909:52614397952": "HOUSE-",
     "-1002681732909:6291456": "APARTMENT 3",
     "-1002681732909:4194304": "APARTMENT 1",
-    "-1002681732909:52613349376": "DUPLEX+"
+    "-1002681732909:52613349376": "DUPLEX+",
+    "-1002691100301:6": "HOUSE",
+    "-1002691100301:5": "HOUSE",
+    "-1002691100301:2": "HOUSE",
+    "-1002691100301:19": "HOUSE",
+    "-1002691100301:10": "HOUSE",
+    "-1002691100301:41": "HOUSE",
+    "-1002691100301:91": "HOUSE",
+    "-1002691100301:4": "HOUSE",
+    "-1002691100301:3": "HOUSE",
+    "-1002691100301:381": "HOUSE",
+    "-1002691100301:30": "HOUSE",
+    "-1002691100301:373": "HOUSE",
+    "-1002691100301:9": "HOUSE",
+    "-1002691100301:7": "HOUSE",
+    "-1002691100301:11": "HOUSE"
   },
   "topicNames": {
     "-1002681732909:52611252224": "Будинки з ремонтом",
@@ -30,7 +49,22 @@
     "-1002681732909:52614397952": "Старий фонд",
     "-1002681732909:6291456": "3кк",
     "-1002681732909:4194304": "1кк",
-    "-1002681732909:52613349376": "Тауни+Дуплекси з ремонтом"
+    "-1002681732909:52613349376": "Тауни+Дуплекси з ремонтом",
+    "-1002691100301:6": "HOUSE",
+    "-1002691100301:5": "HOUSE",
+    "-1002691100301:2": "HOUSE",
+    "-1002691100301:19": "HOUSE",
+    "-1002691100301:10": "HOUSE",
+    "-1002691100301:41": "HOUSE",
+    "-1002691100301:91": "HOUSE",
+    "-1002691100301:4": "HOUSE",
+    "-1002691100301:3": "HOUSE",
+    "-1002691100301:381": "HOUSE",
+    "-1002691100301:30": "HOUSE",
+    "-1002691100301:373": "HOUSE",
+    "-1002691100301:9": "HOUSE",
+    "-1002691100301:7": "HOUSE",
+    "-1002691100301:11": "HOUSE"
   },
   "driveFileDelayMs": 500,
   "driveJobDelayMs": 1000,
@@ -39,9 +73,52 @@
   "maxCatalogPhotos": 50,
   "minIntervalMs": 1200000,
   "maxMessagesPer24Hours": 36,
+  "tikTokMode": "DRAFT",
+  "tikTokDailyLimitCooldownHours": 8,
+  "repostMaxPhotoCount": 10,
+  "telegramListingBotMaxPhotoCount": 100,
+  "threadsEnabled": true,
   "tiktokEnabled": true,
-  "threadsEnabled": false,
   "blockedUntil": 0,
   "slotReservations": [],
-  "orphanGraceMs": 345600000
+  "orphanGraceMs": 345600000,
+  "monitoredTelegramChats": [
+    {
+      "chatId": -1002681732909,
+      "messageThreadIds": [
+        52611252224,
+        105906176,
+        52612300800,
+        102760448,
+        309329920,
+        104857600,
+        5242880,
+        52617543680,
+        52614397952,
+        6291456,
+        4194304,
+        52613349376
+      ]
+    },
+    {
+      "chatId": -1002691100301,
+      "messageThreadIds": [
+        6,
+        5,
+        2,
+        19,
+        10,
+        41,
+        91,
+        4,
+        3,
+        381,
+        30,
+        373,
+        9,
+        7,
+        11
+      ]
+    }
+  ]
 }

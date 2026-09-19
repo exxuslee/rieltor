@@ -3,7 +3,6 @@ package com.rieltor.infrastructure.database.repository
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
 import com.rieltor.domain.model.*
-import com.rieltor.domain.service.GoogleDriveLinkExtractor
 import com.rieltor.infrastructure.database.local.CatalogDao
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.model.IncomingEntity
@@ -32,14 +31,15 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         val row = IncomingEntity(
             id = old?.id ?: 0, chatId = message.chatId, messageId = message.messageId,
             messageThreadId = message.messageThreadId,
-            groupKey = message.groupKey, rawMessage = message.raw, rawText = message.text,
+            rawMessage = message.raw, rawText = message.text,
+            userId = message.userId ?: old?.userId ?: userIdFromRaw(message.raw),
             sourceCreatedAt = message.sourceCreatedAt, sourceEditedAt = message.sourceEditedAt,
             receivedAt = old?.receivedAt ?: now, contentHash = message.fingerprint(),
             revision = (old?.revision ?: 0) + 1, verifyAfter = now + stabilityMs,
         )
         dao.saveSource(row)
-        // A late album item invalidates every part, including a currently running media lease.
-        dao.group(message.groupKey).filter { it.status != "DELETED" }.forEach {
+        // An edit invalidates the source's current media lease.
+        dao.group(message.chatId, message.messageId).filter { it.status != "DELETED" }.forEach {
             dao.saveSource(
                 it.copy(
                     status = "WAITING_STABILITY", verifyAfter = now + stabilityMs,
@@ -47,40 +47,34 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
                 )
             )
         }
-        dao.listingForGroup(message.groupKey)?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
+        dao.listingForSource(message.chatId, message.messageId)?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
     }
 
     fun delete(chatId: Long, messageId: Long, now: Long) = transaction { dao ->
         val row = dao.source(chatId, messageId) ?: return@transaction
-        dao.group(row.groupKey)
+        dao.group(row.chatId, row.messageId)
             .forEach { dao.saveSource(it.copy(status = "DELETED", leaseToken = null, leaseUntil = 0)) }
-        dao.listingForGroup(row.groupKey)?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
+        dao.listingForSource(row.chatId, row.messageId)?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
     }
 
     fun source(chatId: Long, messageId: Long) = transaction { it.source(chatId, messageId) }
-    fun group(key: String) = transaction { it.group(key) }
+    fun group(chatId: Long, messageId: Long?) = transaction { it.group(chatId, messageId) }
     fun groups() =
-        transaction { it.sources() }.groupBy { it.groupKey }.values.map { it.sortedBy { row -> row.messageId } }
+        transaction { it.sources() }.groupBy { it.chatId to it.messageId }.values.map { it.sortedBy { row -> row.messageId } }
 
     fun publicListing(id: Long) = database.blocking { it.catalogDao().publicListing(id) }
     fun listing(id: Long) = transaction { it.listing(id) }
     fun listings() = transaction { it.listings() }
-    private fun sameProperty(a: ListingEntity, b: ListingEntity): Boolean {
-        val extractor = GoogleDriveLinkExtractor()
-        val ids = extractor.identities(json.decodeFromString(a.googleDriveUrls))
-        return a.chatId == b.chatId && a.messageThreadId == b.messageThreadId && ids.isNotEmpty() &&
-                ids == extractor.identities(json.decodeFromString(b.googleDriveUrls))
-    }
 
     fun cachedPhotos(prepared: ListingEntity): List<CatalogPhoto> = transaction { dao ->
-        dao.listings().filter { it.groupKey == prepared.groupKey || sameProperty(it, prepared) }
+        dao.listings().filter { it.adId == prepared.adId }
             .flatMap { json.decodeFromString<List<CatalogPhoto>>(it.photos) }.distinctBy { it.fileName }
     }
 
     fun discard(rows: List<IncomingEntity>): Boolean = transaction { dao ->
-        if (revision(dao.group(rows.first().groupKey)) != revision(rows)) return@transaction false
-        dao.listingForGroup(rows.first().groupKey)?.let { dao.deleteListing(it.id) }
-        dao.deleteGroup(rows.first().groupKey)
+        if (revision(dao.group(rows.first().chatId, rows.first().messageId)) != revision(rows)) return@transaction false
+        dao.listingForSource(rows.first().chatId, rows.first().messageId)?.let { dao.deleteListing(it.id) }
+        dao.deleteGroup(rows.first().chatId, rows.first().messageId)
         true
     }
 
@@ -102,15 +96,15 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
 
         val before = files(sources, listings)
         val expired = listings.filter { listing ->
-            maxOf(listing.sourceCreatedAt, sources.filter { it.groupKey == listing.groupKey }
+            maxOf(listing.sourceCreatedAt, sources.filter { (it.chatId == listing.chatId && it.messageId == listing.messageId) }
                 .maxOfOrNull { maxOf(it.sourceCreatedAt, it.sourceEditedAt) } ?: 0) < cutoff
         }
         expired.forEach { dao.deleteListing(it.id) }
-        sources.groupBy { it.groupKey }.forEach { (key, rows) ->
+        sources.groupBy { it.chatId to it.messageId }.forEach { (key, rows) ->
             if (rows.maxOf { maxOf(it.sourceCreatedAt, it.sourceEditedAt) } < cutoff ||
                 rows.all { it.status in setOf("DELETED", "NEEDS_REVIEW") }) {
-                dao.deleteGroup(key)
-                dao.listingForGroup(key)?.takeIf { it.status != "ACTIVE" }?.let { dao.deleteListing(it.id) }
+                dao.deleteGroup(key.first, key.second)
+                dao.listingForSource(key.first, key.second)?.takeIf { it.status != "ACTIVE" }?.let { dao.deleteListing(it.id) }
             }
         }
         val remaining = files(dao.allSources(), dao.listings())
@@ -138,7 +132,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
 
     fun stage(rows: List<IncomingEntity>, status: String, now: Long, next: Long = 0, failed: Boolean = false): Boolean =
         transaction { dao ->
-            val current = dao.group(rows.first().groupKey)
+            val current = dao.group(rows.first().chatId, rows.first().messageId)
             if (revision(current) != revision(rows) || current.any { it.status == "DELETED" }) return@transaction false
             current.forEach {
                 dao.saveSource(
@@ -154,7 +148,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         }
 
     fun claim(rows: List<IncomingEntity>, now: Long): String? = transaction { dao ->
-        val current = dao.group(rows.first().groupKey)
+        val current = dao.group(rows.first().chatId, rows.first().messageId)
         if (revision(current) != revision(rows) || current.any {
                 it.status !in setOf(
                     "READY_FOR_MEDIA",
@@ -177,7 +171,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
 
     fun manifest(rows: List<IncomingEntity>, token: String, photos: List<CatalogPhoto>, now: Long): Boolean =
         transaction { dao ->
-            val current = dao.group(rows.first().groupKey)
+            val current = dao.group(rows.first().chatId, rows.first().messageId)
             if (revision(current) != revision(rows) || current.any { it.leaseToken != token }) return@transaction false
             current.forEach {
                 dao.saveSource(
@@ -192,23 +186,22 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
 
     fun promote(rows: List<IncomingEntity>, token: String, prepared: ListingEntity, now: Long): Boolean =
         transaction { dao ->
-            val current = dao.group(rows.first().groupKey)
+            val current = dao.group(rows.first().chatId, rows.first().messageId)
             if (revision(current) != revision(rows) || current.any { it.leaseToken != token || it.status != "DOWNLOADING" }) return@transaction false
-            val matches = dao.listings().filter { it.groupKey == prepared.groupKey || sameProperty(it, prepared) }
+            // Same source is an edit; different posts are duplicates only when their adId matches.
+            val matches = dao.listings().filter { (it.chatId == prepared.chatId && it.messageId == prepared.messageId) || it.adId == prepared.adId }
             val old = matches.maxByOrNull { it.sourceCreatedAt }
             // An old queued/replayed message must not overwrite a newer price or extend its lifetime.
             if (old != null && old.sourceCreatedAt > prepared.sourceCreatedAt) {
-                if (old.groupKey != prepared.groupKey) dao.deleteGroup(prepared.groupKey)
+                if ((old.chatId != prepared.chatId || old.messageId != prepared.messageId)) dao.deleteGroup(prepared.chatId, prepared.messageId)
                 return@transaction false
             }
             matches.filter { it.id != old?.id }.forEach { dao.deleteListing(it.id) }
-            matches.filter { it.groupKey != prepared.groupKey }.forEach { dao.deleteGroup(it.groupKey) }
+            matches.filter { (it.chatId != prepared.chatId || it.messageId != prepared.messageId) }.forEach { dao.deleteGroup(it.chatId, it.messageId) }
             val row = if (old == null) prepared else prepared.copy(
                 id = old.id, createdAt = old.createdAt, publishedAt = old.publishedAt ?: now,
-                tiktokReposted = old.tiktokReposted, threadsReposted = old.threadsReposted,
                 tiktokRepostedAt = old.tiktokRepostedAt, threadsRepostedAt = old.threadsRepostedAt,
                 tiktokStatus = old.tiktokStatus, threadsStatus = old.threadsStatus,
-                tiktokPublishId = old.tiktokPublishId, threadsPublishId = old.threadsPublishId,
                 tiktokState = old.tiktokState, threadsState = old.threadsState
             )
             val id = dao.saveListing(validate(row)).takeIf { it > 0 } ?: row.id
@@ -295,14 +288,12 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         val status = overrideStatus ?: last?.status ?: "PENDING"
         return if (destination == RepostDestination.TIKTOK) row.copy(
             tiktokState = json.encodeToString(state),
-            tiktokStatus = status, tiktokPublishId = last?.publishId, tiktokReposted = published,
+            tiktokStatus = status,
             tiktokRepostedAt = row.tiktokRepostedAt ?: now.takeIf { published }, updatedAt = now
         )
         else row.copy(
             threadsState = json.encodeToString(state),
             threadsStatus = status,
-            threadsPublishId = last?.publishId,
-            threadsReposted = published,
             threadsRepostedAt = row.threadsRepostedAt ?: now.takeIf { published },
             updatedAt = now
         )

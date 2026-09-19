@@ -12,16 +12,16 @@ import com.rieltor.infrastructure.database.model.ListingEntity
 internal interface CatalogDao {
     @Query("SELECT * FROM incoming_telegram_messages")
     suspend fun allSources(): List<IncomingEntity>
-    @Query("DELETE FROM incoming_telegram_messages WHERE groupKey=:key")
-    suspend fun deleteGroup(key: String)
+    @Query("DELETE FROM incoming_telegram_messages WHERE chatId=:chat AND messageId IS :message")
+    suspend fun deleteGroup(chat: Long, message: Long?)
     @Query("DELETE FROM listings WHERE id=:id")
     suspend fun deleteListing(id: Long)
 
     @Query("SELECT * FROM incoming_telegram_messages WHERE chatId=:chat AND messageId=:message")
     suspend fun source(chat: Long, message: Long): IncomingEntity?
 
-    @Query("SELECT * FROM incoming_telegram_messages WHERE groupKey=:key ORDER BY messageId")
-    suspend fun group(key: String): List<IncomingEntity>
+    @Query("SELECT * FROM incoming_telegram_messages WHERE chatId=:chat AND messageId IS :message")
+    suspend fun group(chat: Long, message: Long?): List<IncomingEntity>
 
     @Query("SELECT * FROM incoming_telegram_messages WHERE messageId IS NOT NULL AND status NOT IN ('DELETED','NEEDS_REVIEW') ORDER BY sourceCreatedAt DESC, id DESC")
     suspend fun sources(): List<IncomingEntity>
@@ -29,8 +29,8 @@ internal interface CatalogDao {
     suspend fun saveSource(row: IncomingEntity): Long
     @Query("SELECT * FROM listings WHERE id=:id")
     suspend fun listing(id: Long): ListingEntity?
-    @Query("SELECT * FROM listings WHERE groupKey=:key")
-    suspend fun listingForGroup(key: String): ListingEntity?
+    @Query("SELECT * FROM listings WHERE chatId=:chat AND messageId IS :message")
+    suspend fun listingForSource(chat: Long, message: Long?): ListingEntity?
     @Query("SELECT * FROM listings ORDER BY sourceCreatedAt DESC, id DESC")
     suspend fun listings(): List<ListingEntity>
 

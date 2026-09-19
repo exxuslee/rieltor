@@ -16,7 +16,7 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
 
 @Database(
-    entities = [IncomingEntity::class, ListingEntity::class], version = 18,
+    entities = [IncomingEntity::class, ListingEntity::class], version = 21,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -27,6 +27,28 @@ private val migrations = arrayOf(
     object : Migration(17, 18) {
         override fun migrate(connection: SQLiteConnection) {
             connection.execSQL("ALTER TABLE listings ADD COLUMN rawText TEXT NOT NULL DEFAULT ''")
+        }
+    },
+    object : Migration(18, 19) {
+        override fun migrate(connection: SQLiteConnection) {
+            // Keep an old successful flag representable before its redundant column is removed.
+            connection.execSQL("UPDATE listings SET tiktokRepostedAt = updatedAt WHERE tiktokReposted = 1 AND tiktokRepostedAt IS NULL")
+            connection.execSQL("UPDATE listings SET threadsRepostedAt = updatedAt WHERE threadsReposted = 1 AND threadsRepostedAt IS NULL")
+            connection.execSQL("ALTER TABLE listings DROP COLUMN tiktokReposted")
+            connection.execSQL("ALTER TABLE listings DROP COLUMN threadsReposted")
+            connection.execSQL("ALTER TABLE listings DROP COLUMN tiktokPublishId")
+            connection.execSQL("ALTER TABLE listings DROP COLUMN threadsPublishId")
+        }
+    },
+    object : Migration(19, 20) {
+        override fun migrate(connection: SQLiteConnection) = migrateAdIds(connection)
+    },
+    object : Migration(20, 21) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("DROP INDEX index_incoming_telegram_messages_sourceKey")
+            connection.execSQL("DROP INDEX index_listings_sourceKey")
+            connection.execSQL("ALTER TABLE incoming_telegram_messages DROP COLUMN sourceKey")
+            connection.execSQL("ALTER TABLE listings DROP COLUMN sourceKey")
         }
     },
 )

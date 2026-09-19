@@ -18,12 +18,26 @@ import com.rieltor.infrastructure.job.CleanupJob as MediaCleanupJob
 class CatalogRetentionTest {
     private val now = Instant.parse("2026-09-16T12:00:00Z")
     private val cutoff = now.minus(Duration.ofDays(30)).toEpochMilli()
-    private fun message(id: Long, date: Long, price: Int = 82000, drive: String = "https://drive.google.com/drive/folders/property") =
-        SourceMessage(-100, id, 20, text = "Квартира\nІрпінь\nЦіна: $price USD\n$drive", raw = "raw-$id", sourceCreatedAt = date)
+    private fun message(
+        id: Long,
+        date: Long,
+        price: Int = 82000,
+        drive: String = "https://drive.google.com/drive/folders/property"
+    ) =
+        SourceMessage(
+            -100,
+            id,
+            20,
+            text = "Квартира\nІрпінь\nЦіна: $price USD\n$drive",
+            raw = "raw-$id",
+            sourceCreatedAt = date,
+            userId = 123
+        )
+
     private fun photo(name: String) = CatalogPhoto(name, name, "v1", 10, 10, "hash")
     private fun promote(repo: CatalogRepository, message: SourceMessage, photos: List<CatalogPhoto>): Boolean {
         repo.receive(message, now.toEpochMilli(), 0)
-        val rows = repo.group(message.groupKey)
+        val rows = repo.group(message.chatId, message.messageId)
         repo.stage(rows, "READY_FOR_MEDIA", now.toEpochMilli())
         val token = assertNotNull(repo.claim(rows, now.toEpochMilli()))
         repo.manifest(rows, token, photos, now.toEpochMilli())
@@ -31,7 +45,8 @@ class CatalogRetentionTest {
         return repo.promote(rows, token, parsed.copy(photos = Json.encodeToString(photos)), now.toEpochMilli())
     }
 
-    @Test fun `expires by source date despite recent verification and recent file timestamp`() {
+    @Test
+    fun `expires by source date despite recent verification and recent file timestamp`() {
         val root = Files.createTempDirectory("catalog-expiry")
         val media = Files.createDirectory(root.resolve("media"))
         RoomDatabaseStore(root.resolve("test.db")).use { db ->
@@ -39,8 +54,12 @@ class CatalogRetentionTest {
             val expired = message(1, cutoff - 1)
             promote(repo, expired, listOf(photo("expired.jpg")))
             Files.createFile(media.resolve("expired.jpg")) // mtime is new, source is old
-            repo.stage(repo.group(expired.groupKey), "PROMOTED", now.toEpochMilli())
-            promote(repo, message(2, cutoff, drive = "https://drive.google.com/open?id=boundary"), listOf(photo("boundary.jpg")))
+            repo.stage(repo.group(expired.chatId, expired.messageId), "PROMOTED", now.toEpochMilli())
+            promote(
+                repo,
+                message(2, cutoff, price = 83000, drive = "https://drive.google.com/open?id=boundary"),
+                listOf(photo("boundary.jpg"))
+            )
             Files.createFile(media.resolve("boundary.jpg"))
             Files.setLastModifiedTime(media.resolve("boundary.jpg"), FileTime.fromMillis(0))
             MediaCleanupJob(media, clock = Clock.fixed(now, ZoneOffset.UTC), catalogRepository = repo).use {
@@ -54,20 +73,21 @@ class CatalogRetentionTest {
         }
     }
 
-    @Test fun `weekly repost and price reduction update same listing and preserve publication history`() {
+    @Test
+    fun `weekly repost with same adId preserves publication history`() {
         val root = Files.createTempDirectory("catalog-repost")
         RoomDatabaseStore(root.resolve("test.db")).use { db ->
             val repo = CatalogRepository(db)
             promote(repo, message(1, cutoff - 100), listOf(photo("kept.jpg")))
             val old = repo.listings().single()
-            repo.save(old.copy(tiktokReposted = true, tiktokStatus = "PUBLISHED"))
-            val fresh = message(2, now.toEpochMilli(), 79000, "https://drive.google.com/open?id=property&usp=sharing")
+            repo.save(old.copy(tiktokRepostedAt = now.toEpochMilli(), tiktokStatus = "PUBLISHED"))
+            val fresh = message(2, now.toEpochMilli(), 82000, "https://drive.google.com/open?id=property&usp=sharing")
             assertTrue(promote(repo, fresh, listOf(photo("kept.jpg"))))
             val current = repo.listings().single()
             assertEquals(old.id, current.id)
-            assertEquals(79_000L, current.price)
+            assertEquals(82_000L, current.price)
             assertEquals(now.toEpochMilli(), current.sourceCreatedAt)
-            assertTrue(current.tiktokReposted)
+            assertNotNull(current.tiktokRepostedAt)
             assertNull(repo.source(-100, 1))
             assertEquals(listOf(photo("kept.jpg")), repo.cachedPhotos(current))
             assertFalse(promote(repo, message(3, cutoff - 1), listOf(photo("stale.jpg"))))
@@ -77,7 +97,8 @@ class CatalogRetentionTest {
         }
     }
 
-    @Test fun `source edit renews listing but unchanged refresh does not`() {
+    @Test
+    fun `source edit renews listing but unchanged refresh does not`() {
         val root = Files.createTempDirectory("catalog-edit")
         RoomDatabaseStore(root.resolve("test.db")).use { db ->
             val repo = CatalogRepository(db)
@@ -92,17 +113,31 @@ class CatalogRetentionTest {
         }
     }
 
-    @Test fun `cleanup removes terminal and expired incoming including legacy and protects shared files`() {
+    @Test
+    fun `cleanup removes terminal and expired incoming including legacy and protects shared files`() {
         val root = Files.createTempDirectory("catalog-inbox-cleanup")
         RoomDatabaseStore(root.resolve("test.db")).use { db ->
             val repo = CatalogRepository(db)
             promote(repo, message(1, cutoff - 1), listOf(photo("shared.jpg")))
-            promote(repo, message(2, now.toEpochMilli(), drive = "https://drive.google.com/drive/folders/other"), listOf(photo("shared.jpg")))
+            promote(
+                repo,
+                message(2, now.toEpochMilli(), drive = "https://drive.google.com/drive/folders/other"),
+                listOf(photo("shared.jpg"))
+            )
             val invalid = message(3, now.toEpochMilli())
             repo.receive(invalid, now.toEpochMilli(), 0)
-            repo.stage(repo.group(invalid.groupKey), "NEEDS_REVIEW", now.toEpochMilli())
+            repo.stage(repo.group(invalid.chatId, invalid.messageId), "NEEDS_REVIEW", now.toEpochMilli())
             val legacy = repo.source(-100, 3)!!
-            db.blocking { it.catalogDao().saveSource(legacy.copy(id = 0, messageId = null, groupKey = "legacy", status = "MEDIA_RETRY", sourceCreatedAt = cutoff - 1)) }
+            db.blocking {
+                it.catalogDao().saveSource(
+                    legacy.copy(
+                        id = 0,
+                        messageId = null,
+                        status = "MEDIA_RETRY",
+                        sourceCreatedAt = cutoff - 1
+                    )
+                )
+            }
             val retention = repo.cleanExpired(cutoff)
             assertEquals(setOf("shared.jpg"), retention.referenced)
             assertTrue(retention.removed.isEmpty())
@@ -111,7 +146,8 @@ class CatalogRetentionTest {
         }
     }
 
-    @Test fun `orphan sweep has grace for downloads and database cleanup works without media directory`() {
+    @Test
+    fun `orphan sweep has grace for downloads and database cleanup works without media directory`() {
         val root = Files.createTempDirectory("catalog-orphans")
         RoomDatabaseStore(root.resolve("test.db")).use { db ->
             val repo = CatalogRepository(db)
@@ -131,16 +167,21 @@ class CatalogRetentionTest {
         }
     }
 
-    @Test fun `discard checks revision and removes invalid current source and listing`() {
+    @Test
+    fun `discard checks revision and removes invalid current source and listing`() {
         val root = Files.createTempDirectory("catalog-discard")
         RoomDatabaseStore(root.resolve("test.db")).use { db ->
             val repo = CatalogRepository(db)
             val source = message(1, now.toEpochMilli())
             promote(repo, source, emptyList())
-            val stale = repo.group(source.groupKey)
-            repo.receive(source.copy(text = "Без ціни і посилання", sourceEditedAt = now.toEpochMilli() + 1), now.toEpochMilli(), 0)
+            val stale = repo.group(source.chatId, source.messageId)
+            repo.receive(
+                source.copy(text = "Без ціни і посилання", sourceEditedAt = now.toEpochMilli() + 1),
+                now.toEpochMilli(),
+                0
+            )
             assertFalse(repo.discard(stale))
-            assertTrue(repo.discard(repo.group(source.groupKey)))
+            assertTrue(repo.discard(repo.group(source.chatId, source.messageId)))
             assertNull(repo.source(-100, 1))
             assertTrue(repo.listings().isEmpty())
         }

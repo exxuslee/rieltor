@@ -76,7 +76,7 @@ class CatalogIngestionService(
                 }
             }
         }
-        val current = repository.group(rows.first().groupKey)
+        val current = repository.group(rows.first().chatId, rows.first().messageId)
         return repository.revision(current) == repository.revision(rows) && current.all { it.status != "DELETED" && it.verifyAfter <= now() }
     }
 

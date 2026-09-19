@@ -172,7 +172,8 @@ class TelegramClientAdapter(
                 update.newContent.toString(),
                 existing.sourceCreatedAt,
                 existing.sourceEditedAt,
-                mediaIdentity(update.newContent)
+                mediaIdentity(update.newContent),
+                existing.userId
             ), System.currentTimeMillis(), settings.snapshot().stabilityWindowMinutes * 60_000
         )
     }
@@ -213,7 +214,8 @@ class TelegramClientAdapter(
             message.toString(),
             message.date.toLong() * 1000,
             message.editDate.toLong() * 1000,
-            mediaIdentity(message.content)
+            mediaIdentity(message.content),
+            (message.senderId as? TdApi.MessageSenderUser)?.userId
         )
     }
 

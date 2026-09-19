@@ -7,7 +7,6 @@ import com.rieltor.di.googleOAuthState
 import com.rieltor.di.threadsOAuthState
 import com.rieltor.di.tikTokOAuthState
 import com.rieltor.infrastructure.config.JsonSettingsStore
-import com.rieltor.infrastructure.config.serverPort
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.google.GoogleDriveAuthException
@@ -20,7 +19,6 @@ import com.rieltor.infrastructure.threads.ThreadsAuthException
 import com.rieltor.infrastructure.threads.ThreadsAuthService
 import com.rieltor.infrastructure.tiktok.TikTokAuthException
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
-import io.github.cdimascio.dotenv.Dotenv
 import io.ktor.client.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
@@ -44,17 +42,18 @@ import io.ktor.server.cio.CIO as ServerCIO
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation as ServerContentNegotiation
 
 fun main() {
-    val dotenv = Dotenv.configure().ignoreIfMissing().load()
-    embeddedServer(ServerCIO, port = serverPort(dotenv), host = "0.0.0.0") { module(dotenv) }
+    val root = Path.of(System.getenv("APP_PROJECT_ROOT") ?: ".").toAbsolutePath().normalize()
+    val settings = JsonSettingsStore(root.resolve("settings.json"))
+    embeddedServer(ServerCIO, port = settings.snapshot().serverPort, host = "0.0.0.0") { module(settings) }
         .start(wait = true)
 }
 
-fun Application.module(dotenv: Dotenv) {
+fun Application.module(settings: JsonSettingsStore) {
     val delayedStartupScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     install(Koin) {
         slf4jLogger()
-        modules(applicationModules(dotenv))
+        modules(applicationModules(settings))
     }
 
     val json = get<Json>()

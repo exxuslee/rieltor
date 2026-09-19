@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "incoming_telegram_messages", indices = [
-        Index(value = ["chatId", "messageId"], unique = true), Index(value = ["groupKey"]),
+        Index(value = ["chatId", "messageId"], unique = true),
         Index(value = ["status", "verifyAfter"]),
     ]
 )
@@ -16,7 +16,7 @@ data class IncomingEntity(
     val chatId: Long,
     val messageId: Long?,
     val messageThreadId: Long,
-    val groupKey: String,
+    val userId: Long? = null,
     val rawMessage: String,
     val rawText: String,
     val sourceCreatedAt: Long,
@@ -36,7 +36,7 @@ data class IncomingEntity(
 
 @Entity(
     tableName = "listings", indices = [
-        Index(value = ["groupKey"], unique = true), Index(value = ["chatId", "messageId"], unique = true),
+        Index(value = ["adId"], unique = true), Index(value = ["chatId", "messageId"], unique = true),
         Index(value = ["status", "sourceCreatedAt", "id"]),
         Index(value = ["status", "location", "typeOfRealty", "currency", "price"]),
         Index(value = ["status", "tiktokStatus", "sourceCreatedAt"]),
@@ -46,23 +46,32 @@ data class IncomingEntity(
 @kotlinx.serialization.Serializable
 data class ListingEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val groupKey: String, val chatId: Long, val messageId: Long?, val messageThreadId: Long,
+    val chatId: Long, val messageId: Long?,
+    val adId: String,
+    val messageThreadId: Long,
     val sourceRevision: String,
-    val title: String = "", val description: String = "", val rawText: String = "", val location: String? = null,
-    val address: String? = null, val typeOfRealty: String? = null,
+    val title: String = "", val description: String = "",
+    val rawText: String = "", val location: String? = null,
+    val address: String? = null,
+    val typeOfRealty: String? = null,
     val tags: String = "[]",
-    val primeParams: String = "{}", val secondaryParams: String = "{}",
+    val primeParams: String = "{}",
+    val secondaryParams: String = "{}",
     val governmentPrograms: String = "[]",
     val googleDriveUrls: String = "[]",
     val price: Long? = null, val currency: String? = null,
-    val areaM2: Double? = null, val landAreaSotka: Double? = null, val rooms: Int? = null,
-    val floor: Int? = null, val totalFloors: Int? = null, val photos: String = "[]",
+    val areaM2: Double? = null, val landAreaSotka: Double? = null,
+    val rooms: Int? = null,
+    val floor: Int? = null, val totalFloors: Int? = null,
+    val photos: String = "[]",
     val status: String = "NEEDS_REVIEW",
-    val sourceCreatedAt: Long, val createdAt: Long, val updatedAt: Long,
+    val sourceCreatedAt: Long, val createdAt: Long,
+    val updatedAt: Long,
     val publishedAt: Long? = null,
-    val tiktokReposted: Boolean = false, val threadsReposted: Boolean = false,
-    val tiktokRepostedAt: Long? = null, val threadsRepostedAt: Long? = null,
-    val tiktokStatus: String = "PENDING", val threadsStatus: String = "PENDING",
-    val tiktokPublishId: String? = null, val threadsPublishId: String? = null,
-    val tiktokState: String = "{\"attempts\":[]}", val threadsState: String = "{\"attempts\":[]}",
+    val tiktokRepostedAt: Long? = null,
+    val threadsRepostedAt: Long? = null,
+    val tiktokStatus: String = "PENDING",
+    val threadsStatus: String = "PENDING",
+    val tiktokState: String = "{\"attempts\":[]}",
+    val threadsState: String = "{\"attempts\":[]}",
 )
