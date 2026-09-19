@@ -47,14 +47,16 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
                 )
             )
         }
-        dao.listingForSource(message.chatId, message.messageId)?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
+        dao.listingForSource(message.chatId, message.messageId)
+            ?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
     }
 
     fun delete(chatId: Long, messageId: Long, now: Long) = transaction { dao ->
         val row = dao.source(chatId, messageId) ?: return@transaction
         dao.group(row.chatId, row.messageId)
             .forEach { dao.saveSource(it.copy(status = "DELETED", leaseToken = null, leaseUntil = 0)) }
-        dao.listingForSource(row.chatId, row.messageId)?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
+        dao.listingForSource(row.chatId, row.messageId)
+            ?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
     }
 
     fun source(chatId: Long, messageId: Long) = transaction { it.source(chatId, messageId) }
@@ -96,15 +98,18 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
 
         val before = files(sources, listings)
         val expired = listings.filter { listing ->
-            maxOf(listing.sourceCreatedAt, sources.filter { (it.chatId == listing.chatId && it.messageId == listing.messageId) }
-                .maxOfOrNull { maxOf(it.sourceCreatedAt, it.sourceEditedAt) } ?: 0) < cutoff
+            maxOf(
+                listing.sourceCreatedAt,
+                sources.filter { (it.chatId == listing.chatId && it.messageId == listing.messageId) }
+                    .maxOfOrNull { maxOf(it.sourceCreatedAt, it.sourceEditedAt) } ?: 0) < cutoff
         }
         expired.forEach { dao.deleteListing(it.id) }
         sources.groupBy { it.chatId to it.messageId }.forEach { (key, rows) ->
             if (rows.maxOf { maxOf(it.sourceCreatedAt, it.sourceEditedAt) } < cutoff ||
                 rows.all { it.status in setOf("DELETED", "NEEDS_REVIEW") }) {
                 dao.deleteGroup(key.first, key.second)
-                dao.listingForSource(key.first, key.second)?.takeIf { it.status != "ACTIVE" }?.let { dao.deleteListing(it.id) }
+                dao.listingForSource(key.first, key.second)?.takeIf { it.status != "ACTIVE" }
+                    ?.let { dao.deleteListing(it.id) }
             }
         }
         val remaining = files(dao.allSources(), dao.listings())
@@ -189,15 +194,20 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
             val current = dao.group(rows.first().chatId, rows.first().messageId)
             if (revision(current) != revision(rows) || current.any { it.leaseToken != token || it.status != "DOWNLOADING" }) return@transaction false
             // Same source is an edit; different posts are duplicates only when their adId matches.
-            val matches = dao.listings().filter { (it.chatId == prepared.chatId && it.messageId == prepared.messageId) || it.adId == prepared.adId }
+            val matches = dao.listings()
+                .filter { (it.chatId == prepared.chatId && it.messageId == prepared.messageId) || it.adId == prepared.adId }
             val old = matches.maxByOrNull { it.sourceCreatedAt }
             // An old queued/replayed message must not overwrite a newer price or extend its lifetime.
             if (old != null && old.sourceCreatedAt > prepared.sourceCreatedAt) {
-                if ((old.chatId != prepared.chatId || old.messageId != prepared.messageId)) dao.deleteGroup(prepared.chatId, prepared.messageId)
+                if ((old.chatId != prepared.chatId || old.messageId != prepared.messageId)) dao.deleteGroup(
+                    prepared.chatId,
+                    prepared.messageId
+                )
                 return@transaction false
             }
             matches.filter { it.id != old?.id }.forEach { dao.deleteListing(it.id) }
-            matches.filter { (it.chatId != prepared.chatId || it.messageId != prepared.messageId) }.forEach { dao.deleteGroup(it.chatId, it.messageId) }
+            matches.filter { (it.chatId != prepared.chatId || it.messageId != prepared.messageId) }
+                .forEach { dao.deleteGroup(it.chatId, it.messageId) }
             val row = if (old == null) prepared else prepared.copy(
                 id = old.id, createdAt = old.createdAt, publishedAt = old.publishedAt ?: now,
                 tiktokRepostedAt = old.tiktokRepostedAt, threadsRepostedAt = old.threadsRepostedAt,

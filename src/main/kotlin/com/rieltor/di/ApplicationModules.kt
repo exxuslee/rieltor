@@ -10,7 +10,7 @@ import com.rieltor.domain.service.ListingCaptionFormatter
 import com.rieltor.infrastructure.config.*
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.repository.CatalogRepository
-import com.rieltor.infrastructure.database.repository.TikTokPublishThrottleRepositoryImpl
+import com.rieltor.infrastructure.database.repository.TikTokRepositoryImpl
 import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.google.GoogleDrivePhotoSource
 import com.rieltor.infrastructure.job.CleanupJob
@@ -57,7 +57,7 @@ private val persistenceModule = module {
     single { JsonCredentialStore(credentialsPath(get<JsonSettingsStore>().snapshot())) }
     single<SecretRepository> { get<JsonCredentialStore>() }
     single<TikTokTokenRepository> { JsonTikTokTokenRepository(get()) }
-    single<TikTokPublishThrottleRepository> { TikTokPublishThrottleRepositoryImpl(get()) }
+    single<TikTokRepository> { TikTokRepositoryImpl(get()) }
     single<GoogleDriveTokenRepository> { JsonGoogleDriveTokenRepository(get()) }
     single<ThreadsTokenRepository> { JsonThreadsTokenRepository(get()) }
 

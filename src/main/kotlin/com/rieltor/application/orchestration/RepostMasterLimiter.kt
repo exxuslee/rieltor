@@ -1,6 +1,6 @@
 package com.rieltor.application.orchestration
 
-import com.rieltor.domain.repository.TikTokPublishThrottleRepository
+import com.rieltor.domain.repository.TikTokRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -15,7 +15,7 @@ fun interface RepostMasterLimiter {
 }
 
 class PersistentRepostMasterLimiter(
-    private val repository: TikTokPublishThrottleRepository,
+    private val repository: TikTokRepository,
     private val maxMessagesPer24Hours: Int,
     private val minIntervalMillis: Long,
     private val nowMillis: () -> Long = System::currentTimeMillis,

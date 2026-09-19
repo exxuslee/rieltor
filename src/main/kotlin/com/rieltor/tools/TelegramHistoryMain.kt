@@ -18,6 +18,7 @@ fun main() = runBlocking {
         val secrets = JsonCredentialStore(credentialsPath(local))
         fun secret(name: String) = secrets.get(name)?.takeIf { it.isNotBlank() }
             ?: error("Missing $name in secrets.json")
+
         val apiId = secret(SecretNames.TELEGRAM_API_ID).toInt()
         val apiHash = secret(SecretNames.TELEGRAM_API_HASH)
         val userId = secret(SecretNames.TELEGRAM_USER_ID).toLong()

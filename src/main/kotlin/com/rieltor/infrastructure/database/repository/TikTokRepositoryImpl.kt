@@ -1,14 +1,14 @@
 package com.rieltor.infrastructure.database.repository
 
 import com.rieltor.domain.model.RepostDestination
-import com.rieltor.domain.repository.TikTokPublishThrottleRepository
+import com.rieltor.domain.repository.TikTokRepository
 import com.rieltor.domain.repository.TrackedTikTokPublish
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 
-class TikTokPublishThrottleRepositoryImpl(
+class TikTokRepositoryImpl(
     private val database: RoomDatabaseStore,
     private val catalog: CatalogRepository = CatalogRepository(database)
-) : TikTokPublishThrottleRepository {
+) : TikTokRepository {
 
     override fun reserveSlot(nowMillis: Long, windowMillis: Long, maxPostsPerWindow: Int, minIntervalMillis: Long) =
         database.settings.reserveAnonymous(nowMillis, windowMillis, maxPostsPerWindow, minIntervalMillis)

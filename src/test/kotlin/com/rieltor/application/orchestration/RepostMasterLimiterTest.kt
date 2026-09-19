@@ -1,7 +1,7 @@
 package com.rieltor.application.orchestration
 
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
-import com.rieltor.infrastructure.database.repository.TikTokPublishThrottleRepositoryImpl
+import com.rieltor.infrastructure.database.repository.TikTokRepositoryImpl
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import kotlin.test.Test
@@ -15,7 +15,7 @@ class RepostMasterLimiterTest {
         val delays = mutableListOf<Long>()
 
         RoomDatabaseStore(path).use { database ->
-            val repository = TikTokPublishThrottleRepositoryImpl(database)
+            val repository = TikTokRepositoryImpl(database)
             repository.blockUntil(clock + 86_400_000L)
             PersistentRepostMasterLimiter(
                 repository = repository,
@@ -37,7 +37,7 @@ class RepostMasterLimiterTest {
 
         RoomDatabaseStore(path).use { database ->
             val limiter = PersistentRepostMasterLimiter(
-                repository = TikTokPublishThrottleRepositoryImpl(database),
+                repository = TikTokRepositoryImpl(database),
                 maxMessagesPer24Hours = 2,
                 minIntervalMillis = 10,
                 nowMillis = { clock },
@@ -48,7 +48,7 @@ class RepostMasterLimiterTest {
         }
         RoomDatabaseStore(path).use { database ->
             PersistentRepostMasterLimiter(
-                repository = TikTokPublishThrottleRepositoryImpl(database),
+                repository = TikTokRepositoryImpl(database),
                 maxMessagesPer24Hours = 2,
                 minIntervalMillis = 10,
                 nowMillis = { clock },

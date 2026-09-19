@@ -37,7 +37,7 @@ class TikTokPhotoPublisher(
     override val maxPhotoCount: Int = DEFAULT_REPOST_MAX_PHOTO_COUNT,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val delayMillis: suspend (Long) -> Unit = { delay(it) },
-    private val publishRepository: TikTokPublishThrottleRepository? = null,
+    private val publishRepository: TikTokRepository? = null,
     private val globalCooldownMillis: Long = DEFAULT_GLOBAL_COOLDOWN_MILLIS,
 ) : PhotoPublisher {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -273,7 +273,7 @@ class TikTokPhotoPublisher(
 
     private suspend fun refreshTrackedPublishes(
         accessToken: String,
-        repository: TikTokPublishThrottleRepository,
+        repository: TikTokRepository,
     ): TrackedPublishSnapshot {
         val tracked = repository.trackedPublishes(nowMillis(), PENDING_SHARE_WINDOW_MILLIS)
         if (tracked.isEmpty()) return TrackedPublishSnapshot(0, emptyList())

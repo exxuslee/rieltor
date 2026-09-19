@@ -2,7 +2,7 @@ package com.rieltor.infrastructure.tiktok
 
 import com.rieltor.domain.model.StoredTokens
 import com.rieltor.domain.repository.PublisherBackpressureException
-import com.rieltor.domain.repository.TikTokPublishThrottleRepository
+import com.rieltor.domain.repository.TikTokRepository
 import com.rieltor.domain.repository.TikTokTokenRepository
 import com.rieltor.domain.repository.TrackedTikTokPublish
 import com.rieltor.infrastructure.config.ApplicationSettings
@@ -608,7 +608,7 @@ class TikTokPhotoPublisherTest {
         override fun latest(): StoredTokens = tokens
     }
 
-    private class CapturingThrottleRepository : TikTokPublishThrottleRepository {
+    private class CapturingThrottleRepository : TikTokRepository {
         var blockedUntil: Long? = null
         var reserveSlotCalls = 0
         val tracked = mutableListOf<TrackedTikTokPublish>()

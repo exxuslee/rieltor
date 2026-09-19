@@ -5,7 +5,7 @@ import com.rieltor.domain.model.SourceMessage
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.model.ListingEntity
 import com.rieltor.infrastructure.database.repository.CatalogRepository
-import com.rieltor.infrastructure.database.repository.TikTokPublishThrottleRepositoryImpl
+import com.rieltor.infrastructure.database.repository.TikTokRepositoryImpl
 import com.rieltor.web.CatalogQuery
 import io.ktor.http.*
 import kotlinx.serialization.json.Json
@@ -75,13 +75,13 @@ class RoomPersistenceTest {
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db); val id = repo.save(listing(1))
             val attempt = assertNotNull(repo.prepare(id, setOf(RepostDestination.TIKTOK), 1000))
-            val throttle = TikTokPublishThrottleRepositoryImpl(db, repo)
+            val throttle = TikTokRepositoryImpl(db, repo)
             throttle.trackPublishForListing(id, attempt, "pub-1", "DRAFT", 2000)
             throttle.updateTrackedStatus("pub-1", "SEND_TO_USER_INBOX", 3000)
             assertNull(repo.listing(id)!!.tiktokRepostedAt)
         }
         RoomDatabaseStore(path).use { db ->
-            val repo = CatalogRepository(db); val throttle = TikTokPublishThrottleRepositoryImpl(db, repo)
+            val repo = CatalogRepository(db); val throttle = TikTokRepositoryImpl(db, repo)
             assertEquals("pub-1", throttle.trackedPublishes(10_000, 86_400_000).single().publishId)
             throttle.updateTrackedStatus("pub-1", "PUBLISH_COMPLETE", 11_000)
             assertEquals(11_000, repo.listings().single().tiktokRepostedAt)
