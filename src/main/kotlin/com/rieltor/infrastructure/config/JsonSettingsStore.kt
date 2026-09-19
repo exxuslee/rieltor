@@ -23,15 +23,23 @@ data class MonitoredTelegramChat(
 
 @Serializable
 data class LocalSettings(
-    val schemaVersion: Int = 1, val generation: Long = 0,
+    val schemaVersion: Int = 1,
+    val generation: Long = 0,
     val stabilityWindowMinutes: Long = 20,
     val topicTypeMapping: Map<String, String> = emptyMap(),
     val topicNames: Map<String, String> = emptyMap(),
-    val uahPerUsd: Double = 45.0, val usdPerEur: Double = 1.1,
-    val driveFileDelayMs: Long = 500, val driveJobDelayMs: Long = 1_000,
-    val driveMaxAttempts: Int = 5, val driveRetryBaseMs: Long = 60_000, val maxCatalogPhotos: Int = 50,
-    val minIntervalMs: Long = 20 * 60_000, val maxMessagesPer24Hours: Int = 36,
-    val tiktokEnabled: Boolean = true, val threadsEnabled: Boolean = false, val blockedUntil: Long = 0,
+    val uahPerUsd: Double = 45.0,
+    val usdPerEur: Double = 1.1,
+    val driveFileDelayMs: Long = 500,
+    val driveJobDelay: Long = 1,
+    val driveMaxAttempts: Int = 5,
+    val driveRetryBaseMs: Long = 60_000,
+    val maxCatalogPhotos: Int = 50,
+    val minIntervalMs: Long = 20 * 60_000,
+    val maxMessagesPer24Hours: Int = 36,
+    val tiktokEnabled: Boolean = true,
+    val threadsEnabled: Boolean = false,
+    val blockedUntil: Long = 0,
     val slotReservations: List<SlotReservation> = emptyList(),
     val orphanGraceMs: Long = 4 * 86_400_000L,
     val serverPort: Int = 8383,
@@ -72,6 +80,7 @@ class JsonSettingsStore(val path: Path, defaults: LocalSettings = LocalSettings(
 
     @Synchronized
     fun snapshot(): LocalSettings = state
+
     @Synchronized
     fun update(change: (LocalSettings) -> LocalSettings) {
         check(!writeFailed) { "Settings persistence failed; restart after restoring settings.json" }
@@ -117,7 +126,7 @@ class JsonSettingsStore(val path: Path, defaults: LocalSettings = LocalSettings(
         require(value.schemaVersion == 1 && value.stabilityWindowMinutes >= 20)
         require(value.minIntervalMs >= 0 && value.maxMessagesPer24Hours > 0)
         require(value.driveMaxAttempts > 0 && value.driveRetryBaseMs > 0 && value.maxCatalogPhotos in 1..1000)
-        require(value.driveFileDelayMs >= 0 && value.driveJobDelayMs >= 0 && value.orphanGraceMs > 0)
+        require(value.driveFileDelayMs >= 0 && value.driveJobDelay >= 0 && value.orphanGraceMs > 0)
         require(value.serverPort in 1..65535)
         require(value.databasePath.isNotBlank() && value.secretsPath.isNotBlank() && value.mediaDirectory.isNotBlank())
         require(value.tikTokMode.uppercase() in setOf("POST", "DRAFT"))

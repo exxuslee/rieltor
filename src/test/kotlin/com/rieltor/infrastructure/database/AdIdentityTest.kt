@@ -8,6 +8,7 @@ import com.rieltor.domain.model.senderFromRaw
 import com.rieltor.domain.model.userIdFromRaw
 import com.rieltor.domain.service.CatalogListingParser
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
+import com.rieltor.infrastructure.database.model.IncomingStatus
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import kotlinx.serialization.json.*
 import java.nio.file.Files
@@ -34,7 +35,7 @@ class AdIdentityTest {
             repo.receive(source, 1000, 0)
             assertEquals(1961809113L, repo.source(source.chatId, source.messageId)?.userId)
             repo.receive(source.copy(text = "Ірпінь\nКвартира\nЦіна: 79 000 USD", raw = "MessageText {}", sourceEditedAt = 2000), 2000, 0)
-            val rows = repo.group(source.chatId, source.messageId)
+            val rows = repo.incoming()
             assertEquals(1961809113L, rows.single().userId)
             assertEquals("1961809113:IRPIN:APARTMENT 1:79000:null:null",
                 CatalogListingParser().parse(rows, "APARTMENT 1", 2000).adId)
@@ -57,8 +58,8 @@ class AdIdentityTest {
                     "Квартира\nІрпінь\nПлоща: $area м²\nЦіна: $price USD\nhttps://drive.google.com/drive/folders/folder$id",
                     "raw", id * 1000, userId = sender.toLong())
                 repo.receive(source, 10000, 0)
-                val rows = repo.group(source.chatId, source.messageId)
-                repo.stage(rows, "READY_FOR_MEDIA", 10000)
+                val rows = repo.incoming(source.chatId, source.messageId)
+                repo.stage(rows, IncomingStatus.ReadyForMedia, 10000)
                 val token = assertNotNull(repo.claim(rows, 10000))
                 assertTrue(repo.promote(rows, token, CatalogListingParser().parse(rows, "APARTMENT 1", 10000), 10000))
             }
@@ -117,7 +118,7 @@ class AdIdentityTest {
         }
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db)
-            assertEquals(3, repo.groups().size)
+            assertEquals(3, repo.incoming().size)
             assertEquals(2, repo.listings().size)
             val merged = repo.listings().single { it.adId.startsWith("123:") }
             assertEquals(2, merged.id)

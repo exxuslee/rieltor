@@ -6,6 +6,7 @@ import com.rieltor.domain.model.*
 import com.rieltor.infrastructure.database.local.CatalogDao
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.model.IncomingEntity
+import com.rieltor.infrastructure.database.model.IncomingStatus
 import com.rieltor.infrastructure.database.model.ListingEntity
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
@@ -22,47 +23,41 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
 
     fun receive(message: SourceMessage, now: Long, stabilityMs: Long) = transaction { dao ->
         val old = dao.source(message.chatId, message.messageId)
-        if (old?.contentHash == message.fingerprint() || old?.status == "DELETED") {
+        if (old?.contentHash == message.fingerprint() || old?.status == IncomingStatus.Deleted) {
             return@transaction
         }
         if (old != null && message.sourceEditedAt < old.sourceEditedAt) {
             return@transaction
         }
         val row = IncomingEntity(
-            id = old?.id ?: 0, chatId = message.chatId, messageId = message.messageId,
+            id = old?.id ?: 0,
+            chatId = message.chatId,
+            messageId = message.messageId,
             messageThreadId = message.messageThreadId,
-            rawMessage = message.raw, rawText = message.text,
+            rawMessage = message.raw,
+            rawText = message.text,
             userId = message.userId ?: old?.userId ?: userIdFromRaw(message.raw),
-            sourceCreatedAt = message.sourceCreatedAt, sourceEditedAt = message.sourceEditedAt,
-            receivedAt = old?.receivedAt ?: now, contentHash = message.fingerprint(),
-            revision = (old?.revision ?: 0) + 1, verifyAfter = now + stabilityMs,
+            sourceCreatedAt = message.sourceCreatedAt,
+            sourceEditedAt = message.sourceEditedAt,
+            receivedAt = old?.receivedAt ?: now,
+            contentHash = message.fingerprint(),
+            revision = (old?.revision ?: 0) + 1,
+            verifyAfter = now + stabilityMs,
         )
         dao.saveSource(row)
-        // An edit invalidates the source's current media lease.
-        dao.group(message.chatId, message.messageId).filter { it.status != "DELETED" }.forEach {
-            dao.saveSource(
-                it.copy(
-                    status = "WAITING_STABILITY", verifyAfter = now + stabilityMs,
-                    verifiedAt = null, leaseToken = null, leaseUntil = 0, attemptCount = 0, nextAttemptAt = 0
-                )
-            )
-        }
         dao.listingForSource(message.chatId, message.messageId)
             ?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
     }
 
     fun delete(chatId: Long, messageId: Long, now: Long) = transaction { dao ->
         val row = dao.source(chatId, messageId) ?: return@transaction
-        dao.group(row.chatId, row.messageId)
-            .forEach { dao.saveSource(it.copy(status = "DELETED", leaseToken = null, leaseUntil = 0)) }
+        dao.saveSource(row.copy(status = IncomingStatus.Deleted, leaseToken = null, leaseUntil = 0))
         dao.listingForSource(row.chatId, row.messageId)
             ?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
     }
 
     fun source(chatId: Long, messageId: Long) = transaction { it.source(chatId, messageId) }
-    fun group(chatId: Long, messageId: Long?) = transaction { it.group(chatId, messageId) }
-    fun groups() =
-        transaction { it.sources() }.groupBy { it.chatId to it.messageId }.values.map { it.sortedBy { row -> row.messageId } }
+    fun incoming(): List<IncomingEntity> = transaction { it.sources() }
 
     fun publicListing(id: Long) = database.blocking { it.catalogDao().publicListing(id) }
     fun listing(id: Long) = transaction { it.listing(id) }
@@ -73,10 +68,11 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
             .flatMap { json.decodeFromString<List<CatalogPhoto>>(it.photos) }.distinctBy { it.fileName }
     }
 
-    fun discard(rows: List<IncomingEntity>): Boolean = transaction { dao ->
-        if (revision(dao.group(rows.first().chatId, rows.first().messageId)) != revision(rows)) return@transaction false
-        dao.listingForSource(rows.first().chatId, rows.first().messageId)?.let { dao.deleteListing(it.id) }
-        dao.deleteGroup(rows.first().chatId, rows.first().messageId)
+    fun discard(row: IncomingEntity): Boolean = transaction { dao ->
+        val current = dao.source(row.chatId, row.messageId ?: return@transaction false) ?: return@transaction false
+        if (revision(current) != revision(row)) return@transaction false
+        dao.listingForSource(row.chatId, row.messageId)?.let { dao.deleteListing(it.id) }
+        dao.deleteSource(row.chatId, row.messageId)
         true
     }
 
@@ -104,11 +100,12 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
                     .maxOfOrNull { maxOf(it.sourceCreatedAt, it.sourceEditedAt) } ?: 0) < cutoff
         }
         expired.forEach { dao.deleteListing(it.id) }
-        sources.groupBy { it.chatId to it.messageId }.forEach { (key, rows) ->
-            if (rows.maxOf { maxOf(it.sourceCreatedAt, it.sourceEditedAt) } < cutoff ||
-                rows.all { it.status in setOf("DELETED", "NEEDS_REVIEW") }) {
-                dao.deleteGroup(key.first, key.second)
-                dao.listingForSource(key.first, key.second)?.takeIf { it.status != "ACTIVE" }
+        sources.forEach { row ->
+            if (maxOf(row.sourceCreatedAt, row.sourceEditedAt) < cutoff ||
+                row.status in setOf(IncomingStatus.Deleted, IncomingStatus.NeedsReview)
+            ) {
+                dao.deleteSource(row.chatId, row.messageId)
+                dao.listingForSource(row.chatId, row.messageId)?.takeIf { it.status != "ACTIVE" }
                     ?.let { dao.deleteListing(it.id) }
             }
         }
@@ -132,96 +129,105 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
 
     fun query(query: androidx.room.RoomRawQuery) = database.blocking { it.catalogDao().query(query) }
 
-    fun revision(rows: List<IncomingEntity>) =
-        sha256(rows.joinToString("|") { "${it.id}:${it.revision}:${it.contentHash}" })
+    fun revision(row: IncomingEntity) = sha256("${row.id}:${row.revision}:${row.contentHash}")
 
-    fun stage(rows: List<IncomingEntity>, status: String, now: Long, next: Long = 0, failed: Boolean = false): Boolean =
+    fun stage(
+        row: IncomingEntity,
+        status: IncomingStatus,
+        now: Long,
+        next: Long = 0,
+        failed: Boolean = false
+    ): Boolean =
         transaction { dao ->
-            val current = dao.group(rows.first().chatId, rows.first().messageId)
-            if (revision(current) != revision(rows) || current.any { it.status == "DELETED" }) return@transaction false
-            current.forEach {
-                dao.saveSource(
-                    it.copy(
-                        status = status,
-                        verifiedAt = if (status in setOf("READY_FOR_MEDIA", "PROMOTED")) now else it.verifiedAt,
-                        nextAttemptAt = next, leaseToken = null, leaseUntil = 0,
-                        attemptCount = if (failed) it.attemptCount + 1 else it.attemptCount
-                    )
+            val current = dao.source(row.chatId, row.messageId ?: return@transaction false) ?: return@transaction false
+            if (revision(current) != revision(row) || current.status == IncomingStatus.Deleted) return@transaction false
+            dao.saveSource(
+                current.copy(
+                    status = status,
+                    verifiedAt = if (status in setOf(
+                            IncomingStatus.ReadyForMedia,
+                            IncomingStatus.Promoted
+                        )
+                    ) now else current.verifiedAt,
+                    nextAttemptAt = next,
+                    leaseToken = null,
+                    leaseUntil = 0,
+                    attemptCount = if (failed) current.attemptCount + 1 else current.attemptCount
                 )
-            }
+            )
             true
         }
 
-    fun claim(rows: List<IncomingEntity>, now: Long): String? = transaction { dao ->
-        val current = dao.group(rows.first().chatId, rows.first().messageId)
-        if (revision(current) != revision(rows) || current.any {
-                it.status !in setOf(
-                    "READY_FOR_MEDIA",
-                    "MEDIA_RETRY",
-                    "MEDIA_READY"
-                ) || it.nextAttemptAt > now || it.leaseUntil > now
-            }) return@transaction null
+    fun claim(row: IncomingEntity, now: Long): String? = transaction { dao ->
+        val current = dao.source(row.chatId, row.messageId ?: return@transaction null) ?: return@transaction null
+        if (revision(current) != revision(row) ||
+            current.status !in setOf(
+                IncomingStatus.ReadyForMedia,
+                IncomingStatus.MediaRetry,
+                IncomingStatus.MediaReady
+            ) ||
+            current.nextAttemptAt > now || current.leaseUntil > now
+        ) return@transaction null
         val token = UUID.randomUUID().toString()
-        current.forEach {
-            dao.saveSource(
-                it.copy(
-                    status = "DOWNLOADING",
-                    leaseToken = token,
-                    leaseUntil = now + 120_000
-                )
+        dao.saveSource(
+            current.copy(
+                status = IncomingStatus.Downloading,
+                leaseToken = token,
+                leaseUntil = now + 120_000
             )
-        }
+        )
         token
     }
 
-    fun manifest(rows: List<IncomingEntity>, token: String, photos: List<CatalogPhoto>, now: Long): Boolean =
+    fun manifest(row: IncomingEntity, token: String, photos: List<CatalogPhoto>, now: Long): Boolean =
         transaction { dao ->
-            val current = dao.group(rows.first().chatId, rows.first().messageId)
-            if (revision(current) != revision(rows) || current.any { it.leaseToken != token }) return@transaction false
-            current.forEach {
-                dao.saveSource(
-                    it.copy(
-                        mediaManifest = json.encodeToString(photos),
-                        leaseUntil = now + 120_000
-                    )
-                )
-            }
+            val current = dao.source(row.chatId, row.messageId ?: return@transaction false) ?: return@transaction false
+            if (revision(current) != revision(row) || current.leaseToken != token) return@transaction false
+            dao.saveSource(current.copy(mediaManifest = json.encodeToString(photos), leaseUntil = now + 120_000))
             true
         }
 
-    fun promote(rows: List<IncomingEntity>, token: String, prepared: ListingEntity, now: Long): Boolean =
+    fun promote(row: IncomingEntity, token: String, prepared: ListingEntity, now: Long): Boolean =
         transaction { dao ->
-            val current = dao.group(rows.first().chatId, rows.first().messageId)
-            if (revision(current) != revision(rows) || current.any { it.leaseToken != token || it.status != "DOWNLOADING" }) return@transaction false
+            val current = dao.source(row.chatId, row.messageId ?: return@transaction false) ?: return@transaction false
+            if (revision(current) != revision(row) || current.leaseToken != token || current.status != IncomingStatus.Downloading) {
+                return@transaction false
+            }
             // Same source is an edit; different posts are duplicates only when their adId matches.
             val matches = dao.listings()
                 .filter { (it.chatId == prepared.chatId && it.messageId == prepared.messageId) || it.adId == prepared.adId }
             val old = matches.maxByOrNull { it.sourceCreatedAt }
             // An old queued/replayed message must not overwrite a newer price or extend its lifetime.
             if (old != null && old.sourceCreatedAt > prepared.sourceCreatedAt) {
-                if ((old.chatId != prepared.chatId || old.messageId != prepared.messageId)) dao.deleteGroup(
-                    prepared.chatId,
-                    prepared.messageId
-                )
+                if (old.chatId != prepared.chatId || old.messageId != prepared.messageId) {
+                    dao.deleteSource(prepared.chatId, prepared.messageId)
+                }
                 return@transaction false
             }
             matches.filter { it.id != old?.id }.forEach { dao.deleteListing(it.id) }
             matches.filter { (it.chatId != prepared.chatId || it.messageId != prepared.messageId) }
-                .forEach { dao.deleteGroup(it.chatId, it.messageId) }
-            val row = if (old == null) prepared else prepared.copy(
+                .forEach { dao.deleteSource(it.chatId, it.messageId) }
+            val listingRow = if (old == null) prepared else prepared.copy(
                 id = old.id, createdAt = old.createdAt, publishedAt = old.publishedAt ?: now,
                 tiktokRepostedAt = old.tiktokRepostedAt, threadsRepostedAt = old.threadsRepostedAt,
                 tiktokStatus = old.tiktokStatus, threadsStatus = old.threadsStatus,
                 tiktokState = old.tiktokState, threadsState = old.threadsState
             )
-            val id = dao.saveListing(validate(row)).takeIf { it > 0 } ?: row.id
-            current.forEach { dao.saveSource(it.copy(status = "PROMOTED", leaseToken = null, leaseUntil = 0)) }
+            dao.saveListing(validate(listingRow))
+            dao.saveSource(current.copy(status = IncomingStatus.Promoted, leaseToken = null, leaseUntil = 0))
             true
         }
 
     fun recover(now: Long) = transaction { dao ->
-        dao.sources().filter { it.status == "DOWNLOADING" }.forEach {
-            dao.saveSource(it.copy(status = "MEDIA_RETRY", leaseToken = null, leaseUntil = 0, nextAttemptAt = now))
+        dao.sources().filter { it.status == IncomingStatus.Downloading }.forEach {
+            dao.saveSource(
+                it.copy(
+                    status = IncomingStatus.MediaRetry,
+                    leaseToken = null,
+                    leaseUntil = 0,
+                    nextAttemptAt = now
+                )
+            )
         }
         dao.listings().forEach { row ->
             var updated = row

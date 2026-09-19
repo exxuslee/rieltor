@@ -6,6 +6,7 @@ import com.rieltor.domain.model.SourceRefresh
 import com.rieltor.domain.service.CatalogListingParser
 import com.rieltor.infrastructure.config.JsonSettingsStore
 import com.rieltor.infrastructure.database.model.IncomingEntity
+import com.rieltor.infrastructure.database.model.IncomingStatus
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.google.GoogleDrivePhotoSource
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
@@ -16,6 +17,7 @@ import java.nio.file.Files
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.imageio.ImageIO
+import kotlin.time.Duration.Companion.minutes
 
 class CatalogIngestionService(
     private val source: TelegramInboxSource, private val repository: CatalogRepository,
@@ -40,11 +42,13 @@ class CatalogIngestionService(
 
     fun startWorkers() {
         if (!workersStarted.compareAndSet(false, true)) return
-        scope.launch { loop(5_000) { verifyDue() } }
-        scope.launch { loop(settings.snapshot().driveJobDelayMs.coerceAtLeast(1_000)) { downloadNext() } }
+        scope.launch { loop(5) { verifyDue() } }
+        scope.launch {
+            loop(settings.snapshot().driveJobDelay.coerceAtLeast(1)) { downloadNext() }
+        }
     }
 
-    private suspend fun loop(pause: Long, action: suspend () -> Unit) {
+    private suspend fun loop(pauseMinutes: Long, action: suspend () -> Unit) {
         while (currentCoroutineContext().isActive) {
             try {
                 action()
@@ -53,69 +57,64 @@ class CatalogIngestionService(
             } catch (error: Throwable) {
                 logger.error("Catalog worker failed", error)
             }
-            delay(pause)
+            delay(pauseMinutes.minutes)
         }
     }
 
-    suspend fun verify(rows: List<IncomingEntity>): Boolean {
-        for (row in rows) {
-            when (val refreshed = source.refresh(row.chatId, requireNotNull(row.messageId))) {
-                is SourceRefresh.Found -> repository.receive(
-                    refreshed.message,
-                    now(),
-                    settings.snapshot().stabilityWindowMinutes * 60_000
-                )
+    suspend fun verify(row: IncomingEntity): Boolean {
+        when (val refreshed = source.refresh(row.chatId, requireNotNull(row.messageId))) {
+            is SourceRefresh.Found -> repository.receive(
+                refreshed.message,
+                now(),
+                settings.snapshot().stabilityWindowMinutes * 60_000
+            )
 
-                SourceRefresh.Deleted -> {
-                    repository.delete(row.chatId, row.messageId, now()); return false
-                }
+            SourceRefresh.Deleted -> {
+                repository.delete(row.chatId, row.messageId, now()); return false
+            }
 
-                SourceRefresh.Unavailable -> {
-                    repository.stage(rows, "VERIFY_RETRY", now(), now() + 60_000, failed = true)
-                    return false
-                }
+            SourceRefresh.Unavailable -> {
+                repository.stage(row, IncomingStatus.VerifyRetry, now(), now() + 60_000, failed = true)
+                return false
             }
         }
-        val current = repository.group(rows.first().chatId, rows.first().messageId)
-        return repository.revision(current) == repository.revision(rows) && current.all { it.status != "DELETED" && it.verifyAfter <= now() }
+        val current = repository.source(row.chatId, row.messageId) ?: return false
+        return repository.revision(current) == repository.revision(row) &&
+                current.status != IncomingStatus.Deleted && current.verifyAfter <= now()
     }
 
     suspend fun verifyDue() {
         val time = now()
-        repository.groups().filter { group ->
-            group.all { it.verifyAfter <= time && it.nextAttemptAt <= time } &&
-                    group.any {
-                        it.status in setOf(
-                            "WAITING_STABILITY",
-                            "VERIFY_RETRY"
-                        ) || it.status == "PROMOTED" && (it.verifiedAt ?: 0) < time - 20 * 60_000
-                    }
-        }.forEach { rows ->
-            if (verify(rows)) repository.stage(
-                rows,
-                if (rows.all { it.status == "PROMOTED" }) "PROMOTED" else "READY_FOR_MEDIA",
-                now()
-            )
+        repository.incoming().filter {
+            it.verifyAfter <= time
+                    && it.nextAttemptAt <= time
+                    && it.status in setOf(IncomingStatus.WaitingStability, IncomingStatus.VerifyRetry)
+        }.forEach { row ->
+            if (verify(row)) repository.stage(row, IncomingStatus.ReadyForMedia, now())
         }
     }
 
     suspend fun downloadNext(): Boolean {
-        val rows = repository.groups().filter { group ->
-            group.all {
-                it.status in setOf("READY_FOR_MEDIA", "MEDIA_RETRY", "MEDIA_READY") && it.nextAttemptAt <= now()
-            }
-        }.maxWithOrNull(compareBy<List<IncomingEntity>> { it.first().sourceCreatedAt }.thenBy { it.first().id })
-            ?: return false
-        if (!verify(rows)) return true
+        val row = repository.incoming().filter {
+            it.status in setOf(
+                IncomingStatus.ReadyForMedia,
+                IncomingStatus.MediaRetry,
+                IncomingStatus.MediaReady
+            ) && it.nextAttemptAt <= now()
+        }.maxWithOrNull(compareBy<IncomingEntity> { it.sourceCreatedAt }.thenBy { it.id }) ?: return false
+        if (!verify(row)) return true
         val config = settings.snapshot()
-        val topicKey = "${rows.first().chatId}:${rows.first().messageThreadId}"
+        val topicKey = "${row.chatId}:${row.messageThreadId}"
         val parser = CatalogListingParser(
             priceNormalizer = com.rieltor.domain.service.CatalogPriceNormalizer(
                 config.uahPerUsd,
                 config.usdPerEur
             )
         )
-        val parsed = parser.parse(rows, config.topicTypeMapping[topicKey], now()).let { listing ->
+        // NOTE: CatalogListingParser.parse(...) previously took a List<IncomingEntity> (the whole
+        // group). Its signature needs to change to accept a single IncomingEntity — that file
+        // wasn't shared here, so it isn't updated in this pass.
+        val parsed = parser.parse(row, config.topicTypeMapping[topicKey], now()).let { listing ->
             val topic = config.topicNames[topicKey]
             listing.copy(
                 tags = Json.encodeToString(
@@ -124,12 +123,12 @@ class CatalogIngestionService(
             )
         }
         if (parsed.status != "ACTIVE") {
-            repository.discard(rows)
+            repository.discard(row)
             return true
         }
-        val token = repository.claim(rows, now()) ?: return true
+        val token = repository.claim(row, now()) ?: return true
         try {
-            val existing = (Json.decodeFromString<List<CatalogPhoto>>(rows.first().mediaManifest) +
+            val existing = (Json.decodeFromString<List<CatalogPhoto>>(row.mediaManifest) +
                     repository.cachedPhotos(parsed)).distinctBy { it.fileName }
             val photos = mutableListOf<CatalogPhoto>()
             drive.downloadCatalogPhotos(
@@ -154,11 +153,11 @@ class CatalogIngestionService(
                 }
                 content.close()
                 photos += photo
-                check(repository.manifest(rows, token, photos, now())) { "Telegram source changed during download" }
+                check(repository.manifest(row, token, photos, now())) { "Telegram source changed during download" }
             }
             check(photos.isNotEmpty()) { "No Google Drive photos" }
-            if (!verify(rows)) return true
-            if (repository.promote(rows, token, parsed.copy(photos = Json.encodeToString(photos)), now())) {
+            if (!verify(row)) return true
+            if (repository.promote(row, token, parsed.copy(photos = Json.encodeToString(photos)), now())) {
                 photos.forEach { photo ->
                     media.resolve(photo.fileName)?.let {
                         Files.setLastModifiedTime(
@@ -171,13 +170,13 @@ class CatalogIngestionService(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Throwable) {
-            val attempts = rows.first().attemptCount + 1
+            val attempts = row.attemptCount + 1
             val delay =
                 (config.driveRetryBaseMs * (1L shl attempts.coerceAtMost(10))).coerceAtMost(3_600_000) + kotlin.random.Random.nextLong(
                     1000
                 )
-            if (attempts >= config.driveMaxAttempts) repository.discard(rows)
-            else repository.stage(rows, "MEDIA_RETRY", now(), now() + delay, failed = true)
+            if (attempts >= config.driveMaxAttempts) repository.discard(row)
+            else repository.stage(row, IncomingStatus.MediaRetry, now(), now() + delay, failed = true)
         }
         return true
     }

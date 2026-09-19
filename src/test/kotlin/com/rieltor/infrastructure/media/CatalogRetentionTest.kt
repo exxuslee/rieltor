@@ -4,6 +4,7 @@ import com.rieltor.domain.model.CatalogPhoto
 import com.rieltor.domain.model.SourceMessage
 import com.rieltor.domain.service.CatalogListingParser
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
+import com.rieltor.infrastructure.database.model.IncomingStatus
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import kotlinx.serialization.json.Json
 import java.nio.file.Files
@@ -37,8 +38,8 @@ class CatalogRetentionTest {
     private fun photo(name: String) = CatalogPhoto(name, name, "v1", 10, 10, "hash")
     private fun promote(repo: CatalogRepository, message: SourceMessage, photos: List<CatalogPhoto>): Boolean {
         repo.receive(message, now.toEpochMilli(), 0)
-        val rows = repo.group(message.chatId, message.messageId)
-        repo.stage(rows, "READY_FOR_MEDIA", now.toEpochMilli())
+        val rows = repo.incoming(message.chatId, message.messageId)
+        repo.stage(rows, IncomingStatus.ReadyForMedia, now.toEpochMilli())
         val token = assertNotNull(repo.claim(rows, now.toEpochMilli()))
         repo.manifest(rows, token, photos, now.toEpochMilli())
         val parsed = CatalogListingParser().parse(rows, "APARTMENT", now.toEpochMilli())
@@ -54,7 +55,7 @@ class CatalogRetentionTest {
             val expired = message(1, cutoff - 1)
             promote(repo, expired, listOf(photo("expired.jpg")))
             Files.createFile(media.resolve("expired.jpg")) // mtime is new, source is old
-            repo.stage(repo.group(expired.chatId, expired.messageId), "PROMOTED", now.toEpochMilli())
+            repo.stage(repo.incoming(expired.chatId, expired.messageId), IncomingStatus.Promoted, now.toEpochMilli())
             promote(
                 repo,
                 message(2, cutoff, price = 83000, drive = "https://drive.google.com/open?id=boundary"),
@@ -126,14 +127,14 @@ class CatalogRetentionTest {
             )
             val invalid = message(3, now.toEpochMilli())
             repo.receive(invalid, now.toEpochMilli(), 0)
-            repo.stage(repo.group(invalid.chatId, invalid.messageId), "NEEDS_REVIEW", now.toEpochMilli())
+            repo.stage(repo.incoming(invalid.chatId, invalid.messageId), IncomingStatus.NeedsReview, now.toEpochMilli())
             val legacy = repo.source(-100, 3)!!
             db.blocking {
                 it.catalogDao().saveSource(
                     legacy.copy(
                         id = 0,
                         messageId = null,
-                        status = "MEDIA_RETRY",
+                        status = IncomingStatus.MediaRetry,
                         sourceCreatedAt = cutoff - 1
                     )
                 )
@@ -174,14 +175,14 @@ class CatalogRetentionTest {
             val repo = CatalogRepository(db)
             val source = message(1, now.toEpochMilli())
             promote(repo, source, emptyList())
-            val stale = repo.group(source.chatId, source.messageId)
+            val stale = repo.incoming(source.chatId, source.messageId)
             repo.receive(
                 source.copy(text = "Без ціни і посилання", sourceEditedAt = now.toEpochMilli() + 1),
                 now.toEpochMilli(),
                 0
             )
             assertFalse(repo.discard(stale))
-            assertTrue(repo.discard(repo.group(source.chatId, source.messageId)))
+            assertTrue(repo.discard(repo.incoming(source.chatId, source.messageId)))
             assertNull(repo.source(-100, 1))
             assertTrue(repo.listings().isEmpty())
         }

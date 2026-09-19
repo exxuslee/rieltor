@@ -23,7 +23,7 @@ class DatabaseResetTest {
             RoomDatabaseStore(path).use { db ->
                 val repository = CatalogRepository(db)
                 assertTrue(repository.listings().isEmpty())
-                assertTrue(repository.groups().isEmpty())
+                assertTrue(repository.incoming().isEmpty())
             }
             BundledSQLiteDriver().open(path.toString()).use { connection ->
                 connection.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'room_master_table'").use { query ->

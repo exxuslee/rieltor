@@ -11,6 +11,7 @@ import androidx.room.PrimaryKey
     ]
 )
 @kotlinx.serialization.Serializable
+@androidx.room.TypeConverters(IncomingStatusConverters::class)
 data class IncomingEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val chatId: Long,
@@ -26,7 +27,7 @@ data class IncomingEntity(
     val revision: Long = 1,
     val verifyAfter: Long,
     val verifiedAt: Long? = null,
-    val status: String = "WAITING_STABILITY",
+    val status: IncomingStatus = IncomingStatus.WaitingStability,
     val mediaManifest: String = "[]",
     val attemptCount: Int = 0,
     val nextAttemptAt: Long = 0,
@@ -59,8 +60,10 @@ data class ListingEntity(
     val secondaryParams: String = "{}",
     val governmentPrograms: String = "[]",
     val googleDriveUrls: String = "[]",
-    val price: Long? = null, val currency: String? = null,
-    val areaM2: Double? = null, val landAreaSotka: Double? = null,
+    val price: Long? = null,
+    val currency: String? = null,
+    val areaM2: Double? = null,
+    val landAreaSotka: Double? = null,
     val rooms: Int? = null,
     val floor: Int? = null, val totalFloors: Int? = null,
     val photos: String = "[]",

@@ -16,7 +16,8 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
 
 @Database(
-    entities = [IncomingEntity::class, ListingEntity::class], version = 21,
+    entities = [IncomingEntity::class, ListingEntity::class],
+    version = 21,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {

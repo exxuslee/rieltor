@@ -130,8 +130,8 @@ class TikTokPhotoPublisher(
             creator.privacyLevelOptions.firstOrNull { it == "SELF_ONLY" }
                 ?: throw TikTokAuthException(
                     "TikTok did not allow SELF_ONLY privacy for this account. " +
-                        "Available options: ${creator.privacyLevelOptions.joinToString().ifBlank { "none" }}. " +
-                        "For an unaudited app, enable private posting for the authorized TikTok account or complete TikTok audit."
+                            "Available options: ${creator.privacyLevelOptions.joinToString().ifBlank { "none" }}. " +
+                            "For an unaudited app, enable private posting for the authorized TikTok account or complete TikTok audit."
                 )
         } else {
             "DRAFT"
@@ -172,7 +172,12 @@ class TikTokPhotoPublisher(
         )
         val response = httpClient.post(PHOTO_POST_URL) {
             header(HttpHeaders.Authorization, "Bearer $accessToken")
-            setBody(TextContent(json.encodeToString(body), ContentType.Application.Json.withCharset(StandardCharsets.UTF_8)))
+            setBody(
+                TextContent(
+                    json.encodeToString(body),
+                    ContentType.Application.Json.withCharset(StandardCharsets.UTF_8)
+                )
+            )
         }
         val payload = json.decodeFromString<PublishResponse>(response.bodyAsText())
         payload.error.ensureOk("photo publish")
@@ -200,10 +205,10 @@ class TikTokPhotoPublisher(
                 .getOrElse { error ->
                     throw TikTokAuthException(
                         "Public photo preflight failed for photo ${index + 1}/${photoUrls.size}: " +
-                            (error.message ?: error.javaClass.simpleName)
+                                (error.message ?: error.javaClass.simpleName)
                     )
                 }
-            if ( index + 1 == photoUrls.size) logger.info(
+            if (index + 1 == photoUrls.size) logger.info(
                 "TikTok public photo preflight. photo={}/{}, host={}, httpStatus={}, contentType={}, contentLength={}",
                 index + 1,
                 photoUrls.size,
@@ -215,7 +220,7 @@ class TikTokPhotoPublisher(
             if (!response.status.isSuccess()) {
                 throw TikTokAuthException(
                     "Public photo is not readable before TikTok initialization. " +
-                        "photo=${index + 1}/${photoUrls.size}, host=${hostOf(url)}, HTTP ${response.status.value}"
+                            "photo=${index + 1}/${photoUrls.size}, host=${hostOf(url)}, HTTP ${response.status.value}"
                 )
             }
         }
@@ -237,8 +242,9 @@ class TikTokPhotoPublisher(
                     publishRepository?.removeTrackedPublish(publishId)
                     return
                 }
+
                 tikTokMode == TikTokMode.DRAFT &&
-                    statusData.status in setOf("SEND_TO_USER_INBOX", "PUBLISH_COMPLETE") -> {
+                        statusData.status in setOf("SEND_TO_USER_INBOX", "PUBLISH_COMPLETE") -> {
                     // SEND_TO_USER_INBOX is intentionally retained: it still consumes a pending-share slot
                     // until the user publishes it in TikTok or the 24-hour window expires.
                     if (statusData.status == "PUBLISH_COMPLETE") {
@@ -246,26 +252,28 @@ class TikTokPhotoPublisher(
                     }
                     return
                 }
+
                 statusData.status == "FAILED" -> {
                     publishRepository?.removeTrackedPublish(publishId)
                     val message = "TikTok photo post failed after initialization. publishId=$publishId, " +
-                        "reason=${statusData.failReason ?: "unknown"}"
+                            "reason=${statusData.failReason ?: "unknown"}"
                     if (statusData.failReason == DAILY_POST_LIMIT_CODE) {
                         pauseGlobalPublishing("daily creator limit reported by status/fetch")
                         throw TikTokDailyPostLimitException(message)
                     }
                     throw TikTokAuthException(message)
                 }
+
                 statusData.status in setOf("PROCESSING_UPLOAD", "PROCESSING_DOWNLOAD") -> Unit
                 else -> throw TikTokAuthException(
                     "TikTok returned an unexpected publish status for $tikTokMode mode. " +
-                        "publishId=$publishId, status=${statusData.status}"
+                            "publishId=$publishId, status=${statusData.status}"
                 )
             }
         }
         throw TikTokAuthException(
             "TikTok photo post did not reach a final status after $statusPollMaxAttempts checks. " +
-                "publishId=$publishId, lastStatus=${lastStatus ?: "unknown"}"
+                    "publishId=$publishId, lastStatus=${lastStatus ?: "unknown"}"
         )
     }
 
@@ -276,7 +284,7 @@ class TikTokPhotoPublisher(
             pauseGlobalPublishing("locally tracked pending-share limit")
             throw TikTokPendingShareLimitException(
                 "TikTok has ${snapshot.active.size} locally tracked pending shares; waiting for status/fetch to report " +
-                    "PUBLISH_COMPLETE/FAILED or for the 24-hour pending window to expire."
+                        "PUBLISH_COMPLETE/FAILED or for the 24-hour pending window to expire."
             )
         }
     }
@@ -325,10 +333,12 @@ class TikTokPhotoPublisher(
     private suspend fun fetchPublishStatus(accessToken: String, publishId: String): FetchedPublishStatus {
         val response = httpClient.post(PUBLISH_STATUS_URL) {
             header(HttpHeaders.Authorization, "Bearer $accessToken")
-            setBody(TextContent(
-                json.encodeToString(buildJsonObject { put("publish_id", publishId) }),
-                ContentType.Application.Json.withCharset(StandardCharsets.UTF_8),
-            ))
+            setBody(
+                TextContent(
+                    json.encodeToString(buildJsonObject { put("publish_id", publishId) }),
+                    ContentType.Application.Json.withCharset(StandardCharsets.UTF_8),
+                )
+            )
         }
         val payload = json.decodeFromString<PublishStatusResponse>(response.bodyAsText())
         payload.error.ensureOk("publish status")
@@ -374,7 +384,7 @@ class TikTokPhotoPublisher(
         }
         throw TikTokAuthException(
             "TikTok creator info request timed out after $CREATOR_INFO_MAX_ATTEMPTS attempts: " +
-                (lastError?.message ?: "network error")
+                    (lastError?.message ?: "network error")
         )
     }
 

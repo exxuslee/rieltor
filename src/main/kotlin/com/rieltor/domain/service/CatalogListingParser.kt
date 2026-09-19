@@ -14,10 +14,8 @@ class CatalogListingParser(
     private val formatter: ListingCaptionFormatter = ListingCaptionFormatter(),
     private val priceNormalizer: CatalogPriceNormalizer = CatalogPriceNormalizer()
 ) {
-    fun parse(rows: List<IncomingEntity>, type: String?, now: Long): ListingEntity {
-        val first = rows.first()
-        val text = rows.map { it.rawText }.filter { it.isNotBlank() }.distinct().joinToString("\n")
-        val clean = formatter.filter(text)
+    fun parse(row: IncomingEntity, type: String?, now: Long): ListingEntity {
+        val clean = formatter.filter(row.rawText)
         val warnings = mutableListOf<String>()
         val matchedLocations = listOf(
             "IRPIN" to "ірп[іе]н|ирпен",
@@ -30,13 +28,13 @@ class CatalogListingParser(
             "BILOHORODKA" to "б[іи]логородк",
             "DMYTRIVKA" to "дмитр[іи]вк"
         )
-            .filter { Regex(it.second, RegexOption.IGNORE_CASE).containsMatchIn(text) }.map { it.first }
+            .filter { Regex(it.second, RegexOption.IGNORE_CASE).containsMatchIn(row.rawText) }.map { it.first }
         val location = when (matchedLocations.size) {
             0 -> "OTHER"
             1 -> matchedLocations.single()
             else -> null
         }
-        val priceMatch = extractPrice(text)
+        val priceMatch = extractPrice(row.rawText)
         val price = priceMatch?.amount
         val currency = priceMatch?.currency?.lowercase()?.let {
             when {
@@ -45,25 +43,27 @@ class CatalogListingParser(
             }
         }
         if (price == null || price <= 0) warnings += "Missing or ambiguous price/currency"
-        if (type !in CatalogCodes.types) warnings += "Configure topicTypeMapping for ${first.chatId}:${first.messageThreadId}"
+        if (type !in CatalogCodes.types) warnings += "Configure topicTypeMapping for ${row.chatId}:${row.messageThreadId}"
         if (location == null) warnings += "Ambiguous location"
-        val links = GoogleDriveLinkExtractor().extract(text)
+        val links = GoogleDriveLinkExtractor().extract(row.rawText)
         if (links.isEmpty()) warnings += "Missing Google Drive URL"
         if (clean == null) warnings += "Missing public content"
-        val programs = extractGovernmentPrograms(text)
-        fun decimal(pattern: String, source: String = text): Double? =
+        val programs = extractGovernmentPrograms(row.rawText)
+        fun decimal(pattern: String, source: String = row.rawText): Double? =
             Regex(pattern, RegexOption.IGNORE_CASE).find(source)?.groupValues?.get(1)?.replace(',', '.')
                 ?.toDoubleOrNull()
 
-        val areaText = text.lineSequence().filterNot { it == priceMatch?.line }.joinToString("\n")
+        val areaText = row.rawText.lineSequence().filterNot { it == priceMatch?.line }.joinToString("\n")
         val area = extractArea(areaText)
         val rooms = CatalogCodes.apartmentRooms(type)
             ?: decimal("""(\d+)\s*[- ]?(?:кімнат|комнат)""")?.toInt()
-        val floor = Regex("""(?iu)(?:поверх|этаж)\s*[:\-]?\s*(\d+)\s*(?:/|із|з|из)\s*(\d+)""").find(text)
-        val transaction = if (Regex("(?iu)оренд|аренд").containsMatchIn(text)) "RENT" else "SALE"
+        val floor = Regex("""(?iu)(?:поверх|этаж)\s*[:\-]?\s*(\d+)\s*(?:/|із|з|из)\s*(\d+)""").find(row.rawText)
+        val transaction = if (Regex("(?iu)оренд|аренд").containsMatchIn(row.rawText)) "RENT" else "SALE"
         val priceSuffix = priceMatch?.suffix.orEmpty()
         val period = when {
-            Regex("""(?iu)^\s*(?:/|за)\s*(?:1\s*)?(?:м[²2]|кв\.?\s*м|квадратн\p{L}*\s+метр)""").containsMatchIn(priceSuffix) -> "PER_M2"
+            Regex("""(?iu)^\s*(?:/|за)\s*(?:1\s*)?(?:м[²2]|кв\.?\s*м|квадратн\p{L}*\s+метр)""")
+                .containsMatchIn(priceSuffix) -> "PER_M2"
+
             Regex("""(?iu)^\s*(?:/|за)\s*(?:1\s*)?сот""").containsMatchIn(priceSuffix) -> "PER_SOTKA"
             transaction == "RENT" -> "MONTH"
             else -> "TOTAL"
@@ -72,15 +72,17 @@ class CatalogListingParser(
         val totalPrice = priceNormalizer.normalize(ImportedPrice(price, currency, transaction, period, area, landArea))
         if (totalPrice == null) warnings += "Unsupported or invalid sale price"
         return ListingEntity(
-            adId = adId(first.userId?.toString() ?: senderFromRaw(first.rawMessage) ?: "unknown-${first.chatId}:${first.messageId}",
-                location, type, totalPrice, area, landArea),
-            chatId = first.chatId,
-            messageId = first.messageId,
-            messageThreadId = first.messageThreadId,
-            sourceRevision = sha256(rows.joinToString { "${it.id}:${it.revision}" }),
+            adId = adId(
+                row.userId?.toString() ?: senderFromRaw(row.rawMessage) ?: "unknown-${row.chatId}:${row.messageId}",
+                location, type, totalPrice, area, landArea
+            ),
+            chatId = row.chatId,
+            messageId = row.messageId,
+            messageThreadId = row.messageThreadId,
+            sourceRevision = sha256("${row.id}:${row.revision}"),
             title = clean?.title.orEmpty(),
             description = clean?.additionalParameters?.joinToString("\n").orEmpty(),
-            rawText = text,
+            rawText = row.rawText,
             location = location,
             address = clean?.address,
             typeOfRealty = type,
@@ -90,7 +92,7 @@ class CatalogListingParser(
             }.toString(),
             secondaryParams = buildJsonObject {
                 clean?.registration?.let { put("registration", it) }
-                if (hasBargain(text)) put("bargain", "Торг")
+                if (hasBargain(row.rawText)) put("bargain", "Торг")
             }.toString(),
             governmentPrograms = Json.encodeToString(programs.toList()),
             googleDriveUrls = Json.encodeToString(links),
@@ -102,7 +104,7 @@ class CatalogListingParser(
             totalFloors = floor?.groupValues?.get(2)?.toIntOrNull(),
             landAreaSotka = landArea,
             status = if (warnings.isEmpty()) "ACTIVE" else "NEEDS_REVIEW",
-            sourceCreatedAt = rows.maxOf { maxOf(it.sourceCreatedAt, it.sourceEditedAt) },
+            sourceCreatedAt = maxOf(row.sourceCreatedAt, row.sourceEditedAt),
             createdAt = now,
             updatedAt = now,
             publishedAt = now.takeIf { warnings.isEmpty() })

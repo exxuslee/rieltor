@@ -3,6 +3,7 @@ package com.rieltor.infrastructure.database
 import com.rieltor.domain.model.RepostDestination
 import com.rieltor.domain.model.SourceMessage
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
+import com.rieltor.infrastructure.database.model.IncomingStatus
 import com.rieltor.infrastructure.database.model.ListingEntity
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.database.repository.TikTokRepositoryImpl
@@ -34,7 +35,7 @@ class RoomPersistenceTest {
         }
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db)
-            assertEquals(70, repo.groups().size)
+            assertEquals(70, repo.incoming().size)
             assertEquals(2_200_000, repo.source(-100, 1)?.verifyAfter)
             assertEquals(2, repo.source(-100, 1)?.revision)
         }
@@ -45,13 +46,13 @@ class RoomPersistenceTest {
             val repo = CatalogRepository(db)
             val source = source()
             repo.receive(source, 0, 1_200_000)
-            val rows = repo.group(source.chatId, source.messageId)
-            assertTrue(repo.stage(rows, "READY_FOR_MEDIA", 1_200_001))
+            val rows = repo.incoming(source.chatId, source.messageId)
+            assertTrue(repo.stage(rows, IncomingStatus.ReadyForMedia, 1_200_001))
             val token = assertNotNull(repo.claim(rows, 1_200_001))
             repo.receive(source.copy(text = "Оновлена версія", raw = "Оновлена версія", sourceEditedAt = 1), 1_200_002, 1_200_000)
             assertFalse(repo.promote(rows, token, listing(1), 1_200_003))
             assertTrue(repo.listings().isEmpty())
-            assertEquals(1, repo.group(source.chatId, source.messageId).size)
+            assertEquals(1, repo.incoming(source.chatId, source.messageId).size)
         }
     }
 
@@ -59,8 +60,8 @@ class RoomPersistenceTest {
         RoomDatabaseStore(path()).use { db ->
             val repo = CatalogRepository(db); val source = source()
             repo.receive(source, 0, 1_200_000)
-            val rows = repo.group(source.chatId, source.messageId)
-            repo.stage(rows, "READY_FOR_MEDIA", 1_200_001)
+            val rows = repo.incoming(source.chatId, source.messageId)
+            repo.stage(rows, IncomingStatus.ReadyForMedia, 1_200_001)
             val token = assertNotNull(repo.claim(rows, 1_200_001))
             assertTrue(repo.promote(rows, token, listing(1), 1_200_002))
             assertFalse(repo.promote(rows, token, listing(1), 1_200_003))
@@ -162,8 +163,8 @@ class RoomPersistenceTest {
             fun promote(id: Long): Boolean {
                 val message = source(id)
                 repo.receive(message, 100_000, 0)
-                val rows = repo.group(message.chatId, message.messageId)
-                repo.stage(rows, "READY_FOR_MEDIA", 100_000)
+                val rows = repo.incoming(message.chatId, message.messageId)
+                repo.stage(rows, IncomingStatus.ReadyForMedia, 100_000)
                 val token = assertNotNull(repo.claim(rows, 100_000))
                 return repo.promote(rows, token, listing(id).copy(
                     adId = "same-ad",
