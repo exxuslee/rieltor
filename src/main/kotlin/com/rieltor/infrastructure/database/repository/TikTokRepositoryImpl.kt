@@ -16,10 +16,6 @@ class TikTokRepositoryImpl(
     override fun blockUntil(blockedUntilMillis: Long) =
         database.settings.update { it.copy(blockedUntil = maxOf(it.blockedUntil, blockedUntilMillis)) }
 
-    override fun trackPublish(publishId: String, mode: String, nowMillis: Long) {
-        error("A persistent TikTok publish must belong to a listing attempt")
-    }
-
     override fun trackPublishForListing(
         listingId: Long,
         attemptId: String,

@@ -1,5 +1,6 @@
 package com.rieltor.infrastructure.tiktok
 
+import com.rieltor.application.orchestration.PublicationContext
 import com.rieltor.domain.model.StoredTokens
 import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.domain.repository.TikTokRepository
@@ -23,6 +24,31 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class TikTokPhotoPublisherTest {
+    @Test
+    fun `rejects persistent publish without listing context before any HTTP request`() = runBlocking {
+        var requests = 0
+        val client = HttpClient(MockEngine {
+            requests++
+            error("No HTTP requests expected")
+        })
+        try {
+            val json = Json { ignoreUnknownKeys = true }
+            val repository = CapturingThrottleRepository()
+            val publisher = TikTokPhotoPublisher(
+                client, TikTokAuthService(client, settings(), validTokens(), json), json,
+                publishRepository = repository,
+            )
+            val error = kotlin.test.assertFailsWith<IllegalStateException> {
+                publisher.publish(listOf("https://api.example/media/photo.jpg"), null)
+            }
+            assertTrue(error.message.orEmpty().contains("listing attempt"))
+            assertEquals(0, requests)
+            assertTrue(repository.tracked.isEmpty())
+        } finally {
+            client.close()
+        }
+    }
+
     @Test
     fun `queues concurrent posts and keeps safe interval between them`() = runBlocking {
         val json = Json { ignoreUnknownKeys = true }
@@ -118,7 +144,7 @@ class TikTokPhotoPublisherTest {
     }
 
     @Test
-    fun `daily post limit pauses global master limiter state`() = runBlocking {
+    fun `daily post limit pauses global master limiter state`() = runBlocking(PublicationContext(42L, "attempt-1")) {
         val json = Json { ignoreUnknownKeys = true }
         val throttle = CapturingThrottleRepository()
         val engine = MockEngine { request ->
@@ -151,7 +177,7 @@ class TikTokPhotoPublisherTest {
     }
 
     @Test
-    fun `pending share API limit pauses global master limiter state`() = runBlocking {
+    fun `pending share API limit pauses global master limiter state`() = runBlocking(PublicationContext(42L, "attempt-1")) {
         val json = Json { ignoreUnknownKeys = true }
         val throttle = CapturingThrottleRepository()
         val engine = MockEngine { request ->
@@ -184,7 +210,7 @@ class TikTokPhotoPublisherTest {
     }
 
     @Test
-    fun `checks five tracked pending drafts and does not initialize a sixth share`() = runBlocking {
+    fun `checks five tracked pending drafts and does not initialize a sixth share`() = runBlocking(PublicationContext(42L, "attempt-1")) {
         val json = Json { ignoreUnknownKeys = true }
         val throttle = CapturingThrottleRepository().apply {
             tracked += (1..5).map { index ->
@@ -232,7 +258,7 @@ class TikTokPhotoPublisherTest {
     }
 
     @Test
-    fun `pending diagnostics refreshes status fetch and reports unpublished count`() = runBlocking {
+    fun `pending diagnostics refreshes status fetch and reports unpublished count`() = runBlocking(PublicationContext(42L, "attempt-1")) {
         val json = Json { ignoreUnknownKeys = true }
         val throttle = CapturingThrottleRepository().apply {
             tracked += listOf(
@@ -394,7 +420,7 @@ class TikTokPhotoPublisherTest {
     }
 
     @Test
-    fun `draft mode uploads media for manual editing and stops after inbox delivery`() = runBlocking {
+    fun `draft mode uploads media for manual editing and stops after inbox delivery`() = runBlocking(PublicationContext(42L, "attempt-1")) {
         val json = Json { ignoreUnknownKeys = true }
         val throttle = CapturingThrottleRepository()
         var publishBody: String? = null
@@ -627,7 +653,9 @@ class TikTokPhotoPublisherTest {
             blockedUntil = blockedUntilMillis
         }
 
-        override fun trackPublish(publishId: String, mode: String, nowMillis: Long) {
+        override fun trackPublishForListing(listingId: Long, attemptId: String, publishId: String, mode: String, nowMillis: Long) {
+            assertEquals(42L, listingId)
+            assertEquals("attempt-1", attemptId)
             tracked.removeAll { it.publishId == publishId }
             tracked += TrackedTikTokPublish(publishId, mode, nowMillis, null)
         }

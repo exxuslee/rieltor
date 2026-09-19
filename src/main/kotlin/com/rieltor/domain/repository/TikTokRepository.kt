@@ -19,10 +19,7 @@ interface TikTokRepository {
 
     fun blockUntil(blockedUntilMillis: Long)
 
-    fun trackPublish(publishId: String, mode: String, nowMillis: Long)
-
-    fun trackPublishForListing(listingId: Long, attemptId: String, publishId: String, mode: String, nowMillis: Long) =
-        trackPublish(publishId, mode, nowMillis)
+    fun trackPublishForListing(listingId: Long, attemptId: String, publishId: String, mode: String, nowMillis: Long)
 
     fun trackedPublishes(nowMillis: Long, retentionMillis: Long): List<TrackedTikTokPublish>
 

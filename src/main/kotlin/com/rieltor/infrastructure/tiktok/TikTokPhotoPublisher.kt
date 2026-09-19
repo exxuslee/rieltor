@@ -1,5 +1,6 @@
 package com.rieltor.infrastructure.tiktok
 
+import com.rieltor.application.orchestration.PublicationContext
 import com.rieltor.domain.model.PublishReceipt
 import com.rieltor.domain.model.RepostDestination
 import com.rieltor.domain.repository.*
@@ -11,6 +12,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.http.content.*
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -63,6 +65,10 @@ class TikTokPhotoPublisher(
     }
 
     override suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt {
+        val publicationContext = currentCoroutineContext()[PublicationContext]
+        check(publishRepository == null || publicationContext != null) {
+            "A persistent TikTok publish must belong to a listing attempt"
+        }
         require(photoUrls.isNotEmpty()) { "At least one photo URL is required." }
         require(maxPhotoCount in 1..TIKTOK_API_MAX_PHOTO_COUNT) {
             "TikTok photo limit must be between 1 and $TIKTOK_API_MAX_PHOTO_COUNT."
@@ -84,7 +90,7 @@ class TikTokPhotoPublisher(
                 reconcileTrackedPublishes(accessToken)
                 waitForPublishSlot()
                 try {
-                    return@withLock initializePublish(accessToken, photoUrls, caption)
+                    return@withLock initializePublish(accessToken, photoUrls, caption, publicationContext)
                 } catch (error: TikTokRateLimitException) {
                     lastRateLimitError = error
                     if (attempt + 1 < rateLimitMaxAttempts) {
@@ -115,6 +121,7 @@ class TikTokPhotoPublisher(
         accessToken: String,
         photoUrls: List<String>,
         caption: String?,
+        publicationContext: PublicationContext?,
     ): PendingTikTokPublish {
         val creator = queryCreator(accessToken)
         // TikTok blocks unaudited clients from publishing anything except a private post.
@@ -171,9 +178,12 @@ class TikTokPhotoPublisher(
         payload.error.ensureOk("photo publish")
         val publishId = payload.data?.publishId
             ?: throw TikTokAuthException("TikTok photo publish response has no publish_id.")
-        val context = kotlinx.coroutines.currentCoroutineContext()[com.rieltor.application.orchestration.PublicationContext]
-        if (context != null) publishRepository?.trackPublishForListing(context.listingId, context.attemptId, publishId, tikTokMode.name, nowMillis())
-        else publishRepository?.trackPublish(publishId, tikTokMode.name, nowMillis())
+        if (publishRepository != null) {
+            val context = checkNotNull(publicationContext)
+            publishRepository.trackPublishForListing(
+                context.listingId, context.attemptId, publishId, tikTokMode.name, nowMillis(),
+            )
+        }
         logger.info(
             "TikTok photo repost accepted for processing. publishId={}, mode={}, httpStatus={}, logId={}",
             publishId,
