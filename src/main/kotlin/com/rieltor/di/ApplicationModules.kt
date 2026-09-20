@@ -4,6 +4,10 @@ import com.rieltor.application.port.LandingLeadNotifier
 import com.rieltor.application.port.TelegramBotReplySender
 import com.rieltor.application.port.TelegramInboxSource
 import com.rieltor.application.service.*
+import com.rieltor.application.worker.AdsWorker
+import com.rieltor.application.worker.CatalogRepostWorker
+import com.rieltor.application.worker.CleanupWorker
+import com.rieltor.application.worker.ReplyTgBotWorker
 import com.rieltor.domain.repository.*
 import com.rieltor.domain.service.ListingCaptionFormatter
 import com.rieltor.infrastructure.config.*
@@ -12,7 +16,6 @@ import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.database.repository.TikTokRepositoryImpl
 import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.google.GoogleDrivePhotoSource
-import com.rieltor.infrastructure.job.CleanupJob
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import com.rieltor.infrastructure.media.VerificationFileStorage
 import com.rieltor.infrastructure.oauth.OAuthStateStore
@@ -95,14 +98,14 @@ private val networkModule = module {
 private val applicationModule = module {
     single { ListingCaptionFormatter() }
     single {
-        ReplyTgBotService(
+        ReplyTgBotWorker(
             externalPhotoSource = get(),
             replySender = get(),
             captionFormatter = get(),
             maxPhotoCount = get<ApplicationSettings>().telegramListingBotMaxPhotoCount,
         )
     }
-    single { AdsService(get(), get(), get(), get(), get()) }
+    single { AdsWorker(get(), get(), get(), get(), get()) }
     single { LandingLeadValidator() }
     single { LandingLeadRateLimiter() }
     single { LandingLeadService(get(), get(), get()) }
@@ -111,7 +114,7 @@ private val applicationModule = module {
     single { CatalogQueryService(get(), get()) }
     single {
         val app = get<ApplicationSettings>()
-        CatalogRepostService(get(), get(), buildList {
+        CatalogRepostWorker(get(), get(), buildList {
             add(get<TikTokPhotoPublisher>())
             if (app.threadsConfigured) add(get<ThreadsPhotoPublisher>())
         }, get())
@@ -142,7 +145,7 @@ private val integrationModule = module {
     }
     single<PublicMediaStorage> { get<LocalPublicMediaStorage>() }
     single {
-        CleanupJob(get<ApplicationSettings>().mediaDirectory, catalogRepository = get())
+        CleanupWorker(get<ApplicationSettings>().mediaDirectory, catalogRepository = get())
     }
 
     single {
@@ -196,10 +199,10 @@ private val webModule = module {
     single {
         ApplicationLifecycle(
             catalog = get(),
-            ads = get(),
+            adsWorker = get(),
             repostService = get(),
             telegramListingBot = get(),
-            mediaCleanupJob = get(),
+            cleanupWorker = get(),
             httpClient = get(),
             database = get(),
             settingsStore = get(),

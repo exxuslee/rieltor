@@ -1,6 +1,6 @@
 package com.rieltor.web.dto
 
-import com.rieltor.application.model.LandingLeadSubmission
+import com.rieltor.domain.model.LandingLeadSubmission
 import kotlinx.serialization.Serializable
 
 /** Landing form payload as posted by the public site. */

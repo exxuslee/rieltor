@@ -1,4 +1,4 @@
-package com.rieltor.application.model
+package com.rieltor.domain.model
 
 import com.rieltor.infrastructure.database.model.CatalogListingRow
 

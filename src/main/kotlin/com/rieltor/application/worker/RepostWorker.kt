@@ -1,7 +1,7 @@
-package com.rieltor.application.service
+package com.rieltor.application.worker
 
 import com.rieltor.application.port.PublicationContext
-import com.rieltor.application.port.RepostMasterLimiter
+import com.rieltor.application.service.CatalogRepostMasterLimiter
 import com.rieltor.domain.model.CatalogPhoto
 import com.rieltor.domain.model.ListingMessage
 import com.rieltor.domain.model.RepostDestination
@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 
-class CatalogRepostService(
+class CatalogRepostWorker(
     private val repository: CatalogRepository,
     private val settings: JsonSettingsStore,
     private val publishers: List<PhotoPublisher>,
@@ -158,17 +158,4 @@ class CatalogRepostService(
     override fun close() {
         runBlocking { scope.coroutineContext[Job]?.cancelAndJoin() }
     }
-}
-
-class CatalogRepostMasterLimiter(private val settings: JsonSettingsStore) : RepostMasterLimiter {
-    override suspend fun awaitSlot() {
-        while (true) {
-            val wait = waitUntilMillis(System.currentTimeMillis())
-            if (wait <= 0) return
-            delay(wait.coerceAtMost(30_000).milliseconds)
-        }
-    }
-
-    override fun waitUntilMillis(now: Long) = settings.waitMillis(now)
-    fun reserve(attemptId: String, listingId: Long, now: Long) = settings.reserve(attemptId, listingId, now)
 }

@@ -1,4 +1,4 @@
-package com.rieltor.application.service
+package com.rieltor.application.worker
 
 import com.rieltor.application.port.TelegramBotReplySender
 import com.rieltor.domain.model.TelegramBotIncomingMessage
@@ -9,7 +9,7 @@ import com.rieltor.domain.service.ListingCaptionFormatter
 import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
 
-class ReplyTgBotService(
+class ReplyTgBotWorker(
     private val externalPhotoSource: ExternalPhotoSource,
     private val replySender: TelegramBotReplySender,
     private val captionFormatter: ListingCaptionFormatter = ListingCaptionFormatter(),

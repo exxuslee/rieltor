@@ -1,4 +1,4 @@
-package com.rieltor.application.service
+package com.rieltor.application.worker
 
 import com.rieltor.application.port.TelegramInboxSource
 import com.rieltor.domain.model.CatalogPhoto
@@ -23,9 +23,11 @@ import javax.imageio.ImageIO
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.minutes
 
-class AdsService(
-    private val source: TelegramInboxSource, private val repository: CatalogRepository,
-    private val settings: JsonSettingsStore, private val drive: GoogleDrivePhotoSource,
+class AdsWorker(
+    private val source: TelegramInboxSource,
+    private val repository: CatalogRepository,
+    private val settings: JsonSettingsStore,
+    private val drive: GoogleDrivePhotoSource,
     private val media: LocalPublicMediaStorage,
     private val now: () -> Long = System::currentTimeMillis,
 ) : AutoCloseable {
@@ -37,11 +39,6 @@ class AdsService(
     /** Starts only the TDLib Telegram session so it can authorize before background work begins. */
     fun startTelegramSession() {
         source.start()
-    }
-
-    fun start() {
-        startTelegramSession()
-        startWorkers()
     }
 
     fun startWorkers() {
@@ -136,7 +133,7 @@ class AdsService(
                     repository.cachedPhotos(parsed)).distinctBy { it.fileName }
             val photos = mutableListOf<CatalogPhoto>()
             drive.downloadCatalogPhotos(
-                Json.decodeFromString(parsed.googleDriveUrls), config.maxCatalogPhotos, config.driveFileDelayMs,
+                Json.Default.decodeFromString(parsed.googleDriveUrls), config.maxCatalogPhotos, config.driveFileDelayMs,
                 cached = { file ->
                     existing.any {
                         it.sourceFileId == file.id && it.sourceVersion == file.version && media.resolve(
@@ -186,6 +183,6 @@ class AdsService(
     }
 
     override fun close() {
-        runBlocking { scope.coroutineContext[Job]?.cancelAndJoin() }; source.close()
+        runBlocking { scope.coroutineContext[Job.Key]?.cancelAndJoin() }; source.close()
     }
 }

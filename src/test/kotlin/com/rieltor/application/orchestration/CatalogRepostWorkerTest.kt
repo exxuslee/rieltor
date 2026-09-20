@@ -1,6 +1,6 @@
 package com.rieltor.application.orchestration
 
-import com.rieltor.application.service.CatalogRepostService
+import com.rieltor.application.worker.CatalogRepostWorker
 import com.rieltor.domain.model.CatalogPhoto
 import com.rieltor.domain.model.PublishReceipt
 import com.rieltor.domain.model.RepostDestination
@@ -14,7 +14,7 @@ import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import kotlin.test.*
 
-class CatalogRepostServiceTest {
+class CatalogRepostWorkerTest {
     @Test
     fun `newest after cooldown publishes and failed destination does not repeat successful one`() = runBlocking {
         val directory = Files.createTempDirectory("repost-newest")
@@ -48,7 +48,7 @@ class CatalogRepostServiceTest {
                     error("uncertain external response")
             }
             var now = 1000L
-            val service = CatalogRepostService(repo, db.settings, listOf(tiktok, threads), media) { now }
+            val service = CatalogRepostWorker(repo, db.settings, listOf(tiktok, threads), media) { now }
             assertFalse(service.runOnce()); assertTrue(db.settings.snapshot().slotReservations.isEmpty())
             val newest = add(2); now = 5000
             assertTrue(service.runOnce()); assertTrue(captions.single().contains("Listing 2"))

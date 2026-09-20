@@ -1,10 +1,6 @@
 package com.rieltor.application.service
 
-import com.rieltor.application.model.LandingLeadSubmission
-import com.rieltor.domain.model.LandingFormDefinition
-import com.rieltor.domain.model.LandingForms
-import com.rieltor.domain.model.LandingLead
-import com.rieltor.domain.model.LandingLeadField
+import com.rieltor.domain.model.*
 import java.net.URI
 
 /** Accepts only known forms, filled by a human, submitted from our own pages. */

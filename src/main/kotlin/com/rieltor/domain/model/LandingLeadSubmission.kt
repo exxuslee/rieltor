@@ -1,4 +1,4 @@
-package com.rieltor.application.model
+package com.rieltor.domain.model
 
 /** Raw landing form submission as it arrives from the site, before validation. */
 data class LandingLeadSubmission(

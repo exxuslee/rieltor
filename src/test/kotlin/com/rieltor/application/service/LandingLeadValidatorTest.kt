@@ -1,6 +1,6 @@
 package com.rieltor.application.service
 
-import com.rieltor.application.model.LandingLeadSubmission
+import com.rieltor.domain.model.LandingLeadSubmission
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.*

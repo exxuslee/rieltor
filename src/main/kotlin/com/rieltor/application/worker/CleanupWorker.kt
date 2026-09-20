@@ -1,4 +1,4 @@
-package com.rieltor.infrastructure.job
+package com.rieltor.application.worker
 
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import kotlinx.coroutines.*
@@ -10,7 +10,7 @@ import java.time.Clock
 import java.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
-class CleanupJob(
+class CleanupWorker(
     private val directory: Path,
     private val maxAge: Duration = Duration.ofDays(30),
     private val interval: Duration = Duration.ofDays(1),
@@ -20,15 +20,15 @@ class CleanupJob(
     private val catalogRepository: CatalogRepository? = null,
     private val orphanGrace: Duration = Duration.ofHours(1),
 ) : Closeable {
-    private val logger = LoggerFactory.getLogger(CleanupJob::class.java)
+    private val logger = LoggerFactory.getLogger(CleanupWorker::class.java)
     private var job: Job? = null
 
     fun start() {
         check(job == null) { "Media cleanup job is already started" }
         job = scope.launch {
             while (isActive) {
-                runCatching { cleanNow() }.onFailure { logger.error("Media cleanup failed", it) }
                 delay(interval.toMillis().milliseconds)
+                runCatching { cleanNow() }.onFailure { logger.error("Media cleanup failed", it) }
             }
         }
     }

@@ -1,7 +1,7 @@
 package com.rieltor.web.mapper
 
-import com.rieltor.application.model.CatalogListingPage
 import com.rieltor.domain.model.CatalogCodes
+import com.rieltor.domain.model.CatalogListingPage
 import com.rieltor.domain.model.CatalogPhoto
 import com.rieltor.infrastructure.database.model.CatalogListingRow
 import com.rieltor.web.dto.ListingPage

@@ -12,7 +12,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class ReplyTgBotServiceTest {
+class ReplyTgBotWorkerTest {
     @Test
     fun `processes bot message immediately and sends groups of at most ten`() = runBlocking {
         val photoSource = FakePhotoSource(photoCount = 23)

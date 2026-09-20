@@ -1,9 +1,11 @@
 package com.rieltor.application.service
 
+import com.rieltor.application.worker.AdsWorker
+import com.rieltor.application.worker.CatalogRepostWorker
+import com.rieltor.application.worker.CleanupWorker
 import com.rieltor.infrastructure.config.JsonSettingsStore
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.repository.CatalogRepository
-import com.rieltor.infrastructure.job.CleanupJob
 import com.rieltor.infrastructure.telegram.TelegramListingBot
 import io.ktor.client.*
 import kotlinx.coroutines.delay
@@ -16,10 +18,10 @@ import kotlin.time.Duration.Companion.minutes
  */
 class ApplicationLifecycle(
     private val catalog: CatalogRepository,
-    private val ads: AdsService,
-    private val repostService: CatalogRepostService,
+    private val adsWorker: AdsWorker,
+    private val repostService: CatalogRepostWorker,
     private val telegramListingBot: TelegramListingBot,
-    private val mediaCleanupJob: CleanupJob,
+    private val cleanupWorker: CleanupWorker,
     private val httpClient: HttpClient,
     private val database: RoomDatabaseStore,
     private val settingsStore: JsonSettingsStore,
@@ -27,21 +29,21 @@ class ApplicationLifecycle(
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     fun startTelegramSession() {
-        ads.startTelegramSession()
+        adsWorker.startTelegramSession()
     }
 
     suspend fun startBackgroundWorkers() {
         delay(startupDelay)
         catalog.recover(now())
-        ads.startWorkers()
+        adsWorker.startWorkers()
         repostService.start()
         telegramListingBot.start()
-        mediaCleanupJob.start()
+        cleanupWorker.start()
     }
 
     fun stop() {
-        mediaCleanupJob.close()
-        ads.close()
+        cleanupWorker.close()
+        adsWorker.close()
         repostService.close()
         telegramListingBot.close()
         httpClient.close()

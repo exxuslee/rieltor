@@ -1,7 +1,7 @@
 package com.rieltor.infrastructure.telegram
 
 import com.rieltor.application.port.TelegramBotReplySender
-import com.rieltor.application.service.ReplyTgBotService
+import com.rieltor.application.worker.ReplyTgBotWorker
 import com.rieltor.domain.model.TelegramBotIncomingMessage
 import com.rieltor.domain.model.TelegramPhoto
 import kotlinx.coroutines.*
@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /** Bot API entrypoint. Unlike monitored TDLib chats, bot messages are processed immediately. */
 class TelegramListingBot(
     private val botToken: String,
-    private val replyUseCase: ReplyTgBotService,
+    private val replyUseCase: ReplyTgBotWorker,
 ) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

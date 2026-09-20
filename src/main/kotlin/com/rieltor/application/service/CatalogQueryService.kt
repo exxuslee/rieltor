@@ -1,8 +1,8 @@
 package com.rieltor.application.service
 
-import com.rieltor.application.model.CatalogListingPage
 import com.rieltor.domain.model.CatalogCursor
 import com.rieltor.domain.model.CatalogFilter
+import com.rieltor.domain.model.CatalogListingPage
 import com.rieltor.domain.model.CatalogSort
 import com.rieltor.infrastructure.database.model.CatalogListingRow
 import com.rieltor.infrastructure.database.repository.CatalogListingQueryFactory

@@ -1,7 +1,7 @@
 package com.rieltor.application.service
 
-import com.rieltor.application.model.LandingLeadSubmission
 import com.rieltor.application.port.LandingLeadNotifier
+import com.rieltor.domain.model.LandingLeadSubmission
 
 /** Outcome of a landing submission; the transport layer decides which status code to return. */
 enum class LandingLeadResult { ACCEPTED, RATE_LIMITED, INVALID, NOT_DELIVERED }
