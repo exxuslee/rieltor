@@ -31,6 +31,7 @@ data class CatalogFilter(
     val limit: Int = DEFAULT_LIMIT,
     val cursor: CatalogCursor? = null,
     val signature: String = "",
+    val chatIds: List<Long> = emptyList(),
 ) {
     companion object {
         const val DEFAULT_LIMIT = 24

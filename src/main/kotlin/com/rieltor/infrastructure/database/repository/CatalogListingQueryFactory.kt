@@ -18,6 +18,9 @@ object CatalogListingQueryFactory {
             arguments.addAll(values)
         }
 
+        if (filter.chatIds.isNotEmpty()) {
+            add("chatId IN (${placeholders(filter.chatIds.size)})", *filter.chatIds.toTypedArray())
+        }
         if (filter.locations.isNotEmpty()) {
             add("location IN (${placeholders(filter.locations.size)})", *filter.locations.toTypedArray())
         }

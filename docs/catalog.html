@@ -20,6 +20,16 @@
     <section class="section catalog-section">
         <div class="container">
             <form class="catalog-filters" data-catalog-filters>
+                <div class="field"><span id="chatId-label">Джерело</span>
+                    <details class="filter-multi" data-filter="chatId">
+                        <summary aria-labelledby="chatId-label chatId-summary"><span data-empty="Усі джерела"
+                                id="chatId-summary">Усі джерела</span></summary>
+                        <div aria-labelledby="chatId-label" class="filter-multi__options" role="group">
+                            <label><input name="chatId" type="checkbox" value="-1002681732909"> Novator</label>
+                            <label><input name="chatId" type="checkbox" value="-1002691100301"> Загальна</label>
+                        </div>
+                    </details>
+                </div>
                 <div class="field"><span id="location-label">Локація</span>
                     <details class="filter-multi" data-filter="location">
                         <summary aria-labelledby="location-label location-summary"><span data-empty="Усі локації"

@@ -11,6 +11,18 @@ class CatalogFilterParserTest {
     private val parser = CatalogFilterParser()
 
     @Test
+    fun `parses source chat ids and rejects invalid ids`() {
+        assertEquals(emptyList(), parser.parse(emptyMap()).chatIds)
+        assertEquals(
+            listOf(-1002681732909L, -1002691100301L),
+            parser.parse(mapOf("chatId" to listOf("-1002681732909,-1002691100301", "-1002681732909"))).chatIds,
+        )
+        for (invalid in listOf("Novator", "-1002681732909 OR 1=1", "9223372036854775808")) {
+            assertFailsWith<IllegalArgumentException> { parser.parse(mapOf("chatId" to listOf(invalid))) }
+        }
+    }
+
+    @Test
     fun `splits multi value codes and applies defaults`() {
         val filter = parser.parse(
             mapOf(

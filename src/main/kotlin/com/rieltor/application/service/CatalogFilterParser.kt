@@ -24,6 +24,9 @@ class CatalogFilterParser(private val cursors: CatalogCursorCodec = CatalogCurso
         val signature = signature(parameters)
 
         return CatalogFilter(
+            chatIds = parameters["chatId"].orEmpty().flatMap { it.split(',') }
+                .filter { it.isNotEmpty() }
+                .map { requireNotNull(it.toLongOrNull()) { "Invalid chatId" } }.distinct(),
             locations = locations,
             types = types,
             programs = programs,
