@@ -1,6 +1,7 @@
 package com.rieltor.application.usecase
 
 import com.rieltor.application.port.TelegramBotReplySender
+import com.rieltor.application.worker.ReplyTgBotWorker
 import com.rieltor.domain.model.TelegramBotIncomingMessage
 import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.repository.ExternalPhotoSource
@@ -11,15 +12,16 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 class ReplyTgBotWorkerTest {
     @Test
     fun `processes bot message immediately and sends groups of at most ten`() = runBlocking {
         val photoSource = FakePhotoSource(photoCount = 23)
         val sender = CapturingReplySender()
-        val useCase = ReplyBotService(photoSource, sender)
+        val useCase = ReplyTgBotWorker(photoSource, sender)
 
-        withTimeout(1_000) {
+        withTimeout(1_000.milliseconds) {
             useCase.execute(incomingMessage())
         }
 
@@ -38,7 +40,7 @@ class ReplyTgBotWorkerTest {
     fun `does not call Drive without a supported link and replies with an explanation`() = runBlocking {
         val photoSource = FakePhotoSource(photoCount = 1)
         val sender = CapturingReplySender()
-        val useCase = ReplyBotService(photoSource, sender)
+        val useCase = ReplyTgBotWorker(photoSource, sender)
 
         useCase.execute(incomingMessage(text = "Квартира в Ірпені\nЦіна 50000$"))
 
@@ -50,7 +52,7 @@ class ReplyTgBotWorkerTest {
     @Test
     fun `reports a Drive failure without sending a partial formatted reply`() = runBlocking {
         val sender = CapturingReplySender()
-        val useCase = ReplyBotService(
+        val useCase = ReplyTgBotWorker(
             externalPhotoSource = object : ExternalPhotoSource {
                 override suspend fun downloadPhotos(links: List<String>, limit: Int): List<TelegramPhoto> {
                     error("Drive unavailable")

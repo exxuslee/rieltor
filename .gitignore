@@ -39,3 +39,4 @@ secrets.json.tmp
 /*.db-wal
 /media/
 /tdlib-session-id*/
+src.zip
