@@ -60,8 +60,8 @@ class AdIdentityTest {
                 repo.receive(source, 10000, 0)
                 val rows = repo.incoming(source.chatId, source.messageId)
                 repo.stage(rows, IncomingStatus.ReadyForMedia, 10000)
-                val token = assertNotNull(repo.claim(rows, 10000))
-                assertTrue(repo.promote(rows, token, CatalogAdsParser().parse(rows, "APARTMENT 1", 10000), 10000))
+                assertTrue(repo.claim(rows, 10000))
+                assertTrue(repo.promote(rows, CatalogAdsParser().parse(rows, "APARTMENT 1", 10000), 10000))
             }
             publish(1)
             val old = repo.listings().single()

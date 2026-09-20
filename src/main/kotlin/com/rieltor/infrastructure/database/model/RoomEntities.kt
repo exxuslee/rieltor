@@ -5,7 +5,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
-    tableName = "incoming_telegram_messages", indices = [
+    tableName = "incomeTab", indices = [
         Index(value = ["chatId", "messageId"], unique = true),
         Index(value = ["status", "verifyAfter"]),
     ]
@@ -33,8 +33,6 @@ data class IncomingEntity(
     val sourcePhotos: String = "[]",
     val attemptCount: Int = 0,
     val nextAttemptAt: Long = 0,
-    val leaseToken: String? = null,
-    val leaseUntil: Long = 0,
 )
 
 @Entity(

@@ -10,19 +10,19 @@ import com.rieltor.infrastructure.database.model.ListingEntity
 
 @Dao
 internal interface CatalogDao {
-    @Query("SELECT * FROM incoming_telegram_messages")
+    @Query("SELECT * FROM incomeTab")
     suspend fun allSources(): List<IncomingEntity>
 
-    @Query("DELETE FROM incoming_telegram_messages WHERE chatId=:chat AND messageId IS :message")
+    @Query("DELETE FROM incomeTab WHERE chatId=:chat AND messageId IS :message")
     suspend fun deleteSource(chat: Long, message: Long?)
 
     @Query("DELETE FROM listings WHERE id=:id")
     suspend fun deleteListing(id: Long)
 
-    @Query("SELECT * FROM incoming_telegram_messages WHERE chatId=:chat AND messageId=:message")
+    @Query("SELECT * FROM incomeTab WHERE chatId=:chat AND messageId=:message")
     suspend fun source(chat: Long, message: Long): IncomingEntity?
 
-    @Query("SELECT * FROM incoming_telegram_messages WHERE messageId IS NOT NULL AND status NOT IN ('DELETED','NEEDS_REVIEW') ORDER BY sourceCreatedAt DESC, id DESC")
+    @Query("SELECT * FROM incomeTab WHERE messageId IS NOT NULL AND status NOT IN ('DELETED','NEEDS_REVIEW') ORDER BY sourceCreatedAt DESC, id DESC")
     suspend fun sources(): List<IncomingEntity>
 
     @Upsert

@@ -17,13 +17,15 @@ import java.nio.file.attribute.PosixFilePermission
 
 @Database(
     entities = [IncomingEntity::class, ListingEntity::class],
-    version = 22,
+    version = 23,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
     abstract fun catalogDao(): CatalogDao
 }
 
+// Migrations up to 22 intentionally keep the historical table name `incoming_telegram_messages`:
+// it is what the schema was called at those versions. The table becomes `incomeTab` in 22 -> 23.
 private val migrations = arrayOf(
     object : Migration(17, 18) {
         override fun migrate(connection: SQLiteConnection) {
@@ -58,6 +60,19 @@ private val migrations = arrayOf(
             connection.execSQL(
                 "ALTER TABLE incoming_telegram_messages ADD COLUMN sourcePhotos TEXT NOT NULL DEFAULT '[]'"
             )
+        }
+    },
+    object : Migration(22, 23) {
+        override fun migrate(connection: SQLiteConnection) {
+            // Room derives index names from the table name, so they are recreated after the rename.
+            connection.execSQL("DROP INDEX index_incoming_telegram_messages_chatId_messageId")
+            connection.execSQL("DROP INDEX index_incoming_telegram_messages_status_verifyAfter")
+            connection.execSQL("ALTER TABLE incoming_telegram_messages RENAME TO incomeTab")
+            // The download lease was redundant: ownership is guarded by status + revision in one worker.
+            connection.execSQL("ALTER TABLE incomeTab DROP COLUMN leaseToken")
+            connection.execSQL("ALTER TABLE incomeTab DROP COLUMN leaseUntil")
+            connection.execSQL("CREATE UNIQUE INDEX index_incomeTab_chatId_messageId ON incomeTab(chatId, messageId)")
+            connection.execSQL("CREATE INDEX index_incomeTab_status_verifyAfter ON incomeTab(status, verifyAfter)")
         }
     },
 )

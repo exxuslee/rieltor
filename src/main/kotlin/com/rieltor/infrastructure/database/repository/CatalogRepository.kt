@@ -54,7 +54,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
 
     fun delete(chatId: Long, messageId: Long, now: Long) = transaction { dao ->
         val row = dao.source(chatId, messageId) ?: return@transaction
-        dao.saveSource(row.copy(status = IncomingStatus.Deleted, leaseToken = null, leaseUntil = 0))
+        dao.saveSource(row.copy(status = IncomingStatus.Deleted))
         dao.listingForSource(row.chatId, row.messageId)
             ?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
     }
@@ -153,47 +153,39 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
                         )
                     ) now else current.verifiedAt,
                     nextAttemptAt = next,
-                    leaseToken = null,
-                    leaseUntil = 0,
                     attemptCount = if (failed) current.attemptCount + 1 else current.attemptCount
                 )
             )
             true
         }
 
-    fun claim(row: IncomingEntity, now: Long): String? = transaction { dao ->
-        val current = dao.source(row.chatId, row.messageId ?: return@transaction null) ?: return@transaction null
+    /** Moves an eligible row to Downloading; a second claim of the same row fails on the status check. */
+    fun claim(row: IncomingEntity, now: Long): Boolean = transaction { dao ->
+        val current = dao.source(row.chatId, row.messageId ?: return@transaction false) ?: return@transaction false
         if (revision(current) != revision(row) ||
             current.status !in setOf(
                 IncomingStatus.ReadyForMedia,
                 IncomingStatus.MediaRetry,
                 IncomingStatus.MediaReady
             ) ||
-            current.nextAttemptAt > now || current.leaseUntil > now
-        ) return@transaction null
-        val token = UUID.randomUUID().toString()
-        dao.saveSource(
-            current.copy(
-                status = IncomingStatus.Downloading,
-                leaseToken = token,
-                leaseUntil = now + 120_000
-            )
-        )
-        token
+            current.nextAttemptAt > now
+        ) return@transaction false
+        dao.saveSource(current.copy(status = IncomingStatus.Downloading))
+        true
     }
 
-    fun manifest(row: IncomingEntity, token: String, photos: List<CatalogPhoto>, now: Long): Boolean =
+    fun manifest(row: IncomingEntity, photos: List<CatalogPhoto>): Boolean =
         transaction { dao ->
             val current = dao.source(row.chatId, row.messageId ?: return@transaction false) ?: return@transaction false
-            if (revision(current) != revision(row) || current.leaseToken != token) return@transaction false
-            dao.saveSource(current.copy(mediaManifest = json.encodeToString(photos), leaseUntil = now + 120_000))
+            if (revision(current) != revision(row) || current.status != IncomingStatus.Downloading) return@transaction false
+            dao.saveSource(current.copy(mediaManifest = json.encodeToString(photos)))
             true
         }
 
-    fun promote(row: IncomingEntity, token: String, prepared: ListingEntity, now: Long): Boolean =
+    fun promote(row: IncomingEntity, prepared: ListingEntity, now: Long): Boolean =
         transaction { dao ->
             val current = dao.source(row.chatId, row.messageId ?: return@transaction false) ?: return@transaction false
-            if (revision(current) != revision(row) || current.leaseToken != token || current.status != IncomingStatus.Downloading) {
+            if (revision(current) != revision(row) || current.status != IncomingStatus.Downloading) {
                 return@transaction false
             }
             // Same source is an edit; different posts are duplicates only when their adId matches.
@@ -217,7 +209,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
                 tiktokState = old.tiktokState, threadsState = old.threadsState
             )
             dao.saveListing(validate(listingRow))
-            dao.saveSource(current.copy(status = IncomingStatus.Promoted, leaseToken = null, leaseUntil = 0))
+            dao.saveSource(current.copy(status = IncomingStatus.Promoted))
             true
         }
 
@@ -226,8 +218,6 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
             dao.saveSource(
                 it.copy(
                     status = IncomingStatus.MediaRetry,
-                    leaseToken = null,
-                    leaseUntil = 0,
                     nextAttemptAt = now
                 )
             )

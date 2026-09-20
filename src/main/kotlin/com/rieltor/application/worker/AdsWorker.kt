@@ -128,14 +128,14 @@ class AdsWorker(
             repository.discard(row)
             return true
         }
-        val token = repository.claim(row, now()) ?: return true
+        if (!repository.claim(row, now())) return true
         try {
             val existing = (Json.decodeFromString<List<CatalogPhoto>>(row.mediaManifest) +
                     repository.cachedPhotos(parsed)).distinctBy { it.fileName }
             val photos = mutableListOf<CatalogPhoto>()
             fun record(photo: CatalogPhoto) {
                 photos += photo
-                check(repository.manifest(row, token, photos, now())) { "Telegram source changed during download" }
+                check(repository.manifest(row, photos)) { "Telegram source changed during download" }
             }
 
             // The cover of a listing is the first photo of its Telegram post, so Telegram media
@@ -196,7 +196,7 @@ class AdsWorker(
             }
             check(photos.isNotEmpty()) { "Listing has no Telegram or Google Drive photos" }
             if (!verify(row)) return true
-            if (repository.promote(row, token, parsed.copy(photos = Json.encodeToString(photos)), now())) {
+            if (repository.promote(row, parsed.copy(photos = Json.encodeToString(photos)), now())) {
                 photos.forEach { photo ->
                     media.resolve(photo.fileName)?.let {
                         Files.setLastModifiedTime(
