@@ -3,6 +3,7 @@ package com.rieltor.infrastructure.telegram
 import com.rieltor.application.model.TelegramSourceState
 import com.rieltor.application.port.TelegramInboxSource
 import com.rieltor.domain.model.SourceMessage
+import com.rieltor.domain.model.SourcePhoto
 import com.rieltor.domain.model.SourceRefresh
 import com.rieltor.domain.model.TelegramMonitoredTopic
 import com.rieltor.infrastructure.config.JsonSettingsStore
@@ -17,11 +18,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Telegram transport persists monitored messages immediately. CatalogIngestionService owns the durable grace period.
@@ -44,6 +47,15 @@ class TelegramClientAdapter(
     private val startupMonitoringLogged = AtomicBoolean(false)
     private var factory: SimpleTelegramClientFactory? = null
     private var client: SimpleTelegramClient? = null
+
+    /** Album members arrive as separate messages; only the merged post becomes one listing. */
+    private val albums = MediaAlbumCollector<TdApi.Message>(
+        scope = scope,
+        settleDelayMillis = ALBUM_SETTLE_DELAY_MILLIS,
+        maxItemCount = MAX_SOURCE_PHOTOS,
+        itemId = { it.id },
+        onReady = { saveAlbum(it) },
+    )
 
     val state: StateFlow<TelegramSourceState> = mutableState.asStateFlow()
 
@@ -92,7 +104,7 @@ class TelegramClientAdapter(
                 logger.info("Telegram TDLib session is authorized and ready")
                 if (startupMonitoringLogged.compareAndSet(false, true)) {
                     scope.launch {
-                        delay(STARTUP_MONITORING_LOG_DELAY_MILLIS)
+                        delay(STARTUP_MONITORING_LOG_DELAY_MILLIS.milliseconds)
                         client?.let(diagnostics::logStartupSnapshot)
                     }
                 }
@@ -139,19 +151,37 @@ class TelegramClientAdapter(
     suspend fun importHistory(from: java.time.Instant, until: java.time.Instant): Long {
         check(historyOnly) { "History import requires historyOnly mode" }
         require(monitoredTopics.isNotEmpty()) { "No monitored Telegram topics configured" }
-        withTimeout(300_000) { state.first { it == TelegramSourceState.Ready } }
+        withTimeout(300_000.milliseconds) { state.first { it == TelegramSourceState.Ready } }
         val telegram = checkNotNull(client)
         return TelegramHistoryImporter(monitoredTopics, { chatId, cursor ->
             withContext(Dispatchers.IO) {
                 telegram.send(TdApi.GetChatHistory(chatId, cursor, 0, 100, false))
                     .get(60, TimeUnit.SECONDS).messages.filterNotNull().toList()
             }
-        }, ::save).run(from, until)
+        }, ::save).run(from, until).also { albums.flush() }
     }
 
     private fun save(message: TdApi.Message) {
+        // An album is persisted once, after its members settle, so its photos stay with the caption.
+        if (message.mediaAlbumId != 0L) albums.add(message.mediaAlbumId, message) else persist(snapshot(message))
+    }
+
+    private fun saveAlbum(album: List<TdApi.Message>) {
+        val ordered = album.sortedBy { it.id }
+        // The caption carries the listing; the other members only contribute photos.
+        val primary = ordered.firstOrNull { it.messageText().isNotBlank() } ?: ordered.first()
+        logger.info(
+            "album messageId={}, members={}, photos={}",
+            primary.id,
+            ordered.size,
+            ordered.sumOf { photosOf(it.content, it.id).size },
+        )
+        persist(snapshot(primary, ordered))
+    }
+
+    private fun persist(message: SourceMessage) {
         repository.receive(
-            snapshot(message), System.currentTimeMillis(), settings.snapshot().stabilityWindowMinutes * 60_000
+            message, System.currentTimeMillis(), settings.snapshot().stabilityWindowMinutes * 60_000
         )
     }
 
@@ -163,18 +193,22 @@ class TelegramClientAdapter(
             is TdApi.MessagePhoto -> content.caption.textWithEmbeddedLinks()
             else -> ""
         }
-        repository.receive(
+        val messageId = requireNotNull(existing.messageId)
+        // An edit only replaces the content of one message; the known album stays authoritative.
+        val photos = photosOf(update.newContent, messageId).ifEmpty { storedPhotos(existing.sourcePhotos) }
+        persist(
             SourceMessage(
                 existing.chatId,
-                requireNotNull(existing.messageId),
+                messageId,
                 existing.messageThreadId,
                 text,
                 update.newContent.toString(),
                 existing.sourceCreatedAt,
                 existing.sourceEditedAt,
-                mediaIdentity(update.newContent),
-                existing.userId
-            ), System.currentTimeMillis(), settings.snapshot().stabilityWindowMinutes * 60_000
+                mediaIdentity(photos, update.newContent),
+                existing.userId,
+                photos,
+            )
         )
     }
 
@@ -191,7 +225,7 @@ class TelegramClientAdapter(
             val message = withContext(Dispatchers.IO) {
                 telegram.send(TdApi.GetMessage(chatId, messageId)).get(30, TimeUnit.SECONDS)
             }
-            SourceRefresh.Found(snapshot(message))
+            SourceRefresh.Found(withKnownAlbum(message, snapshot(message)))
         } catch (error: CancellationException) {
             throw error
         } catch (error: Throwable) {
@@ -200,28 +234,88 @@ class TelegramClientAdapter(
         }
     }
 
-    private fun snapshot(message: TdApi.Message): SourceMessage {
-        val text = when (val content = message.content) {
-            is TdApi.MessageText -> content.text.textWithEmbeddedLinks()
-            is TdApi.MessagePhoto -> content.caption.textWithEmbeddedLinks()
-            else -> ""
-        }
+    /**
+     * A re-read returns one message, while its listing owns the whole album. Without the already
+     * known members every refresh would look like an edit and drop the other photos.
+     */
+    private fun withKnownAlbum(message: TdApi.Message, refreshed: SourceMessage): SourceMessage {
+        if (message.mediaAlbumId == 0L) return refreshed
+        val known = storedPhotos(repository.source(message.chatId, message.id)?.sourcePhotos ?: "[]")
+        if (known.isEmpty()) return refreshed
+        val photos = (known + refreshed.photos).distinctBy { it.uniqueId }.take(MAX_SOURCE_PHOTOS)
+        return refreshed.copy(photos = photos, mediaIdentity = mediaIdentity(photos, message.content))
+    }
+
+    private fun snapshot(message: TdApi.Message, album: List<TdApi.Message> = listOf(message)): SourceMessage {
+        val photos = album.flatMap { photosOf(it.content, it.id) }
+            .distinctBy { it.uniqueId }
+            .take(MAX_SOURCE_PHOTOS)
         return SourceMessage(
             message.chatId,
             message.id,
             message.messageThreadId,
-            text,
+            message.messageText(),
             message.toString(),
             message.date.toLong() * 1000,
             message.editDate.toLong() * 1000,
-            mediaIdentity(message.content),
-            (message.senderId as? TdApi.MessageSenderUser)?.userId
+            mediaIdentity(photos, message.content),
+            (message.senderId as? TdApi.MessageSenderUser)?.userId,
+            photos,
         )
     }
 
-    private fun mediaIdentity(content: TdApi.MessageContent): String = when (content) {
-        is TdApi.MessagePhoto -> content.photo.sizes.joinToString { "${it.photo.remote.uniqueId}:${it.width}:${it.height}" }
-        else -> content.javaClass.simpleName
+    /** Largest available size of every photo in the post, in Telegram order. */
+    private fun photosOf(content: TdApi.MessageContent, messageId: Long): List<SourcePhoto> = when (content) {
+        is TdApi.MessagePhoto -> listOfNotNull(
+            content.photo.sizes.maxByOrNull { it.width.toLong() * it.height }?.let { size ->
+                SourcePhoto(
+                    remoteFileId = size.photo.remote.id,
+                    uniqueId = size.photo.remote.uniqueId,
+                    width = size.width,
+                    height = size.height,
+                    fileSize = maxOf(size.photo.size, size.photo.expectedSize),
+                    messageId = messageId,
+                )
+            }
+        )
+
+        else -> emptyList()
+    }
+
+    private fun storedPhotos(serialized: String): List<SourcePhoto> =
+        runCatching { Json.decodeFromString<List<SourcePhoto>>(serialized) }.getOrDefault(emptyList())
+
+    private fun mediaIdentity(photos: List<SourcePhoto>, content: TdApi.MessageContent): String =
+        if (photos.isEmpty()) content.javaClass.simpleName else photos.joinToString { it.identity }
+
+    override suspend fun downloadPhoto(photo: SourcePhoto): ByteArray? {
+        val telegram = client ?: return null
+        if (state.value != TelegramSourceState.Ready) return null
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val remote = telegram.send(
+                    TdApi.GetRemoteFile().apply { remoteFileId = photo.remoteFileId }
+                ).get(30, TimeUnit.SECONDS)
+                val download = TdApi.DownloadFile().apply {
+                    fileId = remote.id
+                    priority = PHOTO_DOWNLOAD_PRIORITY
+                    synchronous = true
+                }
+                val file = if (remote.local?.isDownloadingCompleted == true) remote
+                else telegram.send(download).get(PHOTO_DOWNLOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                val path = file.local?.path?.takeIf { it.isNotBlank() } ?: return@runCatching null
+                val bytes = Files.readAllBytes(Path.of(path))
+                // The catalog keeps its own copy; the TDLib cache must not grow with every listing.
+                runCatching { telegram.send(TdApi.DeleteFile().apply { fileId = file.id }) }
+                bytes
+            }.onFailure {
+                logger.warn(
+                    "Could not download Telegram photo. uniqueId={}, reason={}",
+                    photo.uniqueId,
+                    it.message ?: it.javaClass.simpleName,
+                )
+            }.getOrNull()
+        }
     }
 
     private fun isMonitored(message: TdApi.Message): Boolean =
@@ -229,7 +323,7 @@ class TelegramClientAdapter(
 
     override fun close() {
 
-
+        albums.close()
         scope.cancel()
 
         runCatching { client?.closeAndWait() }.onFailure { logger.warn("Could not close Telegram client cleanly", it) }
@@ -248,6 +342,10 @@ class TelegramClientAdapter(
 
     private companion object {
         const val STARTUP_MONITORING_LOG_DELAY_MILLIS = 500L
+        const val ALBUM_SETTLE_DELAY_MILLIS = 3_000L
+        const val MAX_SOURCE_PHOTOS = 100
+        const val PHOTO_DOWNLOAD_PRIORITY = 16
+        const val PHOTO_DOWNLOAD_TIMEOUT_SECONDS = 120L
     }
 }
 
@@ -270,6 +368,14 @@ internal fun Throwable.telegramRefreshFailure(): TelegramRefreshFailure? {
         current = current.cause
     }
     return null
+}
+
+internal fun TdApi.Message.messageText(): String = when (val content = content) {
+    is TdApi.MessageText -> content.text.textWithEmbeddedLinks()
+    is TdApi.MessagePhoto -> content.caption.textWithEmbeddedLinks()
+    is TdApi.MessageVideo -> content.caption.textWithEmbeddedLinks()
+    is TdApi.MessageDocument -> content.caption.textWithEmbeddedLinks()
+    else -> ""
 }
 
 internal fun TdApi.Message.summary(): String = when (val content = content) {

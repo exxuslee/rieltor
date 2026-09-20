@@ -17,7 +17,7 @@ import java.nio.file.attribute.PosixFilePermission
 
 @Database(
     entities = [IncomingEntity::class, ListingEntity::class],
-    version = 21,
+    version = 22,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -50,6 +50,14 @@ private val migrations = arrayOf(
             connection.execSQL("DROP INDEX index_listings_sourceKey")
             connection.execSQL("ALTER TABLE incoming_telegram_messages DROP COLUMN sourceKey")
             connection.execSQL("ALTER TABLE listings DROP COLUMN sourceKey")
+        }
+    },
+    object : Migration(21, 22) {
+        override fun migrate(connection: SQLiteConnection) {
+            // Photos of the Telegram post itself; a listing no longer needs a Google Drive link.
+            connection.execSQL(
+                "ALTER TABLE incoming_telegram_messages ADD COLUMN sourcePhotos TEXT NOT NULL DEFAULT '[]'"
+            )
         }
     },
 )

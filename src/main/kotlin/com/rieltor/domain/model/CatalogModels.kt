@@ -3,6 +3,24 @@ package com.rieltor.domain.model
 import kotlinx.serialization.Serializable
 import java.security.MessageDigest
 
+/**
+ * A photo attached to the Telegram post itself.
+ *
+ * [uniqueId] is stable for the same image across re-downloads and is used as the catalog
+ * photo identity; [remoteFileId] is what TDLib needs to fetch the bytes.
+ */
+@Serializable
+data class SourcePhoto(
+    val remoteFileId: String,
+    val uniqueId: String,
+    val width: Int = 0,
+    val height: Int = 0,
+    val fileSize: Long = 0,
+    val messageId: Long = 0,
+) {
+    val identity: String get() = "$uniqueId:$width:$height"
+}
+
 @Serializable
 data class SourceMessage(
     val chatId: Long,
@@ -14,9 +32,14 @@ data class SourceMessage(
     val sourceEditedAt: Long = 0,
     val mediaIdentity: String = "",
     val userId: Long? = null,
+    /** Album photos of the post, in Telegram order. The first one is the listing cover. */
+    val photos: List<SourcePhoto> = emptyList(),
 ) {
     fun fingerprint(): String = sha256("$text|$sourceEditedAt|$mediaIdentity|$messageThreadId|$userId")
 }
+
+/** Catalog photos taken from Telegram carry this version: a Telegram photo never changes in place. */
+const val TELEGRAM_PHOTO_VERSION = "telegram"
 
 fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
     .digest(value.toByteArray()).joinToString("") { "%02x".format(it) }

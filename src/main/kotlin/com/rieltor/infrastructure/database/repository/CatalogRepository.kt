@@ -43,6 +43,9 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
             contentHash = message.fingerprint(),
             revision = (old?.revision ?: 0) + 1,
             verifyAfter = now + stabilityMs,
+            // A caption edit arrives without media; the already known album must survive it.
+            sourcePhotos = if (message.photos.isEmpty()) old?.sourcePhotos ?: "[]"
+            else json.encodeToString(message.photos),
         )
         dao.saveSource(row)
         dao.listingForSource(message.chatId, message.messageId)

@@ -5,11 +5,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class CatalogPriceNormalizerTest {
-    private fun parse(price: String, area: String = "Площа: 50,5 м²", normalizer: CatalogPriceNormalizer = CatalogPriceNormalizer()) = CatalogAdsParser(priceNormalizer = normalizer).parse(listOf(
+    private fun parse(price: String, area: String = "Площа: 50,5 м²", normalizer: CatalogPriceNormalizer = CatalogPriceNormalizer()) = CatalogAdsParser(priceNormalizer = normalizer).parse(
         IncomingEntity(chatId = -1, messageId = 1, messageThreadId = 2, rawMessage = "original",
             rawText = "Ірпінь\nКвартира\n$price\n$area\nhttps://drive.google.com/drive/folders/example",
-            sourceCreatedAt = 0, receivedAt = 0, contentHash = "h", verifyAfter = 0)
-    ), "APARTMENT", 1)
+            sourceCreatedAt = 0, receivedAt = 0, contentHash = "h", verifyAfter = 0),
+        "APARTMENT", 1
+    )
 
     @Test fun `converts currency and area then rounds once to whole dollars`() {
         assertEquals(1, parse("Ціна: 1 грн за 1 м²").price)

@@ -1,9 +1,6 @@
 package com.rieltor.domain.service
 
-import com.rieltor.domain.model.CatalogCodes
-import com.rieltor.domain.model.adId
-import com.rieltor.domain.model.senderFromRaw
-import com.rieltor.domain.model.sha256
+import com.rieltor.domain.model.*
 import com.rieltor.infrastructure.database.model.IncomingEntity
 import com.rieltor.infrastructure.database.model.ListingEntity
 import kotlinx.serialization.json.*
@@ -46,7 +43,10 @@ class CatalogAdsParser(
         if (type !in CatalogCodes.types) warnings += "Configure topicTypeMapping for ${row.chatId}:${row.messageThreadId}"
         if (location == null) warnings += "Ambiguous location"
         val links = GoogleDriveLinkExtractor().extract(row.rawText)
-        if (links.isEmpty()) warnings += "Missing Google Drive URL"
+        val telegramPhotos = runCatching { Json.decodeFromString<List<SourcePhoto>>(row.sourcePhotos) }
+            .getOrDefault(emptyList())
+        // Photos of the Telegram post are enough on their own: a Drive link is now optional.
+        if (links.isEmpty() && telegramPhotos.isEmpty()) warnings += "Missing listing photos"
         if (clean == null) warnings += "Missing public content"
         val programs = extractGovernmentPrograms(row.rawText)
         fun decimal(pattern: String, source: String = row.rawText): Double? =

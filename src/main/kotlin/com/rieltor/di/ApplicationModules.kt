@@ -31,7 +31,6 @@ import com.rieltor.infrastructure.threads.ThreadsPhotoPublisher
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
 import com.rieltor.infrastructure.tiktok.TikTokPhotoPublisher
 import com.rieltor.web.api.CatalogListingApi
-import com.rieltor.web.mapper.PublicListingMapper
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
@@ -180,8 +179,7 @@ private val integrationModule = module {
 /** HTTP adapter: everything the routes need and nothing else. */
 private val webModule = module {
     single { VerificationFileStorage(verificationDirectory) }
-    single { PublicListingMapper(get<ApplicationSettings>().publicBaseUrl) }
-    single { CatalogListingApi(get(), get(), get()) }
+    single { CatalogListingApi(get<ApplicationSettings>().publicBaseUrl, get(), get(), get()) }
 
     single(tikTokOAuthLogin) { OAuthLoginService(TikTokOAuthProvider(get()), get(tikTokOAuthState)) }
     single(googleOAuthLogin) { OAuthLoginService(GoogleDriveOAuthProvider(get()), get(googleOAuthState)) }

@@ -2,7 +2,9 @@ package com.rieltor.application.worker
 
 import com.rieltor.application.port.TelegramInboxSource
 import com.rieltor.domain.model.CatalogPhoto
+import com.rieltor.domain.model.SourcePhoto
 import com.rieltor.domain.model.SourceRefresh
+import com.rieltor.domain.model.TELEGRAM_PHOTO_VERSION
 import com.rieltor.domain.service.CatalogAdsParser
 import com.rieltor.domain.service.CatalogPriceNormalizer
 import com.rieltor.infrastructure.config.JsonSettingsStore
@@ -14,6 +16,8 @@ import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
+import java.io.ByteArrayInputStream
+import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.FileTime
@@ -112,9 +116,6 @@ class AdsWorker(
                 config.usdPerEur
             )
         )
-        // NOTE: CatalogListingParser.parse(...) previously took a List<IncomingEntity> (the whole
-        // group). Its signature needs to change to accept a single IncomingEntity — that file
-        // wasn't shared here, so it isn't updated in this pass.
         val parsed = parser.parse(row, config.topicTypeMapping[topicKey], now()).let { listing ->
             val topic = config.topicNames[topicKey]
             listing.copy(
@@ -132,31 +133,68 @@ class AdsWorker(
             val existing = (Json.decodeFromString<List<CatalogPhoto>>(row.mediaManifest) +
                     repository.cachedPhotos(parsed)).distinctBy { it.fileName }
             val photos = mutableListOf<CatalogPhoto>()
-            drive.downloadCatalogPhotos(
-                Json.Default.decodeFromString(parsed.googleDriveUrls), config.maxCatalogPhotos, config.driveFileDelayMs,
-                cached = { file ->
-                    existing.any {
-                        it.sourceFileId == file.id && it.sourceVersion == file.version && media.resolve(
-                            it.fileName
-                        ) != null
-                    }
-                }) { file, content ->
-                val cached = existing.firstOrNull {
-                    it.sourceFileId == file.id && it.sourceVersion == file.version && media.resolve(it.fileName) != null
-                }
-                val photo = cached ?: content.use {
-                    val stored = media.store(file.name, it, null)
-                    val path = Path.of(stored.localPath)
-                    val image = ImageIO.read(path.toFile())
-                    val hash = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))
-                        .joinToString("") { byte -> "%02x".format(byte) }
-                    CatalogPhoto(path.fileName.toString(), file.id, file.version, image.width, image.height, hash)
-                }
-                content.close()
+            fun record(photo: CatalogPhoto) {
                 photos += photo
                 check(repository.manifest(row, token, photos, now())) { "Telegram source changed during download" }
             }
-            check(photos.isNotEmpty()) { "No Google Drive photos" }
+
+            // The cover of a listing is the first photo of its Telegram post, so Telegram media
+            // is downloaded first and Google Drive only fills the remaining slots.
+            val telegramPhotos = Json.decodeFromString<List<SourcePhoto>>(row.sourcePhotos)
+            for (photo in telegramPhotos.take(config.maxCatalogPhotos)) {
+                val cached = existing.firstOrNull {
+                    it.sourceFileId == photo.uniqueId && it.sourceVersion == TELEGRAM_PHOTO_VERSION &&
+                            media.resolve(it.fileName) != null
+                }
+                if (cached != null) {
+                    record(cached)
+                    continue
+                }
+                val bytes = source.downloadPhoto(photo)
+                // An unavailable Telegram photo is retried later: never publish a partial album.
+                checkNotNull(bytes) { "Telegram photo ${photo.uniqueId} is unavailable" }
+                record(
+                    ByteArrayInputStream(bytes).use {
+                        store("telegram-${photo.uniqueId}.jpg", it, photo.uniqueId, TELEGRAM_PHOTO_VERSION)
+                    }
+                )
+            }
+
+            val driveLinks = Json.decodeFromString<List<String>>(parsed.googleDriveUrls)
+            val driveLimit = config.maxCatalogPhotos - photos.size
+            if (driveLinks.isNotEmpty() && driveLimit > 0) {
+                try {
+                    drive.downloadCatalogPhotos(
+                        driveLinks, driveLimit, config.driveFileDelayMs,
+                        cached = { file ->
+                            existing.any {
+                                it.sourceFileId == file.id && it.sourceVersion == file.version && media.resolve(
+                                    it.fileName
+                                ) != null
+                            }
+                        }) { file, content ->
+                        val cached = existing.firstOrNull {
+                            it.sourceFileId == file.id && it.sourceVersion == file.version &&
+                                    media.resolve(it.fileName) != null
+                        }
+                        val photo = cached ?: content.use {
+                            store(file.name, it, file.id, file.version)
+                        }
+                        content.close()
+                        record(photo)
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Throwable) {
+                    // Telegram already supplied the album; a broken Drive link cannot hide the post.
+                    if (photos.isEmpty()) throw error
+                    logger.warn(
+                        "Google Drive photos unavailable; keeping Telegram photos. chatId={}, messageId={}, reason={}",
+                        row.chatId, row.messageId, error.message ?: error.javaClass.simpleName,
+                    )
+                }
+            }
+            check(photos.isNotEmpty()) { "Listing has no Telegram or Google Drive photos" }
             if (!verify(row)) return true
             if (repository.promote(row, token, parsed.copy(photos = Json.encodeToString(photos)), now())) {
                 photos.forEach { photo ->
@@ -180,6 +218,16 @@ class AdsWorker(
             else repository.stage(row, IncomingStatus.MediaRetry, now(), now() + delay, failed = true)
         }
         return true
+    }
+
+    /** Stores one downloaded image and describes it for the catalog manifest. */
+    private fun store(name: String, content: InputStream, sourceId: String, version: String): CatalogPhoto {
+        val stored = media.store(name, content, null)
+        val path = Path.of(stored.localPath)
+        val image = ImageIO.read(path.toFile())
+        val hash = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))
+            .joinToString("") { byte -> "%02x".format(byte) }
+        return CatalogPhoto(path.fileName.toString(), sourceId, version, image.width, image.height, hash)
     }
 
     override fun close() {

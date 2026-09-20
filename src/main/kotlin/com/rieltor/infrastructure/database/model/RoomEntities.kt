@@ -29,6 +29,8 @@ data class IncomingEntity(
     val verifiedAt: Long? = null,
     val status: IncomingStatus = IncomingStatus.WaitingStability,
     val mediaManifest: String = "[]",
+    /** Photos attached to the Telegram post itself, serialized as a list of SourcePhoto. */
+    val sourcePhotos: String = "[]",
     val attemptCount: Int = 0,
     val nextAttemptAt: Long = 0,
     val leaseToken: String? = null,
