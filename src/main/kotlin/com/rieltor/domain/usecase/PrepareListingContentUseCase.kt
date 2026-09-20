@@ -1,7 +1,6 @@
-package com.rieltor.domain.service
+package com.rieltor.domain.usecase
 
 import com.rieltor.domain.model.ListingMessage
-import com.rieltor.domain.model.MediaTextOverlay
 
 /**
  * Converts an internal Telegram listing caption into a reusable public domain model.
@@ -10,8 +9,10 @@ import com.rieltor.domain.model.MediaTextOverlay
  * model is built. The class is stateless so it can be tested independently from
  * Telegram and destination integrations.
  */
-class ListingCaptionFormatter {
-    fun filter(message: String?): ListingMessage? {
+class PrepareListingContentUseCase(
+    private val extractPrice: ExtractListingPriceUseCase = ExtractListingPriceUseCase(),
+) {
+    operator fun invoke(message: String?): ListingMessage? {
         if (message.isNullOrBlank()) return null
 
         val sourceLines = message
@@ -50,18 +51,17 @@ class ListingCaptionFormatter {
         val publicContent = content
             .filterNot(registrationLine::containsMatchIn)
             .filterNot(boilerCostLine::containsMatchIn)
-        val priceIndex = publicContent.indexOfFirst(priceLine::containsMatchIn)
-        val price = publicContent.getOrNull(priceIndex)?.let(::extractPrice) ?: PRICE_ON_REQUEST
+        val price = extractPrice(publicContent.joinToString("\n"))?.display ?: PRICE_ON_REQUEST
         val governmentPrograms = publicContent.firstOrNull(governmentProgramsLine::containsMatchIn)
             ?.let(::normalizeGovernmentPrograms)
         val excluded = setOfNotNull(
-            priceIndex.takeIf { it >= 0 },
             publicContent.indexOfFirst(governmentProgramsLine::containsMatchIn).takeIf { it >= 0 },
         )
         val fullText = lines.joinToString(" ")
         val isApartment = apartmentListing.containsMatchIn(fullText)
         val details = publicContent
             .filterIndexed { index, _ -> index !in excluded }
+            .filterNot(priceLine::containsMatchIn)
             .filterNot { isApartment && isTopFloor(it) }
             .filterNot(electricHeatingLine::containsMatchIn)
         val (parameters, description) = details.partition(::looksLikeParameter)
@@ -77,34 +77,6 @@ class ListingCaptionFormatter {
             hashtags = buildHashtags(fullText),
             phone = PUBLIC_PHONE,
         )
-    }
-
-    fun forTikTok(listing: ListingMessage?): String? {
-        listing ?: return null
-
-        return buildList {
-            add("$TITLE_PREFIX${listing.title}")
-            listing.address?.let { add("📍 $it") }
-            add("💰 ${listing.price}")
-            if (listing.keyParameters.isNotEmpty()) {
-                add("")
-                listing.keyParameters.forEach { add("$ITEM_PREFIX$it") }
-            }
-            if (listing.additionalParameters.isNotEmpty()) {
-                add("")
-                listing.additionalParameters.forEach(::add)
-            }
-            listing.governmentPrograms?.let { add("🏦 $it") }
-            listing.registration?.let { add("📄 $it") }
-            add("")
-            add("🤙 ${listing.phone} $PUBLIC_CONTACT_NAME")
-            add("")
-            add(listing.hashtags.joinToString(" "))
-        }.joinToString("\n")
-    }
-
-    fun photoOverlay(listing: ListingMessage?): MediaTextOverlay? = listing?.let {
-        MediaTextOverlay(it.title, it.price, "${it.phone} $PUBLIC_CONTACT_NAME")
     }
 
     private fun cleanLine(source: String): String {
@@ -145,11 +117,6 @@ class ListingCaptionFormatter {
         match.groupValues[1].toIntOrNull() == match.groupValues[2].toIntOrNull()
     } ?: false
 
-    private fun extractPrice(line: String): String = priceValue.find(line)?.groupValues?.get(1)
-        ?.replace(repeatedWhitespace, " ")
-        ?.trim()
-        ?: line.removeListMarker()
-
     private fun normalizeGovernmentPrograms(line: String): String =
         line.removeListMarker().replace(fieldSeparator, ": ").trim()
 
@@ -168,11 +135,8 @@ class ListingCaptionFormatter {
 
     private companion object {
         const val PUBLIC_PHONE = "066-372-71-02"
-        const val PUBLIC_CONTACT_NAME = "Ірина"
         const val PRICE_ON_REQUEST = "Ціна за запитом"
         const val HASHTAG_COUNT = 5
-        const val TITLE_PREFIX = "🏠 "
-        const val ITEM_PREFIX = "• "
         val FALLBACK_HASHTAGS = listOf("#рієлтор", "#нерухомістьУкраїни", "#купитинерухомість")
 
         val googleUrl = Regex("""(?iu)https?://(?:drive|docs)\.google\.com/\S+""")
@@ -213,9 +177,6 @@ class ListingCaptionFormatter {
             """(?iu)(?:ціна|вартість|площа|м\s*[²2]|м\.?\s*кв\.?|кв\.?\s*м|сот\p{L}*|ділянк\p{L}*|поверх\p{L}*|кімнат\p{L}*|санвуз\p{L}*|(?:^|\s)жк(?:\s|$)|(?:^|\s)вул\.?\s|вулиц\p{L}*|опален\p{L}*|комунікаці\p{L}*|вода|каналізаці\p{L}*|септик|свердловин\p{L}*|скважин\p{L}*|газ|електр\p{L}*|програм\p{L}*|сертифікат|іпотек\p{L}*|розтермінув\p{L}*)"""
         )
         val priceLine = Regex("""(?iu)(?:ціна|вартість|від\s+\d|\d[\d\s.,]*\s*(?:[$€₴]|грн\.?|usd|eur))""")
-        val priceValue = Regex(
-            """(?iu)(?:(?:ціна|вартість)\s*[-:.]?\s*)?((?:від\s*)?\d[\d\s.,]*(?:[$€₴]|грн\.?|usd|eur))"""
-        )
         val governmentProgramsLine = Regex("""(?iu)(?:держ(?:авні|\.)?\s*програм\p{L}*|єосел\p{L}*|сертифікат|постанова)""")
         val registrationLine = Regex("""(?iu)(?:оформлення|оф\.?(?=\s)|переуступк[ау])""")
         val registrationCostLine = Regex(

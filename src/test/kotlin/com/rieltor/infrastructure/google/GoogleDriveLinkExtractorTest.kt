@@ -1,4 +1,4 @@
-package com.rieltor.domain.service
+package com.rieltor.infrastructure.google
 
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -2,12 +2,12 @@ package com.rieltor.application.worker
 
 import com.rieltor.application.port.PublicationContext
 import com.rieltor.application.service.CatalogRepostMasterLimiter
+import com.rieltor.application.service.ListingCaptionFormatter
 import com.rieltor.domain.model.CatalogPhoto
 import com.rieltor.domain.model.ListingMessage
 import com.rieltor.domain.model.RepostDestination
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublisherBackpressureException
-import com.rieltor.domain.service.ListingCaptionFormatter
 import com.rieltor.infrastructure.config.JsonSettingsStore
 import com.rieltor.infrastructure.database.model.ListingEntity
 import com.rieltor.infrastructure.database.repository.CatalogRepository

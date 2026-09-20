@@ -5,9 +5,10 @@ import com.rieltor.domain.model.CatalogPhoto
 import com.rieltor.domain.model.SourcePhoto
 import com.rieltor.domain.model.SourceRefresh
 import com.rieltor.domain.model.TELEGRAM_PHOTO_VERSION
-import com.rieltor.domain.service.CatalogAdsParser
-import com.rieltor.domain.service.CatalogPriceNormalizer
+import com.rieltor.domain.usecase.NormalizeCatalogPriceUseCase
+import com.rieltor.domain.usecase.PrepareCatalogListingUseCase
 import com.rieltor.infrastructure.config.JsonSettingsStore
+import com.rieltor.infrastructure.database.mapper.CatalogListingMapper
 import com.rieltor.infrastructure.database.model.IncomingEntity
 import com.rieltor.infrastructure.database.model.IncomingStatus
 import com.rieltor.infrastructure.database.repository.CatalogRepository
@@ -110,13 +111,12 @@ class AdsWorker(
         if (!verify(row)) return true
         val config = settings.snapshot()
         val topicKey = "${row.chatId}:${row.messageThreadId}"
-        val parser = CatalogAdsParser(
-            priceNormalizer = CatalogPriceNormalizer(
-                config.uahPerUsd,
-                config.usdPerEur
+        val mapper = CatalogListingMapper(
+            PrepareCatalogListingUseCase(
+                priceNormalizer = NormalizeCatalogPriceUseCase(config.uahPerUsd, config.usdPerEur)
             )
         )
-        val parsed = parser.parse(row, config.topicTypeMapping[topicKey], now()).let { listing ->
+        val parsed = mapper.fromIncoming(row, config.topicTypeMapping[topicKey], now()).let { listing ->
             val topic = config.topicNames[topicKey]
             listing.copy(
                 tags = Json.encodeToString(

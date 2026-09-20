@@ -1,7 +1,7 @@
 package com.rieltor.infrastructure.oauth
 
 import java.time.Instant
-import java.util.UUID
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 class OAuthStateStore(

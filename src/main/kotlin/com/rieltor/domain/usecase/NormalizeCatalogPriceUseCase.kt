@@ -1,17 +1,17 @@
-package com.rieltor.domain.service
+package com.rieltor.domain.usecase
+
+import com.rieltor.domain.model.ImportedPrice
 
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-/** Source-only price metadata. Never persisted as a catalog listing. */
-data class ImportedPrice(
-    val amount: Long?, val currency: String?, val transactionType: String = "SALE",
-    val period: String = "TOTAL", val areaM2: Double? = null, val landAreaSotka: Double? = null,
-)
-
 /** Converts a sale price to whole USD for the entire property before persistence. */
-class CatalogPriceNormalizer(private val uahPerUsd: Double = 45.0, private val usdPerEur: Double = 1.1) {
-    fun normalize(source: ImportedPrice): Long? = runCatching {
+class NormalizeCatalogPriceUseCase(
+    private val uahPerUsd: Double = 45.0,
+    private val usdPerEur: Double = 1.1
+) {
+
+    operator fun invoke(source: ImportedPrice): Long? = runCatching {
         require(source.transactionType == "SALE") { "Only sale listings are supported" }
         val amount = requireNotNull(source.amount)
         require(amount > 0) { "Price must be positive" }

@@ -1,11 +1,12 @@
 package com.rieltor.application.worker
 
 import com.rieltor.application.port.TelegramBotReplySender
+import com.rieltor.application.service.ListingCaptionFormatter
 import com.rieltor.domain.model.TelegramBotIncomingMessage
 import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.repository.ExternalPhotoSource
-import com.rieltor.domain.service.GoogleDriveLinkExtractor
-import com.rieltor.domain.service.ListingCaptionFormatter
+import com.rieltor.domain.usecase.PrepareListingContentUseCase
+import com.rieltor.infrastructure.google.GoogleDriveLinkExtractor
 import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
 
@@ -14,13 +15,14 @@ class ReplyTgBotWorker(
     private val replySender: TelegramBotReplySender,
     private val captionFormatter: ListingCaptionFormatter = ListingCaptionFormatter(),
     private val driveLinkExtractor: GoogleDriveLinkExtractor = GoogleDriveLinkExtractor(),
+    private val prepareContent: PrepareListingContentUseCase = PrepareListingContentUseCase(),
     private val maxPhotoCount: Int = DEFAULT_MAX_PHOTO_COUNT,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     suspend fun execute(message: TelegramBotIncomingMessage) {
         val startedAt = System.nanoTime()
-        val listing = captionFormatter.filter(message.text)
+        val listing = prepareContent(message.text)
         val formattedText = captionFormatter.forTikTok(listing)
         if (formattedText == null) {
             logger.warn(

@@ -6,8 +6,8 @@ import com.rieltor.domain.model.SourceMessage
 import com.rieltor.domain.model.adId
 import com.rieltor.domain.model.senderFromRaw
 import com.rieltor.domain.model.userIdFromRaw
-import com.rieltor.domain.service.CatalogAdsParser
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
+import com.rieltor.infrastructure.database.mapper.CatalogListingMapper
 import com.rieltor.infrastructure.database.model.IncomingStatus
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import kotlinx.serialization.json.*
@@ -38,7 +38,7 @@ class AdIdentityTest {
             val rows = repo.incoming()
             assertEquals(1961809113L, rows.single().userId)
             assertEquals("1961809113:IRPIN:APARTMENT 1:79000:null:null",
-                CatalogAdsParser().parse(rows, "APARTMENT 1", 2000).adId)
+                CatalogListingMapper().fromIncoming(rows, "APARTMENT 1", 2000).adId)
         }
     }
 
@@ -61,7 +61,7 @@ class AdIdentityTest {
                 val rows = repo.incoming(source.chatId, source.messageId)
                 repo.stage(rows, IncomingStatus.ReadyForMedia, 10000)
                 assertTrue(repo.claim(rows, 10000))
-                assertTrue(repo.promote(rows, CatalogAdsParser().parse(rows, "APARTMENT 1", 10000), 10000))
+                assertTrue(repo.promote(rows, CatalogListingMapper().fromIncoming(rows, "APARTMENT 1", 10000), 10000))
             }
             publish(1)
             val old = repo.listings().single()

@@ -1,8 +1,11 @@
-package com.rieltor.domain.service
+package com.rieltor.domain.usecase
+
+import com.rieltor.application.service.ListingCaptionFormatter
 
 import kotlin.test.*
 
-class ListingCaptionFormatterTest {
+class PrepareListingContentUseCaseTest {
+    private val prepareContent = PrepareListingContentUseCase()
     private val filter = ListingCaptionFormatter()
 
     @Test
@@ -22,7 +25,7 @@ class ListingCaptionFormatterTest {
             https://drive.google.com/drive/folders/example
         """.trimIndent()
 
-        val listing = requireNotNull(filter.filter(source))
+        val listing = requireNotNull(prepareContent(source))
         val result = requireNotNull(filter.forTikTok(listing))
 
         assertEquals("Таунхаус з ремонтом — Ірпінь", listing.title)
@@ -51,7 +54,7 @@ class ListingCaptionFormatterTest {
             https://docs.google.com/document/d/example/edit
         """.trimIndent()
 
-        val listing = requireNotNull(filter.filter(source))
+        val listing = requireNotNull(prepareContent(source))
         val result = requireNotNull(filter.forTikTok(listing))
 
         assertContains(result, "• Площа дуплекса: 93 м2")
@@ -65,8 +68,8 @@ class ListingCaptionFormatterTest {
 
     @Test
     fun `returns null for an empty caption`() {
-        assertNull(filter.filter(null))
-        assertNull(filter.filter("  \n "))
+        assertNull(prepareContent(null))
+        assertNull(prepareContent("  \n "))
     }
 
     @Test
@@ -80,7 +83,7 @@ class ListingCaptionFormatterTest {
             АН «Novator»
         """.trimIndent()
 
-        val listing = requireNotNull(filter.filter(source))
+        val listing = requireNotNull(prepareContent(source))
         val result = requireNotNull(filter.forTikTok(listing))
 
         assertEquals("45000${'$'}", listing.price)
@@ -98,7 +101,7 @@ class ListingCaptionFormatterTest {
             Ціна 22 000${'$'} ( 2000/2)
         """.trimIndent()
 
-        val listing = requireNotNull(filter.filter(source))
+        val listing = requireNotNull(prepareContent(source))
         val result = requireNotNull(filter.forTikTok(listing))
 
         assertEquals("22 000${'$'}", listing.price)
@@ -108,7 +111,7 @@ class ListingCaptionFormatterTest {
 
     @Test
     fun `extracts title price and public contact for the first photo`() {
-        val listing = requireNotNull(filter.filter("Квартира в Ірпені\nЦіна 22 000${'$'}"))
+        val listing = requireNotNull(prepareContent("Квартира в Ірпені\nЦіна 22 000${'$'}"))
 
         val overlay = requireNotNull(filter.photoOverlay(listing))
 
@@ -133,7 +136,7 @@ class ListingCaptionFormatterTest {
             0961733824 Віта, АН Новатор
         """.trimIndent()
 
-        val listing = requireNotNull(filter.filter(source))
+        val listing = requireNotNull(prepareContent(source))
         val tiktok = requireNotNull(filter.forTikTok(listing))
 
         assertEquals("Квартира в ЖК На Прорізній — Гостомель", listing.title)
@@ -164,7 +167,7 @@ class ListingCaptionFormatterTest {
             Готівка, сертифікат
         """.trimIndent()
 
-        val listing = requireNotNull(filter.filter(source))
+        val listing = requireNotNull(prepareContent(source))
         val tiktok = requireNotNull(filter.forTikTok(listing))
 
         assertContains(listing.keyParameters, "Площа 24,5м2")
@@ -184,7 +187,7 @@ class ListingCaptionFormatterTest {
             Ціна 60000${'$'}
         """.trimIndent()
 
-        val tiktok = requireNotNull(filter.forTikTok(filter.filter(source)))
+        val tiktok = requireNotNull(filter.forTikTok(prepareContent(source)))
 
         assertContains(tiktok, "Поверх 4/5")
         assertContains(tiktok, "Газове опалення")
@@ -199,7 +202,7 @@ class ListingCaptionFormatterTest {
             Ціна 120000${'$'}
         """.trimIndent()
 
-        val listing = requireNotNull(filter.filter(source))
+        val listing = requireNotNull(prepareContent(source))
         val tiktok = requireNotNull(filter.forTikTok(listing))
 
         assertContains(tiktok, "Поверх 2/2")
@@ -209,7 +212,7 @@ class ListingCaptionFormatterTest {
 
     @Test
     fun `omits assignment fee in accusative form`() {
-        val listing = requireNotNull(filter.filter("Квартира в Ірпені\nПереуступку - 4%\nЦіна 52500${'$'}"))
+        val listing = requireNotNull(prepareContent("Квартира в Ірпені\nПереуступку - 4%\nЦіна 52500${'$'}"))
 
         assertNull(listing.registration)
         assertEquals("52500${'$'}", listing.price)
@@ -229,14 +232,14 @@ class ListingCaptionFormatterTest {
             Ціна 52500${'$'}
         """.trimIndent()
 
-        val listing = requireNotNull(filter.filter(source))
+        val listing = requireNotNull(prepareContent(source))
 
         assertEquals("Квартира в Ірпені", listing.title)
         assertEquals(
             listOf("Житловий комплекс", "Введений в експлуатацію", "Гарний ремонт"),
             listing.additionalParameters,
         )
-        assertNull(filter.filter("Екс"))
+        assertNull(prepareContent("Екс"))
     }
 
     @Test
@@ -249,7 +252,7 @@ class ListingCaptionFormatterTest {
             Ціна 52500${'$'}
         """.trimIndent()
 
-        val listing = requireNotNull(filter.filter(source))
+        val listing = requireNotNull(prepareContent(source))
         val tiktok = requireNotNull(filter.forTikTok(listing))
 
         assertEquals("52500${'$'}", listing.price)

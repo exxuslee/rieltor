@@ -6,8 +6,8 @@ import com.rieltor.domain.repository.ExternalPhotoSource
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublicMediaStorage
 import com.rieltor.domain.repository.TelegramRepostRepository
-import com.rieltor.domain.service.GoogleDriveLinkExtractor
 import com.rieltor.domain.service.TelegramListingIdentityExtractor
+import com.rieltor.infrastructure.google.GoogleDriveLinkExtractor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayInputStream

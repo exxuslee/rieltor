@@ -1,4 +1,4 @@
-package com.rieltor.domain.service
+package com.rieltor.infrastructure.google
 
 /** Extracts supported Google Drive URLs from the original Telegram text. */
 class GoogleDriveLinkExtractor {

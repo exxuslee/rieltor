@@ -9,7 +9,7 @@ import com.rieltor.application.worker.CatalogRepostWorker
 import com.rieltor.application.worker.CleanupWorker
 import com.rieltor.application.worker.ReplyTgBotWorker
 import com.rieltor.domain.repository.*
-import com.rieltor.domain.service.ListingCaptionFormatter
+import com.rieltor.application.service.ListingCaptionFormatter
 import com.rieltor.infrastructure.config.*
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.repository.CatalogRepository

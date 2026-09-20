@@ -1,4 +1,4 @@
-package com.rieltor.domain.service
+package com.rieltor.infrastructure.database.mapper
 
 import com.rieltor.domain.model.SourcePhoto
 import com.rieltor.infrastructure.database.model.IncomingEntity
@@ -8,23 +8,23 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class CatalogAdsParserTest {
+class CatalogListingMapperTest {
     @Test fun `extracts exact price and programs without inventing eligibility`() {
         val text = "Ірпінь\n2 кімнатна квартира\nЦіна: 82 000,50 USD\nПлоща: 64 м²\nєОселя\nСертифікат не розглядаємо\nhttps://drive.google.com/drive/folders/example"
         val row = IncomingEntity(chatId = -1, messageId = 1, messageThreadId = 2, rawMessage = text, rawText = text, sourceCreatedAt = 0, receivedAt = 0, contentHash = "h", verifyAfter = 0)
-        val result = CatalogAdsParser().parse(row, "APARTMENT 2", 1)
+        val result = CatalogListingMapper().fromIncoming(row, "APARTMENT 2", 1)
         assertEquals(82_001, result.price)
         assertEquals("ACTIVE", result.status)
         assertEquals("[\"EOSELIA\"]", result.governmentPrograms)
         assertEquals(64.0, result.areaM2)
-        assertEquals("NEEDS_REVIEW", CatalogAdsParser().parse(row, null, 1).status)
+        assertEquals("NEEDS_REVIEW", CatalogListingMapper().fromIncoming(row, null, 1).status)
     }
 
     @Test fun `takes apartment room count from configured topic type`() {
         val text = "Ірпінь\nКвартира з ремонтом\nЦіна: 70 000 USD\nПлоща: 48 м²\nhttps://drive.google.com/drive/folders/example"
         val row = IncomingEntity(chatId = -1, messageId = 2, messageThreadId = 3, rawMessage = text, rawText = text, sourceCreatedAt = 0, receivedAt = 0, contentHash = "h", verifyAfter = 0)
 
-        val result = CatalogAdsParser().parse(row, "APARTMENT 3+", 1)
+        val result = CatalogListingMapper().fromIncoming(row, "APARTMENT 3+", 1)
 
         assertEquals(3, result.rooms)
         assertEquals("ACTIVE", result.status)
@@ -34,7 +34,7 @@ class CatalogAdsParserTest {
         val text = "ЖК Сенсація\nКвартира з ремонтом\nЦіна: 35 000 USD\nПлоща: 24 м²\nhttps://drive.google.com/drive/folders/example"
         val row = IncomingEntity(chatId = -1, messageId = 3, messageThreadId = 4, rawMessage = text, rawText = text, sourceCreatedAt = 0, receivedAt = 0, contentHash = "h", verifyAfter = 0)
 
-        val result = CatalogAdsParser().parse(row, "APARTMENT 1", 1)
+        val result = CatalogListingMapper().fromIncoming(row, "APARTMENT 1", 1)
 
         assertEquals("OTHER", result.location)
         assertEquals("ACTIVE", result.status)
@@ -155,7 +155,7 @@ class CatalogAdsParserTest {
         assertEquals("NEEDS_REVIEW", parse(text).status)
     }
 
-    private fun parse(text: String, sourcePhotos: String = "[]") = CatalogAdsParser().parse(
+    private fun parse(text: String, sourcePhotos: String = "[]") = CatalogListingMapper().fromIncoming(
         IncomingEntity(
             chatId = -1, messageId = 10, messageThreadId = 20, rawMessage = text, rawText = text,
             sourceCreatedAt = 0, receivedAt = 0, contentHash = "h", verifyAfter = 0, sourcePhotos = sourcePhotos,
