@@ -2,7 +2,7 @@ package com.rieltor.infrastructure.media
 
 import com.rieltor.domain.model.CatalogPhoto
 import com.rieltor.domain.model.SourceMessage
-import com.rieltor.domain.service.CatalogListingParser
+import com.rieltor.domain.service.CatalogAdsParser
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.model.IncomingStatus
 import com.rieltor.infrastructure.database.repository.CatalogRepository
@@ -42,7 +42,7 @@ class CatalogRetentionTest {
         repo.stage(rows, IncomingStatus.ReadyForMedia, now.toEpochMilli())
         val token = assertNotNull(repo.claim(rows, now.toEpochMilli()))
         repo.manifest(rows, token, photos, now.toEpochMilli())
-        val parsed = CatalogListingParser().parse(rows, "APARTMENT", now.toEpochMilli())
+        val parsed = CatalogAdsParser().parse(rows, "APARTMENT", now.toEpochMilli())
         return repo.promote(rows, token, parsed.copy(photos = Json.encodeToString(photos)), now.toEpochMilli())
     }
 

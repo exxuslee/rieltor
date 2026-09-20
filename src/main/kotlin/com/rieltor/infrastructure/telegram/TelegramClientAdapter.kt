@@ -277,3 +277,12 @@ internal fun TdApi.Message.summary(): String = when (val content = content) {
     is TdApi.MessagePhoto -> "photo: ${content.caption.text}".replace('\n', ' ')
     else -> content.javaClass.simpleName.removePrefix("Message")
 }
+
+internal fun TdApi.FormattedText.textWithEmbeddedLinks(): String {
+    val embeddedLinks = entities.asSequence()
+        .mapNotNull { (it.type as? TdApi.TextEntityTypeTextUrl)?.url }
+        .filter { it.isNotBlank() && !text.contains(it) }
+        .distinct()
+        .toList()
+    return if (embeddedLinks.isEmpty()) text else (listOf(text) + embeddedLinks).joinToString("\n")
+}

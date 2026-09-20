@@ -7,21 +7,3 @@ sealed interface TelegramSourceState {
     data object Ready : TelegramSourceState
     data class Failed(val reason: String) : TelegramSourceState
 }
-
-sealed interface RepostFlowState {
-    data object Stopped : RepostFlowState
-    data object WaitingForMessage : RepostFlowState
-    data class Processing(val updateId: Long) : RepostFlowState
-    data class Deferred(val updateId: Long, val reason: String) : RepostFlowState
-    data class Published(val updateId: Long, val publishId: String) : RepostFlowState
-    data class Skipped(val updateId: Long, val reason: SkipReason) : RepostFlowState
-    data class Failed(val updateId: Long?, val reason: String) : RepostFlowState
-}
-
-enum class SkipReason {
-    DUPLICATE,
-    UNMONITORED_SOURCE,
-    UNSUPPORTED_CONTENT,
-    MISSING_PRICE,
-    MISSING_GOOGLE_DRIVE_LINK,
-}

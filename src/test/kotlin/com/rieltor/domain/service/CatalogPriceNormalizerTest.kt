@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class CatalogPriceNormalizerTest {
-    private fun parse(price: String, area: String = "Площа: 50,5 м²", normalizer: CatalogPriceNormalizer = CatalogPriceNormalizer()) = CatalogListingParser(priceNormalizer = normalizer).parse(listOf(
+    private fun parse(price: String, area: String = "Площа: 50,5 м²", normalizer: CatalogPriceNormalizer = CatalogPriceNormalizer()) = CatalogAdsParser(priceNormalizer = normalizer).parse(listOf(
         IncomingEntity(chatId = -1, messageId = 1, messageThreadId = 2, rawMessage = "original",
             rawText = "Ірпінь\nКвартира\n$price\n$area\nhttps://drive.google.com/drive/folders/example",
             sourceCreatedAt = 0, receivedAt = 0, contentHash = "h", verifyAfter = 0)

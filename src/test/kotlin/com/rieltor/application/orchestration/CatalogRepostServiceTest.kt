@@ -1,5 +1,6 @@
 package com.rieltor.application.orchestration
 
+import com.rieltor.application.service.CatalogRepostService
 import com.rieltor.domain.model.CatalogPhoto
 import com.rieltor.domain.model.PublishReceipt
 import com.rieltor.domain.model.RepostDestination

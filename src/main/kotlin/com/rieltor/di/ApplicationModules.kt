@@ -1,10 +1,9 @@
 package com.rieltor.di
 
-import com.rieltor.application.orchestration.CatalogIngestionService
-import com.rieltor.application.orchestration.CatalogRepostService
+import com.rieltor.application.port.LandingLeadNotifier
 import com.rieltor.application.port.TelegramBotReplySender
 import com.rieltor.application.port.TelegramInboxSource
-import com.rieltor.application.usecase.ReplyWithFormattedListingUseCase
+import com.rieltor.application.service.*
 import com.rieltor.domain.repository.*
 import com.rieltor.domain.service.ListingCaptionFormatter
 import com.rieltor.infrastructure.config.*
@@ -15,15 +14,21 @@ import com.rieltor.infrastructure.google.GoogleDriveAuthService
 import com.rieltor.infrastructure.google.GoogleDrivePhotoSource
 import com.rieltor.infrastructure.job.CleanupJob
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
+import com.rieltor.infrastructure.media.VerificationFileStorage
 import com.rieltor.infrastructure.oauth.OAuthStateStore
+import com.rieltor.infrastructure.oauth.provider.GoogleDriveOAuthProvider
+import com.rieltor.infrastructure.oauth.provider.ThreadsOAuthProvider
+import com.rieltor.infrastructure.oauth.provider.TikTokOAuthProvider
 import com.rieltor.infrastructure.telegram.TelegramBotApiReplySender
 import com.rieltor.infrastructure.telegram.TelegramClientAdapter
+import com.rieltor.infrastructure.telegram.TelegramLandingLeadNotifier
 import com.rieltor.infrastructure.telegram.TelegramListingBot
 import com.rieltor.infrastructure.threads.ThreadsAuthService
 import com.rieltor.infrastructure.threads.ThreadsPhotoPublisher
 import com.rieltor.infrastructure.tiktok.TikTokAuthService
 import com.rieltor.infrastructure.tiktok.TikTokPhotoPublisher
-import com.rieltor.web.LandingLeadSender
+import com.rieltor.web.api.CatalogListingApi
+import com.rieltor.web.mapper.PublicListingMapper
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
@@ -33,10 +38,18 @@ import kotlinx.serialization.json.Json
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import java.nio.file.Path
 
 val tikTokOAuthState = named("tiktok-oauth-state")
 val googleOAuthState = named("google-oauth-state")
 val threadsOAuthState = named("threads-oauth-state")
+
+private val tikTokOAuthLogin = named("tiktok-oauth-login")
+private val googleOAuthLogin = named("google-oauth-login")
+private val threadsOAuthLogin = named("threads-oauth-login")
+
+/** Directory with the platform ownership files served at the site root. */
+private val verificationDirectory = Path.of("docs")
 
 fun applicationModules(settingsStore: JsonSettingsStore): List<Module> = listOf(
     configurationModule(settingsStore),
@@ -44,6 +57,7 @@ fun applicationModules(settingsStore: JsonSettingsStore): List<Module> = listOf(
     networkModule,
     applicationModule,
     integrationModule,
+    webModule,
 )
 
 private fun configurationModule(settingsStore: JsonSettingsStore) = module {
@@ -81,14 +95,20 @@ private val networkModule = module {
 private val applicationModule = module {
     single { ListingCaptionFormatter() }
     single {
-        ReplyWithFormattedListingUseCase(
+        ReplyTgBotService(
             externalPhotoSource = get(),
             replySender = get(),
             captionFormatter = get(),
             maxPhotoCount = get<ApplicationSettings>().telegramListingBotMaxPhotoCount,
         )
     }
-    single { CatalogIngestionService(get(), get(), get(), get(), get()) }
+    single { AdsService(get(), get(), get(), get(), get()) }
+    single { LandingLeadValidator() }
+    single { LandingLeadRateLimiter() }
+    single { LandingLeadService(get(), get(), get()) }
+    single { CatalogCursorCodec() }
+    single { CatalogFilterParser(get()) }
+    single { CatalogQueryService(get(), get()) }
     single {
         val app = get<ApplicationSettings>()
         CatalogRepostService(get(), get(), buildList {
@@ -98,7 +118,7 @@ private val applicationModule = module {
     }
 }
 private val integrationModule = module {
-    single { LandingLeadSender(get(), get()) }
+    single<LandingLeadNotifier> { TelegramLandingLeadNotifier(get(), get()) }
     single { TikTokAuthService(get(), get(), get(), get()) }
     single(tikTokOAuthState) { OAuthStateStore() }
     single { ThreadsAuthService(get(), get(), get(), get()) }
@@ -150,6 +170,39 @@ private val integrationModule = module {
             )
             },
             repository = get(), settings = get(),
+        )
+    }
+}
+
+/** HTTP adapter: everything the routes need and nothing else. */
+private val webModule = module {
+    single { VerificationFileStorage(verificationDirectory) }
+    single { PublicListingMapper(get<ApplicationSettings>().publicBaseUrl) }
+    single { CatalogListingApi(get(), get(), get()) }
+
+    single(tikTokOAuthLogin) { OAuthLoginService(TikTokOAuthProvider(get()), get(tikTokOAuthState)) }
+    single(googleOAuthLogin) { OAuthLoginService(GoogleDriveOAuthProvider(get()), get(googleOAuthState)) }
+    single(threadsOAuthLogin) { OAuthLoginService(ThreadsOAuthProvider(get()), get(threadsOAuthState)) }
+    single {
+        OAuthRegistry(
+            listOf(
+                get<OAuthLoginService>(tikTokOAuthLogin),
+                get<OAuthLoginService>(googleOAuthLogin),
+                get<OAuthLoginService>(threadsOAuthLogin),
+            )
+        )
+    }
+
+    single {
+        ApplicationLifecycle(
+            catalog = get(),
+            ads = get(),
+            repostService = get(),
+            telegramListingBot = get(),
+            mediaCleanupJob = get(),
+            httpClient = get(),
+            database = get(),
+            settingsStore = get(),
         )
     }
 }

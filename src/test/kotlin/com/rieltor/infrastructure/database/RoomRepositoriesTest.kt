@@ -1,5 +1,6 @@
 package com.rieltor.infrastructure.database
 
+import com.rieltor.application.service.CatalogQueryService
 import com.rieltor.domain.model.RepostDestination
 import com.rieltor.domain.model.SourceMessage
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
@@ -7,7 +8,8 @@ import com.rieltor.infrastructure.database.model.IncomingStatus
 import com.rieltor.infrastructure.database.model.ListingEntity
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.database.repository.TikTokRepositoryImpl
-import com.rieltor.web.CatalogQuery
+import com.rieltor.web.api.CatalogListingApi
+import com.rieltor.web.mapper.PublicListingMapper
 import io.ktor.http.*
 import kotlinx.serialization.json.Json
 import java.nio.file.Files
@@ -95,7 +97,7 @@ class RoomPersistenceTest {
             val repo = CatalogRepository(db)
             repo.save(listing(1, programs = "[\"EOSELIA\"]")); repo.save(listing(2, programs = "[\"CERTIFICATE\"]"))
             repo.save(listing(3, city = "BUCHA")); repo.save(listing(4, price = 90_000))
-            val api = CatalogQuery(repo, "http://localhost")
+            val api = catalogApi(repo)
             val params = Parameters.build {
                 append("location", "IRPIN"); append("governmentPrograms", "EOSELIA,CERTIFICATE")
                 append("priceMin", "82000"); append("priceMax", "82000"); append("limit", "1")
@@ -117,7 +119,7 @@ class RoomPersistenceTest {
             assertFailsWith<IllegalArgumentException> { repo.save(listing(2, price = 0)) }
             repo.save(listing(3, price = 50_500))
             val hidden = repo.save(listing(4).copy(status = "NEEDS_REVIEW", price = null))
-            val api = CatalogQuery(repo, "http://localhost")
+            val api = catalogApi(repo)
             assertEquals(listOf("50500"), api.list(Parameters.Empty).items.map { it.price })
             assertNull(api.one(hidden))
         }
@@ -132,7 +134,7 @@ class RoomPersistenceTest {
             val repo = CatalogRepository(db)
             repo.save(listing(1, rawText = "Ірпінь\nЦіна: 82 000 USD"))
 
-            assertEquals("Ірпінь\nЦіна: 82 000 USD", CatalogQuery(repo, "http://localhost").list(Parameters.Empty).items.single().rawText)
+            assertEquals("Ірпінь\nЦіна: 82 000 USD", catalogApi(repo).list(Parameters.Empty).items.single().rawText)
         }
     }
 
@@ -144,7 +146,7 @@ class RoomPersistenceTest {
             repo.save(listing(3, type = "HOUSE-"))
             repo.save(listing(4, type = "DUPLEX+"))
             repo.save(listing(5, type = "LAND"))
-            val api = CatalogQuery(repo, "http://localhost")
+            val api = catalogApi(repo)
 
             val apartments = api.list(Parameters.build {
                 append("typeOfRealty", "APARTMENT 1+,APARTMENT 2")
@@ -177,7 +179,7 @@ class RoomPersistenceTest {
             assertTrue(promote(3))
             assertFalse(promote(1))
             assertEquals(2, repo.listings().size)
-            val api = CatalogQuery(repo, "http://localhost")
+            val api = catalogApi(repo)
             val params = Parameters.build { append("sort", "newest"); append("limit", "1") }
             val first = api.list(params)
             assertEquals(originalId.toString(), first.items.single().id)
@@ -206,3 +208,8 @@ class RoomPersistenceTest {
     }
 
 }
+
+private fun catalogApi(repository: CatalogRepository) = CatalogListingApi(
+    CatalogQueryService(repository),
+    PublicListingMapper("http://localhost"),
+)

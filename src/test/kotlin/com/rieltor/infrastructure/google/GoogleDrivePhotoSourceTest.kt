@@ -1,5 +1,6 @@
 package com.rieltor.infrastructure.google
 
+import com.rieltor.application.service.AdsService
 import com.rieltor.domain.model.StoredGoogleDriveTokens
 import com.rieltor.domain.repository.GoogleDriveTokenRepository
 import com.rieltor.infrastructure.config.ApplicationSettings
@@ -38,7 +39,7 @@ class GoogleDrivePhotoSourceTest {
                     else com.rieltor.domain.model.SourceRefresh.Found(messages.getValue(messageId))
             }
             val storage = com.rieltor.infrastructure.media.LocalPublicMediaStorage(directory.resolve("media"), "https://api.example")
-            val service = com.rieltor.application.orchestration.CatalogIngestionService(telegram, repo, db.settings, createSource(client), storage) { time }
+            val service = AdsService(telegram, repo, db.settings, createSource(client), storage) { time }
             messages.values.forEach { repo.receive(it, time, 1_200_000) }
             time = 1_199_999
             service.verifyDue(); assertFalse(service.downloadNext()); assertEquals(0, downloads)

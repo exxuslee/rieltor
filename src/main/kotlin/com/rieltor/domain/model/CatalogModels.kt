@@ -48,11 +48,23 @@ object CatalogCodes {
         "APARTMENT 1", "APARTMENT 1+", "APARTMENT 2", "APARTMENT 2+", "APARTMENT 3", "APARTMENT 3+",
         "HOUSE", "HOUSE+", "HOUSE-", "DUPLEX", "DUPLEX+", "LAND",
     )
-    val locations = setOf(
-        "IRPIN", "BUCHA", "VORZEL", "HOSTOMEL", "STOYANKA", "HORENYCHI",
-        "MYKHAILIVKA_RUBEZHIVKA", "BILOHORODKA", "DMYTRIVKA", "OTHER"
+    private val locationNames = linkedMapOf(
+        "IRPIN" to "Ірпінь",
+        "BUCHA" to "Буча",
+        "VORZEL" to "Ворзель",
+        "HOSTOMEL" to "Гостомель",
+        "STOYANKA" to "Стоянка",
+        "HORENYCHI" to "Гореничі",
+        "MYKHAILIVKA_RUBEZHIVKA" to "Михайлівка-Рубежівка",
+        "BILOHORODKA" to "Білогородка",
+        "DMYTRIVKA" to "Дмитрівка",
+        "OTHER" to "Інша локація",
     )
+    val locations: Set<String> = locationNames.keys
     val programs = setOf("EOSELIA", "VOUCHER", "CERTIFICATE", "POSTANOVA")
+
+    /** Display name of a location code, empty when the code is unknown. */
+    fun locationName(code: String?): String = code?.let(locationNames::get).orEmpty()
 
     fun category(type: String?): String = when {
         type?.startsWith("APARTMENT") == true -> "apartments"
