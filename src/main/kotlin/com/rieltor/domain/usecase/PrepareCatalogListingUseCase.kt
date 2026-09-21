@@ -14,6 +14,7 @@ class PrepareCatalogListingUseCase(
         val type = source.typeOfRealty
         val clean = prepareContent(source.text)
         val warnings = mutableListOf<String>()
+        val locationText = distanceToCity.replace(source.text, "")
         val matchedLocations = listOf(
             "IRPIN" to "ірп[іе]н|ирпен",
             "BUCHA" to "буч[аіи]",
@@ -25,7 +26,7 @@ class PrepareCatalogListingUseCase(
             "BILOHORODKA" to "б[іи]логородк",
             "DMYTRIVKA" to "дмитр[іи]вк"
         )
-            .filter { Regex(it.second, RegexOption.IGNORE_CASE).containsMatchIn(source.text) }.map { it.first }
+            .filter { Regex(it.second, RegexOption.IGNORE_CASE).containsMatchIn(locationText) }.map { it.first }
         val location = when (matchedLocations.size) {
             0 -> "OTHER"
             1 -> matchedLocations.single()
@@ -35,7 +36,7 @@ class PrepareCatalogListingUseCase(
         val price = priceMatch?.amount
         val currency = priceMatch?.currency?.lowercase()?.let {
             when {
-                it in setOf("usd", "$") || it.startsWith("долар") -> "USD"
+                it in setOf("usd", "$") || it.startsWith("дол") -> "USD"
                 it in setOf("uah", "₴", "грн") -> "UAH"; else -> "EUR"
             }
         }
@@ -52,8 +53,13 @@ class PrepareCatalogListingUseCase(
         val areaText = source.text.lineSequence().filterNot { it == priceMatch?.line }.joinToString("\n")
         val area = extractArea(areaText)
         val rooms = CatalogCodes.apartmentRooms(type)
-            ?: decimal("""(\d+)\s*[- ]?(?:кімнат|комнат)""")?.toInt()
+            ?: decimal("""(\d+)\s*(?:[-–]?[хx]\s*|[- ]|окремі\s+|спальні\s+)?(?:кімнат|комнат)""")?.toInt()
+            ?: decimal("""(?:кімнат|комнат)\s*[:\-–—]?\s*(\d+)""")?.toInt()
         val floor = Regex("""(?iu)(?:поверх|этаж)\s*[:\-]?\s*(\d+)\s*(?:/|із|з|из)\s*(\d+)""").find(source.text)
+            ?: Regex("""(?iu)(\d+)\s*/\s*(\d+)\s*(?:поверх|этаж)""").find(source.text)
+            ?: Regex("""(?m)^\s*(\d{1,2})\s*/\s*(\d{1,2})\s*$""").find(source.text)
+        val singleFloor = Regex("""(?iu)(?:поверх|этаж)(?!\p{L})\s*[:\-–—]?\s*(\d+)(?![\d/\-])""").find(source.text)?.groupValues?.get(1)?.toIntOrNull()
+            ?: Regex("""(?iu)(\d+)\s+(?:високий\s+)?(?:поверх|этаж)(?!\p{L})""").find(source.text)?.groupValues?.get(1)?.toIntOrNull()
         val transaction = if (Regex("(?iu)оренд|аренд").containsMatchIn(source.text)) "RENT" else "SALE"
         val priceSuffix = priceMatch?.suffix.orEmpty()
         val period = when {
@@ -70,7 +76,7 @@ class PrepareCatalogListingUseCase(
         return PreparedCatalogListing(
             content = clean, location = location, typeOfRealty = type, price = totalPrice,
             areaM2 = area, landAreaSotka = landArea, rooms = rooms,
-            floor = floor?.groupValues?.get(1)?.toIntOrNull(),
+            floor = floor?.groupValues?.get(1)?.toIntOrNull() ?: singleFloor,
             totalFloors = floor?.groupValues?.get(2)?.toIntOrNull(),
             governmentPrograms = programs, hasBargain = hasBargain(source.text),
             photoLinks = source.photoLinks, warnings = warnings.toList(),
@@ -78,7 +84,11 @@ class PrepareCatalogListingUseCase(
     }
 
     private fun extractArea(text: String): Double? {
-        val labeled = labeledArea.find(text)?.groupValues?.get(1)?.toArea()
+        val labeled = labeledArea.findAll(text).firstNotNullOfOrNull { match ->
+            val suffix = text.substring(match.range.last + 1)
+            if (Regex("""(?iu)^\s*(?:сот|га(?!\p{L}))""").containsMatchIn(suffix)) null
+            else match.groupValues[1].toArea()
+        }
         if (labeled != null) return labeled
 
         return areaWithUnit.findAll(text).firstNotNullOfOrNull { match ->
@@ -124,6 +134,7 @@ class PrepareCatalogListingUseCase(
     }
 
     private companion object {
+        val distanceToCity = Regex("""(?iu)\d+(?:[.,]\d+)?\s*км\s*(?:від|до|от)\s+[\p{L}’'ʼ-]+""")
         val ALL_PROGRAMS = CatalogCodes.programs.toList()
         val programPatterns = linkedMapOf(
             "EOSELIA" to Regex("""(?iu)[#\s]*[єе]осел\p{L}*|єоселя\s*впо"""),
@@ -136,8 +147,8 @@ class PrepareCatalogListingUseCase(
         val negativeClause = Regex("""(?iu)(?:\bне\b|без|\bні\b|\bнет\b|не\s+підход|не\s+розгляда)""")
         val bargain = Regex("""(?iu)торг\p{L}*""")
         val noBargain = Regex("""(?iu)(?:без\s+торг\p{L}*|торг\p{L}*\s*(?:не|ні|нет))""")
-        val labeledArea = Regex("""(?iu)(?:площа|площадь)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)""")
-        val areaWithUnit = Regex("""(?iu)(?<![\d.,])(\d+(?:[.,]\d+)?)\s*(?:м[²2]|м\.?\s*кв\.?|кв\.?\s*м)(?!\p{L})""")
+        val labeledArea = Regex("""(?iu)(?:площа|площадь)\s*(?:(?:будинку|квартири|таунхаусу|дуплекса)\s*)?[:\-–—]?\s*(\d+(?:[.,]\d+)?)""")
+        val areaWithUnit = Regex("""(?iu)(?<![\d.,])(\d+(?:[.,]\d+)?)\s*(?:м[²2]|м\.?\s*кв\.?|кв\.?\s*м|квадрат(?:ів|и|них\s+метрів))(?!\p{L})""")
         val currencyBeforeArea = Regex("""(?iu)(?:[$€₴]|\b(?:usd|uah|eur|грн|долар\p{L}*|євро))\s*$""")
     }
 }

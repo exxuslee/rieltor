@@ -51,7 +51,7 @@ class PrepareListingContentUseCase(
         val publicContent = content
             .filterNot(registrationLine::containsMatchIn)
             .filterNot(boilerCostLine::containsMatchIn)
-        val price = extractPrice(publicContent.joinToString("\n"))?.display ?: PRICE_ON_REQUEST
+        val price = extractPrice(lines.joinToString("\n"))?.display ?: PRICE_ON_REQUEST
         val governmentPrograms = publicContent.firstOrNull(governmentProgramsLine::containsMatchIn)
             ?.let(::normalizeGovernmentPrograms)
         val excluded = setOfNotNull(
@@ -82,6 +82,7 @@ class PrepareListingContentUseCase(
     private fun cleanLine(source: String): String {
         var line = source.trim()
         if (line.isBlank() || phone.containsMatchIn(line)) return ""
+        if (agencyLine.matches(line) || commissionSplit.matches(line) || taxCostLine.containsMatchIn(line)) return ""
         if (internalNoise.matches(line) || standalonePercentage.matches(line)) return ""
 
         line = googleUrl.replace(line, "")
@@ -104,8 +105,8 @@ class PrepareListingContentUseCase(
     private fun looksLikePropertyTitle(line: String): Boolean = propertyType.containsMatchIn(line)
 
     private fun looksLikeLocation(line: String): Boolean =
-        locationWords.containsMatchIn(line) ||
-            (line.length <= 60 && !line.any(Char::isDigit) && !propertyType.containsMatchIn(line))
+        !distanceToCity.containsMatchIn(line) && (locationWords.containsMatchIn(line) ||
+            (line.length <= 60 && !line.any(Char::isDigit) && !propertyType.containsMatchIn(line)))
 
     private fun containsLocation(line: String): Boolean = cityWords.containsMatchIn(line)
 
@@ -126,7 +127,8 @@ class PrepareListingContentUseCase(
     private fun buildHashtags(fullText: String): List<String> {
         val tags = linkedSetOf("#нерухомість", "#продажнерухомості")
         propertyHashtags.firstOrNull { it.first.containsMatchIn(fullText) }?.let { tags += it.second }
-        locationHashtags.filter { it.first.containsMatchIn(fullText) }.take(2).forEach { tags += it.second }
+        val locationText = distanceToCity.replace(fullText, "")
+        locationHashtags.filter { it.first.containsMatchIn(locationText) }.take(2).forEach { tags += it.second }
         FALLBACK_HASHTAGS.forEach { if (tags.size < HASHTAG_COUNT) tags += it }
         return tags.take(HASHTAG_COUNT)
     }
@@ -140,6 +142,10 @@ class PrepareListingContentUseCase(
         val FALLBACK_HASHTAGS = listOf("#рієлтор", "#нерухомістьУкраїни", "#купитинерухомість")
 
         val googleUrl = Regex("""(?iu)https?://(?:drive|docs)\.google\.com/\S+""")
+        val distanceToCity = Regex("""(?iu)\d+(?:[.,]\d+)?\s*км\s*(?:від|до|от)\s+[\p{L}’'ʼ-]+""")
+        val agencyLine = Regex("""(?iu)^\s*(?:АН|AH)\s+.+$""")
+        val commissionSplit = Regex("""^\s*\d{3,}(?:[.,]\d+)?\s*%?\s*[/\\]\s*2\s*$""")
+        val taxCostLine = Regex("""(?iu)^\s*(?:подат\p{L}*|налог\p{L}*)\s*[:\-–—]?\s*\d""")
         val phone = Regex("""(?<!\d)(?:\+?38[\s().-]*)?0\d{2}(?:[\s().-]*\d){7}(?!\d)""")
         val agency = Regex("""(?iu)(?<!\p{L})АН\s*[«\"']?\s*(?:НОВАТОР|NOVATOR)\s*[»\"']?|(?<!\p{L})(?:АН\s+)?НОВАТОР(?!\p{L})""")
         val parenthesizedCommission = Regex(
@@ -162,7 +168,7 @@ class PrepareListingContentUseCase(
             """(?iu)^\s*[\p{L}][\p{L}'ʼ’.-]*(?:\s+[\p{L}][\p{L}'ʼ’.-]*){0,2}(?:\s*,?\s+АН\s+НОВАТОР)?\s*$"""
         )
         val propertyType = Regex(
-            """(?iu)(?:таунхаус\p{L}*|дуплекс\p{L}*|квартир\p{L}*|будинок|будинки|ділянк\p{L}*|комерці\p{L}*|офіс\p{L}*)"""
+            """(?iu)(?:таунхаус\p{L}*|дуплекс\p{L}*|квартир\p{L}*|студі\p{L}*|(?<![\p{L}\p{N}])\d\s*-?\s*кк?(?!\p{L})|будинок|будинки|ділянк\p{L}*|комерці\p{L}*|офіс\p{L}*)"""
         )
         val locationWords = Regex(
             """(?iu)(?:ірпін\p{L}*|буч\p{L}*|гостомел\p{L}*|горенич\p{L}*|стоянк\p{L}*|софіївськ\p{L}*|михайлівц\p{L}*|северинівк\p{L}*|гнатівк\p{L}*|(?:^|\s)жк(?:\s|$)|(?:^|\s)вул\.?\s|вулиц\p{L}*)"""

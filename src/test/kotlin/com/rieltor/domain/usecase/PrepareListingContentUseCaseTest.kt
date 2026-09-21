@@ -8,6 +8,14 @@ class PrepareListingContentUseCaseTest {
     private val prepareContent = PrepareListingContentUseCase()
     private val filter = ListingCaptionFormatter()
 
+    @Test fun `recognizes studio and abbreviated apartment titles`() {
+        listOf("Студія з ремонтом", "2кк з якісним ремонтом", "1к з новим ремонтом").forEach { title ->
+            val listing = assertNotNull(prepareContent("Ірпінь\nЖК Приклад\n$title\nЦіна 76500$"))
+            assertEquals("$title — Ірпінь", listing.title)
+            assertEquals("ЖК Приклад", listing.address)
+        }
+    }
+
     @Test
     fun `removes private contacts drive links commission and registration percentage`() {
         val source = """
