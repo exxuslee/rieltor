@@ -1,11 +1,10 @@
 package com.rieltor.application.worker
 
 import com.rieltor.application.port.PublicationContext
+import com.rieltor.application.port.Worker
 import com.rieltor.application.service.CatalogRepostMasterLimiter
 import com.rieltor.application.service.ListingCaptionFormatter
-import com.rieltor.domain.model.CatalogPhoto
-import com.rieltor.domain.model.ListingMessage
-import com.rieltor.domain.model.RepostDestination
+import com.rieltor.domain.model.*
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.infrastructure.config.JsonSettingsStore
@@ -14,24 +13,26 @@ import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 
-class CatalogRepostWorker(
+class RepostWorker(
     private val repository: CatalogRepository,
     private val settings: JsonSettingsStore,
     private val publishers: List<PhotoPublisher>,
     private val media: LocalPublicMediaStorage,
     private val now: () -> Long = System::currentTimeMillis,
-) : AutoCloseable {
+) : Worker {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val logger = LoggerFactory.getLogger(javaClass)
     private val limiter = CatalogRepostMasterLimiter(settings)
-    fun start() {
+    private val started = AtomicBoolean()
+    private val captionFormatter = ListingCaptionFormatter()
+
+    override fun start() {
+        if (!started.compareAndSet(false, true)) return
         scope.launch {
             while (isActive) {
                 try {
@@ -41,7 +42,7 @@ class CatalogRepostWorker(
                 } catch (error: Throwable) {
                     logger.error("Repost dispatch failed", error)
                 }
-                delay(1_000.milliseconds)
+                delay(1.minutes)
             }
         }
         scope.launch {
@@ -60,100 +61,107 @@ class CatalogRepostWorker(
         }
     }
 
-    suspend fun runOnce(): Boolean {
-        val config = settings.snapshot()
-        val enabled = publishers.filter {
-            if (it.destination == RepostDestination.TIKTOK) config.tiktokEnabled else config.threadsEnabled
+    suspend fun runOnce() {
+        val enabled = enabledPublishers()
+        if (enabled.isEmpty() || limiter.waitUntilMillis(now()) > 0) return
+
+        val attempt = prepareNextAttempt(enabled) ?: return
+        for (publisher in attempt.publishers) {
+            publishToDestination(attempt, publisher)
         }
-        if (enabled.isEmpty()) return false
-        // The selection is repeated each tick after the persisted limiter releases its pause.
-        if (limiter.waitUntilMillis(now()) > 0) return false
+    }
+
+    private fun enabledPublishers(): List<PhotoPublisher> {
+        val config = settings.snapshot()
+        return publishers.filter {
+            when (it.destination) {
+                RepostDestination.TIKTOK -> config.tiktokEnabled
+                RepostDestination.THREADS -> config.threadsEnabled
+            }
+        }
+    }
+
+    private fun prepareNextAttempt(enabled: List<PhotoPublisher>): RepostAttempt? {
         val row = repository.nextRepost(
             enabled.any { it.destination == RepostDestination.TIKTOK },
             enabled.any { it.destination == RepostDestination.THREADS },
-        ) ?: return false
-        val targets = enabled.filter { repository.status(row, it.destination) == "PENDING" }
-        val attemptId = repository.prepare(row.id, targets.map { it.destination }.toSet(), now()) ?: return false
+        ) ?: return null
+        val targets = enabled.filter { repository.status(row, it.destination) == RepostStatus.Pending }
+        val attemptId = repository.prepare(row.id, targets.map { it.destination }.toSet(), now()) ?: return null
+        val attempt = RepostAttempt(row, attemptId, targets)
         if (limiter.reserve(attemptId, row.id, now()) > 0) {
             targets.forEach { publisher ->
-                repository.changeAttempt(
-                    row.id,
-                    publisher.destination,
-                    attemptId,
-                    now()
-                ) { it.copy(status = "PENDING") }
+                updateAttempt(attempt, publisher.destination) { it.copy(status = RepostStatus.Pending) }
             }
-            return false
+            return null
         }
-        val photos = Json.decodeFromString<List<CatalogPhoto>>(row.photos)
-        for (publisher in targets) {
-            val destination = publisher.destination
-            try {
-                val current = repository.listing(row.id) ?: continue
-                if (current.status != "ACTIVE" || current.sourceRevision != row.sourceRevision) {
-                    repository.changeAttempt(row.id, destination, attemptId, now()) { it.copy(status = "PENDING") }
-                    continue
-                }
-                check(photos.isNotEmpty() && photos.all { media.resolve(it.fileName) != null }) { "Listing media is unavailable" }
-                publisher.awaitPublishSlot()
-                repository.changeAttempt(row.id, destination, attemptId, now()) { it.copy(status = "SENDING") }
-                val receipt = withContext(PublicationContext(row.id, attemptId)) {
-                    publisher.publish(
-                        photos.take(publisher.maxPhotoCount).map { media.publicUrl(it.fileName) },
-                        caption(row)
-                    )
-                }
-                repository.changeAttempt(row.id, destination, attemptId, now()) {
-                    it.copy(
-                        status = if (receipt.privacyLevel == "DRAFT" && it.status != "PUBLISHED") "DELIVERED_DRAFT" else "PUBLISHED",
-                        publishId = receipt.publishId
-                    )
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: PublisherBackpressureException) {
-                repository.changeAttempt(row.id, destination, attemptId, now()) {
-                    it.copy(
-                        status = if (it.publishId == null) "PENDING" else it.status,
-                        error = error.javaClass.simpleName
-                    )
-                }
-            } catch (error: Throwable) {
-                repository.changeAttempt(row.id, destination, attemptId, now()) {
-                    // A transport failure after SENDING has an uncertain external outcome.
-                    it.copy(
-                        status = when {
-                            it.publishId != null -> it.status
-                            it.status == "SENDING" -> "UNKNOWN"
-                            else -> "FAILED"
-                        }, error = error.javaClass.simpleName
-                    )
-                }
-                logger.warn(
-                    "Repost attempt incomplete. listing={}, destination={}, error={}",
-                    row.id,
-                    destination,
-                    error.javaClass.simpleName
-                )
-            }
-        }
-        return true
+        return attempt
     }
 
-    private fun caption(row: ListingEntity): String? {
-        val details =
-            Json.parseToJsonElement(row.primeParams).jsonObject["details"]?.jsonArray?.map { it.jsonPrimitive.content }
-                .orEmpty()
-        return ListingCaptionFormatter().forTikTok(
-            ListingMessage(
-                row.title,
-                "${requireNotNull(row.price)} ${row.currency}",
-                row.address, details, row.description.lines().filter { it.isNotBlank() },
-                Json.decodeFromString<List<String>>(row.governmentPrograms).joinToString().takeIf { it.isNotEmpty() },
-                null, Json.decodeFromString(row.tags), "066-372-71-02"
-            )
-        )
+    private suspend fun publishToDestination(attempt: RepostAttempt, publisher: PhotoPublisher) {
+        val row = attempt.listing
+        val destination = publisher.destination
+        try {
+            val current = repository.listing(row.id) ?: return
+            if (current.status != ListingStatus.Active || current.sourceRevision != row.sourceRevision) {
+                updateAttempt(attempt, destination) { it.copy(status = RepostStatus.Pending) }
+                return
+            }
+            val photoUrls = photoUrls(row, publisher.maxPhotoCount)
+            val caption = captionFormatter.forCatalog(row, settings.snapshot().repostContactPhone)
+            publisher.awaitPublishSlot()
+            updateAttempt(attempt, destination) { it.copy(status = RepostStatus.Sending) }
+            val receipt = withContext(PublicationContext(row.id, attempt.id)) {
+                publisher.publish(photoUrls, caption)
+            }
+            updateAttempt(attempt, destination) {
+                it.copy(
+                    status = if (receipt.privacyLevel == "DRAFT" && it.status != RepostStatus.Published)
+                        RepostStatus.DeliveredDraft else RepostStatus.Published,
+                    publishId = receipt.publishId
+                )
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            handlePublishFailure(attempt, destination, error)
+        }
     }
+
+    private fun handlePublishFailure(attempt: RepostAttempt, destination: RepostDestination, error: Throwable) {
+        updateAttempt(attempt, destination) {
+            it.copy(
+                status = when {
+                    it.publishId != null -> it.status
+                    error is PublisherBackpressureException -> RepostStatus.Pending
+                    // Once sending starts, an external publication may exist even if the response was lost.
+                    it.status == RepostStatus.Sending -> RepostStatus.Unknown
+                    else -> RepostStatus.Failed
+                },
+                error = error.javaClass.simpleName
+            )
+        }
+        if (error !is PublisherBackpressureException) {
+            logger.warn(
+                "Repost attempt incomplete. listing={}, destination={}, error={}",
+                attempt.listing.id, destination, error.javaClass.simpleName
+            )
+        }
+    }
+
+    private fun updateAttempt(
+        attempt: RepostAttempt,
+        destination: RepostDestination,
+        change: (PublishAttempt) -> PublishAttempt,
+    ) = repository.changeAttempt(attempt.listing.id, destination, attempt.id, now(), change)
+
+    private fun photoUrls(row: ListingEntity, maxCount: Int): List<String> {
+        val photos = Json.decodeFromString<List<CatalogPhoto>>(row.photos)
+        check(photos.isNotEmpty() && photos.all { media.resolve(it.fileName) != null }) { "Listing media is unavailable" }
+        return photos.take(maxCount).map { media.publicUrl(it.fileName) }
+    }
+
+    private data class RepostAttempt(val listing: ListingEntity, val id: String, val publishers: List<PhotoPublisher>)
 
     override fun close() {
         runBlocking { scope.coroutineContext[Job]?.cancelAndJoin() }

@@ -1,6 +1,7 @@
 package com.rieltor.infrastructure.google
 
 import com.rieltor.application.service.AdsService
+import com.rieltor.domain.model.ListingStatus
 import com.rieltor.domain.model.StoredGoogleDriveTokens
 import com.rieltor.domain.repository.GoogleDriveTokenRepository
 import com.rieltor.infrastructure.config.ApplicationSettings
@@ -49,7 +50,7 @@ class GoogleDrivePhotoSourceTest {
             service.verifyDue(); assertTrue(service.downloadNext())
             assertEquals(2, repo.listings().single().messageId); assertEquals(1, downloads)
             assertTrue(service.downloadNext()); assertEquals(2, repo.listings().size)
-            assertTrue(repo.listings().all { it.status == "ACTIVE" && it.tiktokRepostedAt == null })
+            assertTrue(repo.listings().all { it.status == ListingStatus.Active && it.tiktokRepostedAt == null })
             val original = repo.listings().first { it.messageId == 2L }
             val originalPhotos = Json.decodeFromString<List<com.rieltor.domain.model.CatalogPhoto>>(original.photos)
             time += 7 * 86_400_000

@@ -1,15 +1,15 @@
 package com.rieltor.di
 
 import com.rieltor.application.port.LandingLeadNotifier
+import com.rieltor.application.port.TelegramBotMessageSource
 import com.rieltor.application.port.TelegramBotReplySender
 import com.rieltor.application.port.TelegramInboxSource
 import com.rieltor.application.service.*
 import com.rieltor.application.worker.AdsWorker
-import com.rieltor.application.worker.CatalogRepostWorker
 import com.rieltor.application.worker.CleanupWorker
 import com.rieltor.application.worker.ReplyTgBotWorker
+import com.rieltor.application.worker.RepostWorker
 import com.rieltor.domain.repository.*
-import com.rieltor.application.service.ListingCaptionFormatter
 import com.rieltor.infrastructure.config.*
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.repository.CatalogRepository
@@ -100,6 +100,7 @@ private val applicationModule = module {
         ReplyTgBotWorker(
             externalPhotoSource = get(),
             replySender = get(),
+            messageSource = get(),
             captionFormatter = get(),
             maxPhotoCount = get<ApplicationSettings>().telegramListingBotMaxPhotoCount,
         )
@@ -113,7 +114,7 @@ private val applicationModule = module {
     single { CatalogQueryService(get(), get()) }
     single {
         val app = get<ApplicationSettings>()
-        CatalogRepostWorker(get(), get(), buildList {
+        RepostWorker(get(), get(), buildList {
             add(get<TikTokPhotoPublisher>())
             if (app.threadsConfigured) add(get<ThreadsPhotoPublisher>())
         }, get())
@@ -132,10 +133,9 @@ private val integrationModule = module {
     single<ExternalPhotoSource> { get<GoogleDrivePhotoSource>() }
     single { TelegramBotApiReplySender(get<ApplicationSettings>().telegramListingBotToken) }
     single<TelegramBotReplySender> { get<TelegramBotApiReplySender>() }
-    single {
+    single<TelegramBotMessageSource> {
         TelegramListingBot(
             botToken = get<ApplicationSettings>().telegramListingBotToken,
-            replyUseCase = get(),
         )
     }
     single {
@@ -199,7 +199,7 @@ private val webModule = module {
             catalog = get(),
             adsWorker = get(),
             repostService = get(),
-            telegramListingBot = get(),
+            replyTgBotWorker = get(),
             cleanupWorker = get(),
             httpClient = get(),
             database = get(),

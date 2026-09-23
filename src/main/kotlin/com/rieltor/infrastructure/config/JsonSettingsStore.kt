@@ -31,7 +31,7 @@ data class LocalSettings(
     val uahPerUsd: Double = 45.0,
     val usdPerEur: Double = 1.1,
     val driveFileDelayMs: Long = 500,
-    val driveJobDelay: Long = 1,
+    val driveJobDelayMin: Long = 1,
     val driveMaxAttempts: Int = 5,
     val driveRetryBaseMs: Long = 60_000,
     val maxCatalogPhotos: Int = 50,
@@ -40,8 +40,8 @@ data class LocalSettings(
     val tiktokEnabled: Boolean = true,
     val threadsEnabled: Boolean = false,
     val blockedUntil: Long = 0,
+    /** Persisted attempt reservations for the shared interval and rolling 24-hour quota, including failed sends. */
     val slotReservations: List<SlotReservation> = emptyList(),
-    val orphanGraceMs: Long = 4 * 86_400_000L,
     val serverPort: Int = 8383,
     val databasePath: String = "rieltor.db",
     val secretsPath: String = "secrets.json",
@@ -49,6 +49,7 @@ data class LocalSettings(
     val tikTokMode: String = "POST",
     val tikTokDailyLimitCooldownHours: Long = 8,
     val repostMaxPhotoCount: Int = 10,
+    val repostContactPhone: String = "066-372-71-02",
     val telegramListingBotMaxPhotoCount: Int = 100,
     val monitoredTelegramChats: List<MonitoredTelegramChat> = emptyList(),
 )
@@ -126,7 +127,7 @@ class JsonSettingsStore(val path: Path, defaults: LocalSettings = LocalSettings(
         require(value.schemaVersion == 1 && value.stabilityWindowMinutes >= 20)
         require(value.minIntervalMs >= 0 && value.maxMessagesPer24Hours > 0)
         require(value.driveMaxAttempts > 0 && value.driveRetryBaseMs > 0 && value.maxCatalogPhotos in 1..1000)
-        require(value.driveFileDelayMs >= 0 && value.driveJobDelay >= 0 && value.orphanGraceMs > 0)
+        require(value.driveFileDelayMs >= 0 && value.driveJobDelayMin >= 0)
         require(value.serverPort in 1..65535)
         require(value.databasePath.isNotBlank() && value.secretsPath.isNotBlank() && value.mediaDirectory.isNotBlank())
         require(value.tikTokMode.uppercase() in setOf("POST", "DRAFT"))

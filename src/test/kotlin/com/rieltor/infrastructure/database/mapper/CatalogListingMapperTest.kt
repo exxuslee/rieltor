@@ -1,5 +1,6 @@
 package com.rieltor.infrastructure.database.mapper
 
+import com.rieltor.domain.model.ListingStatus
 import com.rieltor.domain.model.SourcePhoto
 import com.rieltor.infrastructure.database.model.IncomingEntity
 import kotlinx.serialization.json.Json
@@ -14,10 +15,10 @@ class CatalogListingMapperTest {
         val row = IncomingEntity(chatId = -1, messageId = 1, messageThreadId = 2, rawMessage = text, rawText = text, sourceCreatedAt = 0, receivedAt = 0, contentHash = "h", verifyAfter = 0)
         val result = CatalogListingMapper().fromIncoming(row, "APARTMENT 2", 1)
         assertEquals(82_001, result.price)
-        assertEquals("ACTIVE", result.status)
+        assertEquals(ListingStatus.Active, result.status)
         assertEquals("[\"EOSELIA\"]", result.governmentPrograms)
         assertEquals(64.0, result.areaM2)
-        assertEquals("NEEDS_REVIEW", CatalogListingMapper().fromIncoming(row, null, 1).status)
+        assertEquals(ListingStatus.NeedsReview, CatalogListingMapper().fromIncoming(row, null, 1).status)
     }
 
     @Test fun `takes apartment room count from configured topic type`() {
@@ -27,7 +28,7 @@ class CatalogListingMapperTest {
         val result = CatalogListingMapper().fromIncoming(row, "APARTMENT 3+", 1)
 
         assertEquals(3, result.rooms)
-        assertEquals("ACTIVE", result.status)
+        assertEquals(ListingStatus.Active, result.status)
     }
 
     @Test fun `uses other location when city is not specified`() {
@@ -37,7 +38,7 @@ class CatalogListingMapperTest {
         val result = CatalogListingMapper().fromIncoming(row, "APARTMENT 1", 1)
 
         assertEquals("OTHER", result.location)
-        assertEquals("ACTIVE", result.status)
+        assertEquals(ListingStatus.Active, result.status)
     }
 
     @Test fun `recognizes the additional catalog locations`() {
@@ -64,7 +65,7 @@ class CatalogListingMapperTest {
         """.trimIndent())
 
         assertEquals(150_000, result.price)
-        assertEquals("ACTIVE", result.status)
+        assertEquals(ListingStatus.Active, result.status)
         assertEquals(ALL_PROGRAMS_JSON, result.governmentPrograms)
         assertEquals("Торг", Json.parseToJsonElement(result.secondaryParams).jsonObject["bargain"]?.jsonPrimitive?.content)
     }
@@ -94,7 +95,7 @@ class CatalogListingMapperTest {
         """.trimIndent())
 
         assertEquals(79_000, result.price)
-        assertEquals("ACTIVE", result.status)
+        assertEquals(ListingStatus.Active, result.status)
     }
 
     @Test fun `recognizes standalone price while ignoring discount amount`() {
@@ -107,7 +108,7 @@ class CatalogListingMapperTest {
         """.trimIndent())
 
         assertEquals(131_000, result.price)
-        assertEquals("ACTIVE", result.status)
+        assertEquals(ListingStatus.Active, result.status)
     }
 
     @Test fun `supports common price spellings from supplied listings`() {
@@ -120,7 +121,7 @@ class CatalogListingMapperTest {
         ).forEach { (priceLine, expected) ->
             val result = parse(baseListing(priceLine = priceLine))
             assertEquals(expected, result.price, priceLine)
-            assertEquals("ACTIVE", result.status, priceLine)
+            assertEquals(ListingStatus.Active, result.status, priceLine)
         }
     }
 
@@ -151,8 +152,8 @@ class CatalogListingMapperTest {
         val text = "Ірпінь\n2к квартира\nЦіна 100000${'$'}"
         val photos = Json.encodeToString(listOf(SourcePhoto("remote-1", "unique-1", 1280, 960)))
 
-        assertEquals("ACTIVE", parse(text, sourcePhotos = photos).status)
-        assertEquals("NEEDS_REVIEW", parse(text).status)
+        assertEquals(ListingStatus.Active, parse(text, sourcePhotos = photos).status)
+        assertEquals(ListingStatus.NeedsReview, parse(text).status)
     }
 
     private fun parse(text: String, sourcePhotos: String = "[]") = CatalogListingMapper().fromIncoming(

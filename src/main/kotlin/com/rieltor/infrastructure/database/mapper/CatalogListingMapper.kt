@@ -44,7 +44,7 @@ class CatalogListingMapper(
             price = result.price, currency = "USD", areaM2 = result.areaM2,
             landAreaSotka = result.landAreaSotka, rooms = result.rooms,
             floor = result.floor, totalFloors = result.totalFloors,
-            status = if (result.readyForPublication) "ACTIVE" else "NEEDS_REVIEW",
+            status = if (result.readyForPublication) ListingStatus.Active else ListingStatus.NeedsReview,
             sourceCreatedAt = maxOf(row.sourceCreatedAt, row.sourceEditedAt),
             createdAt = now, updatedAt = now, publishedAt = now.takeIf { result.readyForPublication },
         )

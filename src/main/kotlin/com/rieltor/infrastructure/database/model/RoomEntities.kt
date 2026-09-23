@@ -3,6 +3,7 @@ package com.rieltor.infrastructure.database.model
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.rieltor.domain.model.ListingStatus
 
 @Entity(
     tableName = "incomeTab", indices = [
@@ -45,6 +46,7 @@ data class IncomingEntity(
     ]
 )
 @kotlinx.serialization.Serializable
+@androidx.room.TypeConverters(ListingStatusConverters::class)
 data class ListingEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val chatId: Long, val messageId: Long?,
@@ -67,7 +69,7 @@ data class ListingEntity(
     val rooms: Int? = null,
     val floor: Int? = null, val totalFloors: Int? = null,
     val photos: String = "[]",
-    val status: String = "NEEDS_REVIEW",
+    val status: ListingStatus = ListingStatus.NeedsReview,
     val sourceCreatedAt: Long, val createdAt: Long,
     val updatedAt: Long,
     val publishedAt: Long? = null,

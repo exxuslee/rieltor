@@ -1,10 +1,8 @@
 package com.rieltor.application.worker
 
 import com.rieltor.application.port.TelegramInboxSource
-import com.rieltor.domain.model.CatalogPhoto
-import com.rieltor.domain.model.SourcePhoto
-import com.rieltor.domain.model.SourceRefresh
-import com.rieltor.domain.model.TELEGRAM_PHOTO_VERSION
+import com.rieltor.application.port.Worker
+import com.rieltor.domain.model.*
 import com.rieltor.domain.usecase.NormalizeCatalogPriceUseCase
 import com.rieltor.domain.usecase.PrepareCatalogListingUseCase
 import com.rieltor.infrastructure.config.JsonSettingsStore
@@ -35,7 +33,7 @@ class AdsWorker(
     private val drive: GoogleDrivePhotoSource,
     private val media: LocalPublicMediaStorage,
     private val now: () -> Long = System::currentTimeMillis,
-) : AutoCloseable {
+) : Worker {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -46,11 +44,11 @@ class AdsWorker(
         source.start()
     }
 
-    fun startWorkers() {
+    override fun start() {
         if (!workersStarted.compareAndSet(false, true)) return
         scope.launch { loop(5) { verifyDue() } }
         scope.launch {
-            loop(settings.snapshot().driveJobDelay.coerceAtLeast(1)) { downloadNext() }
+            loop(settings.snapshot().driveJobDelayMin.coerceAtLeast(1)) { downloadNext() }
         }
     }
 
@@ -124,7 +122,7 @@ class AdsWorker(
                 )
             )
         }
-        if (parsed.status != "ACTIVE") {
+        if (parsed.status != ListingStatus.Active) {
             repository.discard(row)
             return true
         }

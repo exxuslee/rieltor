@@ -1,6 +1,8 @@
 package com.rieltor.application.worker
 
+import com.rieltor.application.port.TelegramBotMessageSource
 import com.rieltor.application.port.TelegramBotReplySender
+import com.rieltor.application.port.Worker
 import com.rieltor.application.service.ListingCaptionFormatter
 import com.rieltor.domain.model.TelegramBotIncomingMessage
 import com.rieltor.domain.model.TelegramPhoto
@@ -13,12 +15,21 @@ import org.slf4j.LoggerFactory
 class ReplyTgBotWorker(
     private val externalPhotoSource: ExternalPhotoSource,
     private val replySender: TelegramBotReplySender,
+    private val messageSource: TelegramBotMessageSource,
     private val captionFormatter: ListingCaptionFormatter = ListingCaptionFormatter(),
     private val driveLinkExtractor: GoogleDriveLinkExtractor = GoogleDriveLinkExtractor(),
     private val prepareContent: PrepareListingContentUseCase = PrepareListingContentUseCase(),
     private val maxPhotoCount: Int = DEFAULT_MAX_PHOTO_COUNT,
-) {
+) : Worker {
     private val logger = LoggerFactory.getLogger(javaClass)
+
+    override fun start() {
+        messageSource.start(::execute)
+    }
+
+    override fun close() {
+        messageSource.close()
+    }
 
     suspend fun execute(message: TelegramBotIncomingMessage) {
         val startedAt = System.nanoTime()

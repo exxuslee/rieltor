@@ -1,9 +1,9 @@
 package com.rieltor.application.worker
 
+import com.rieltor.application.port.Worker
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
-import java.io.Closeable
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -19,11 +19,11 @@ class CleanupWorker(
     private val referencedFiles: () -> Set<String> = { emptySet() },
     private val catalogRepository: CatalogRepository? = null,
     private val orphanGrace: Duration = Duration.ofHours(1),
-) : Closeable {
+) : Worker {
     private val logger = LoggerFactory.getLogger(CleanupWorker::class.java)
     private var job: Job? = null
 
-    fun start() {
+    override fun start() {
         check(job == null) { "Media cleanup job is already started" }
         job = scope.launch {
             while (isActive) {

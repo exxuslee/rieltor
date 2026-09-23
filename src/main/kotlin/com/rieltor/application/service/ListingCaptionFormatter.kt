@@ -2,9 +2,30 @@ package com.rieltor.application.service
 
 import com.rieltor.domain.model.ListingMessage
 import com.rieltor.domain.model.MediaTextOverlay
+import com.rieltor.infrastructure.database.model.ListingEntity
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /** Presentation of already prepared public content; no source parsing. */
 class ListingCaptionFormatter {
+    fun forCatalog(row: ListingEntity, phone: String): String? = forTikTok(
+        ListingMessage(
+            title = row.title,
+            price = "${requireNotNull(row.price)} ${row.currency}",
+            address = row.address,
+            keyParameters = Json.parseToJsonElement(row.primeParams).jsonObject["details"]
+                ?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+            additionalParameters = row.description.lines().filter { it.isNotBlank() },
+            governmentPrograms = Json.decodeFromString<List<String>>(row.governmentPrograms)
+                .joinToString().takeIf { it.isNotEmpty() },
+            registration = null,
+            hashtags = Json.decodeFromString(row.tags),
+            phone = phone,
+        )
+    )
+
     fun forTikTok(listing: ListingMessage?): String? {
         listing ?: return null
 

@@ -1,12 +1,13 @@
 package com.rieltor.application.service
 
 import com.rieltor.application.worker.AdsWorker
-import com.rieltor.application.worker.CatalogRepostWorker
 import com.rieltor.application.worker.CleanupWorker
+import com.rieltor.application.worker.ReplyTgBotWorker
+import com.rieltor.application.worker.RepostWorker
+import com.rieltor.application.worker.Worker
 import com.rieltor.infrastructure.config.JsonSettingsStore
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.repository.CatalogRepository
-import com.rieltor.infrastructure.telegram.TelegramListingBot
 import io.ktor.client.*
 import kotlinx.coroutines.delay
 import kotlin.time.Duration
@@ -19,8 +20,8 @@ import kotlin.time.Duration.Companion.minutes
 class ApplicationLifecycle(
     private val catalog: CatalogRepository,
     private val adsWorker: AdsWorker,
-    private val repostService: CatalogRepostWorker,
-    private val telegramListingBot: TelegramListingBot,
+    private val repostService: RepostWorker,
+    private val replyTgBotWorker: ReplyTgBotWorker,
     private val cleanupWorker: CleanupWorker,
     private val httpClient: HttpClient,
     private val database: RoomDatabaseStore,
@@ -28,6 +29,8 @@ class ApplicationLifecycle(
     private val startupDelay: Duration = STARTUP_AFTER_TELEGRAM_DELAY,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
+    private val workers: List<Worker> = listOf(adsWorker, repostService, replyTgBotWorker, cleanupWorker)
+
     fun startTelegramSession() {
         adsWorker.startTelegramSession()
     }
@@ -35,17 +38,14 @@ class ApplicationLifecycle(
     suspend fun startBackgroundWorkers() {
         delay(startupDelay)
         catalog.recover(now())
-        adsWorker.startWorkers()
-        repostService.start()
-        telegramListingBot.start()
-        cleanupWorker.start()
+        workers.forEach(Worker::start)
     }
 
     fun stop() {
         cleanupWorker.close()
         adsWorker.close()
         repostService.close()
-        telegramListingBot.close()
+        replyTgBotWorker.close()
         httpClient.close()
         database.close()
         settingsStore.close()

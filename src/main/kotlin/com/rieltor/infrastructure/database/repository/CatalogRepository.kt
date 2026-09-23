@@ -49,14 +49,14 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         )
         dao.saveSource(row)
         dao.listingForSource(message.chatId, message.messageId)
-            ?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
+            ?.let { dao.saveListing(it.copy(status = ListingStatus.Hidden, updatedAt = now)) }
     }
 
     fun delete(chatId: Long, messageId: Long, now: Long) = transaction { dao ->
         val row = dao.source(chatId, messageId) ?: return@transaction
         dao.saveSource(row.copy(status = IncomingStatus.Deleted))
         dao.listingForSource(row.chatId, row.messageId)
-            ?.let { dao.saveListing(it.copy(status = "HIDDEN", updatedAt = now)) }
+            ?.let { dao.saveListing(it.copy(status = ListingStatus.Hidden, updatedAt = now)) }
     }
 
     fun source(chatId: Long, messageId: Long) = transaction { it.source(chatId, messageId) }
@@ -108,7 +108,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
                 row.status in setOf(IncomingStatus.Deleted, IncomingStatus.NeedsReview)
             ) {
                 dao.deleteSource(row.chatId, row.messageId)
-                dao.listingForSource(row.chatId, row.messageId)?.takeIf { it.status != "ACTIVE" }
+                dao.listingForSource(row.chatId, row.messageId)?.takeIf { it.status != ListingStatus.Active }
                     ?.let { dao.deleteListing(it.id) }
             }
         }
@@ -117,7 +117,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     }
 
     private fun validate(row: ListingEntity): ListingEntity {
-        require(row.status != "ACTIVE" || (row.currency == "USD" && (row.price ?: 0) > 0)) {
+        require(row.status != ListingStatus.Active || (row.currency == "USD" && (row.price ?: 0) > 0)) {
             "Active listings require a positive total price in USD"
         }
         return row
@@ -228,14 +228,14 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
                 val state = publication(updated, destination)
                 val attempts = state.attempts.map { attempt ->
                     when (attempt.status) {
-                        "PREPARED" -> attempt.copy(status = "ABANDONED", updatedAt = now)
-                        "SENDING" -> attempt.copy(status = "UNKNOWN", updatedAt = now)
+                        RepostStatus.Prepared -> attempt.copy(status = RepostStatus.Abandoned, updatedAt = now)
+                        RepostStatus.Sending -> attempt.copy(status = RepostStatus.Unknown, updatedAt = now)
                         else -> attempt
                     }
                 }
                 if (attempts != state.attempts) updated = applyPublication(
                     updated, destination, PublicationState(attempts), now,
-                    if (state.attempts.last().status == "PREPARED") "PENDING" else "UNKNOWN"
+                    if (state.attempts.last().status == RepostStatus.Prepared) RepostStatus.Pending else RepostStatus.Unknown
                 )
             }
             if (updated != row) dao.saveListing(updated)
@@ -244,10 +244,10 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
 
     fun prepare(id: Long, destinations: Set<RepostDestination>, now: Long): String? = transaction { dao ->
         val row = dao.listing(id) ?: return@transaction null
-        if (row.status != "ACTIVE") return@transaction null
+        if (row.status != ListingStatus.Active) return@transaction null
         val attemptId = UUID.randomUUID().toString()
         var updated = row
-        destinations.filter { status(row, it) == "PENDING" }.forEach { destination ->
+        destinations.filter { status(row, it) == RepostStatus.Pending }.forEach { destination ->
             val state = publication(updated, destination)
             updated = applyPublication(
                 updated, destination, state.copy(
@@ -285,16 +285,16 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     fun publication(row: ListingEntity, destination: RepostDestination): PublicationState =
         json.decodeFromString(if (destination == RepostDestination.TIKTOK) row.tiktokState else row.threadsState)
 
-    fun status(row: ListingEntity, destination: RepostDestination) =
-        if (destination == RepostDestination.TIKTOK) row.tiktokStatus else row.threadsStatus
+    fun status(row: ListingEntity, destination: RepostDestination): RepostStatus =
+        RepostStatus.fromCode(if (destination == RepostDestination.TIKTOK) row.tiktokStatus else row.threadsStatus)
 
     private fun applyPublication(
         row: ListingEntity, destination: RepostDestination, state: PublicationState, now: Long,
-        overrideStatus: String? = null
+        overrideStatus: RepostStatus? = null
     ): ListingEntity {
         val last = state.attempts.lastOrNull()
-        val published = state.attempts.any { it.status == "PUBLISHED" }
-        val status = overrideStatus ?: last?.status ?: "PENDING"
+        val published = state.attempts.any { it.status == RepostStatus.Published }
+        val status = (overrideStatus ?: last?.status ?: RepostStatus.Pending).code
         return if (destination == RepostDestination.TIKTOK) row.copy(
             tiktokState = json.encodeToString(state),
             tiktokStatus = status,

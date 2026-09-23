@@ -1,6 +1,7 @@
 package com.rieltor.infrastructure.database.mapper
 
 import com.rieltor.domain.model.ImportedPrice
+import com.rieltor.domain.model.ListingStatus
 import com.rieltor.domain.usecase.NormalizeCatalogPriceUseCase
 import com.rieltor.domain.usecase.PrepareCatalogListingUseCase
 import com.rieltor.infrastructure.database.model.IncomingEntity
@@ -31,7 +32,7 @@ class CatalogPriceMappingTest {
             ImportedPrice(100, "USD", period = "PER_M2", areaM2 = Double.NaN),
             ImportedPrice(Long.MAX_VALUE, "USD", period = "PER_M2", areaM2 = 2.0),
         ).forEach { kotlin.test.assertNull(normalizer(it)) }
-        assertEquals("NEEDS_REVIEW", parse("Оренда. Ціна: 100 USD").status)
+        assertEquals(ListingStatus.NeedsReview, parse("Оренда. Ціна: 100 USD").status)
     }
 
     @Test fun `recognizes unit prices after Ukrainian and Russian price labels`() {
@@ -40,7 +41,7 @@ class CatalogPriceMappingTest {
         }
         val land = parse("Ціна: 1000 USD за 1 сотку", "Ділянка: 6,5 соток")
         assertEquals(6_500, land.price)
-        assertEquals("NEEDS_REVIEW", parse("Ціна: 1000 USD /м²", "").status)
+        assertEquals(ListingStatus.NeedsReview, parse("Ціна: 1000 USD /м²", "").status)
         assertEquals(1, parse("Ціна: 1 EUR", normalizer = NormalizeCatalogPriceUseCase(usdPerEur = 1.005)).price)
     }
 }

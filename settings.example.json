@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "repostContactPhone": "066-372-71-02",
   "serverPort": 8383,
   "databasePath": "rieltor.db",
   "secretsPath": "secrets.json",
@@ -67,7 +68,7 @@
     "-1002691100301:11": "HOUSE"
   },
   "driveFileDelayMs": 500,
-  "driveJobDelayMs": 1000,
+  "driveJobDelayMin": 1,
   "driveMaxAttempts": 5,
   "driveRetryBaseMs": 60000,
   "maxCatalogPhotos": 50,
@@ -81,7 +82,6 @@
   "tiktokEnabled": true,
   "blockedUntil": 0,
   "slotReservations": [],
-  "orphanGraceMs": 345600000,
   "monitoredTelegramChats": [
     {
       "chatId": -1002681732909,

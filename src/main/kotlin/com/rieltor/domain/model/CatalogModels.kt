@@ -58,7 +58,7 @@ data class CatalogPhoto(
 
 @Serializable
 data class PublishAttempt(
-    val attemptId: String, val status: String = "PREPARED", val publishId: String? = null,
+    val attemptId: String, val status: RepostStatus = RepostStatus.Prepared, val publishId: String? = null,
     val mode: String = "POST", val createdAt: Long, val updatedAt: Long, val error: String? = null
 )
 

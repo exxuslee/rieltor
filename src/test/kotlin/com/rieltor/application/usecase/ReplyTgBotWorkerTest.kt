@@ -1,6 +1,8 @@
 package com.rieltor.application.usecase
 
+import com.rieltor.application.port.TelegramBotMessageSource
 import com.rieltor.application.port.TelegramBotReplySender
+import com.rieltor.application.port.Worker
 import com.rieltor.application.worker.ReplyTgBotWorker
 import com.rieltor.domain.model.TelegramBotIncomingMessage
 import com.rieltor.domain.model.TelegramPhoto
@@ -16,10 +18,27 @@ import kotlin.time.Duration.Companion.milliseconds
 
 class ReplyTgBotWorkerTest {
     @Test
+    fun `worker lifecycle connects message processing and closes the bot source`() = runBlocking {
+        val source = FakeMessageSource()
+        val sender = CapturingReplySender()
+        val worker: Worker = ReplyTgBotWorker(FakePhotoSource(1), sender, source)
+
+        worker.start()
+        try {
+            requireNotNull(source.onMessage).invoke(incomingMessage())
+            assertEquals(1, sender.texts.size)
+            assertEquals(listOf(1), sender.photoBatchSizes)
+        } finally {
+            worker.close()
+        }
+        assertTrue(source.closed)
+    }
+
+    @Test
     fun `processes bot message immediately and sends groups of at most ten`() = runBlocking {
         val photoSource = FakePhotoSource(photoCount = 23)
         val sender = CapturingReplySender()
-        val useCase = ReplyTgBotWorker(photoSource, sender)
+        val useCase = ReplyTgBotWorker(photoSource, sender, FakeMessageSource())
 
         withTimeout(1_000.milliseconds) {
             useCase.execute(incomingMessage())
@@ -40,7 +59,7 @@ class ReplyTgBotWorkerTest {
     fun `does not call Drive without a supported link and replies with an explanation`() = runBlocking {
         val photoSource = FakePhotoSource(photoCount = 1)
         val sender = CapturingReplySender()
-        val useCase = ReplyTgBotWorker(photoSource, sender)
+        val useCase = ReplyTgBotWorker(photoSource, sender, FakeMessageSource())
 
         useCase.execute(incomingMessage(text = "Квартира в Ірпені\nЦіна 50000$"))
 
@@ -59,6 +78,7 @@ class ReplyTgBotWorkerTest {
                 }
             },
             replySender = sender,
+            messageSource = FakeMessageSource(),
         )
 
         useCase.execute(incomingMessage())
@@ -66,6 +86,20 @@ class ReplyTgBotWorkerTest {
         assertEquals(1, sender.texts.size)
         assertTrue(sender.texts.single().text.contains("Не вдалося завантажити"))
         assertTrue(sender.photoBatchSizes.isEmpty())
+    }
+
+    private class FakeMessageSource : TelegramBotMessageSource {
+        var onMessage: (suspend (TelegramBotIncomingMessage) -> Unit)? = null
+        var closed = false
+
+        override fun start(onMessage: suspend (TelegramBotIncomingMessage) -> Unit) {
+            this.onMessage = onMessage
+        }
+
+        override fun close() {
+            closed = true
+            onMessage = null
+        }
     }
 
     private fun incomingMessage(
