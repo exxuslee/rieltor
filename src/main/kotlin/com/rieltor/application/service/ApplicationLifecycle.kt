@@ -1,10 +1,10 @@
 package com.rieltor.application.service
 
+import com.rieltor.application.port.Worker
 import com.rieltor.application.worker.AdsWorker
 import com.rieltor.application.worker.CleanupWorker
 import com.rieltor.application.worker.ReplyTgBotWorker
 import com.rieltor.application.worker.RepostWorker
-import com.rieltor.application.worker.Worker
 import com.rieltor.infrastructure.config.JsonSettingsStore
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.repository.CatalogRepository
