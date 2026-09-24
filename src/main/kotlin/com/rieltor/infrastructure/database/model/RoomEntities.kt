@@ -19,11 +19,9 @@ data class IncomingEntity(
     val messageId: Long?,
     val messageThreadId: Long,
     val userId: Long? = null,
-    val rawMessage: String,
     val rawText: String,
     val sourceCreatedAt: Long,
     val sourceEditedAt: Long = 0,
-    val receivedAt: Long,
     val contentHash: String,
     val revision: Long = 1,
     val verifyAfter: Long,
@@ -37,7 +35,7 @@ data class IncomingEntity(
 )
 
 @Entity(
-    tableName = "listings", indices = [
+    tableName = "adsTab", indices = [
         Index(value = ["adId"], unique = true), Index(value = ["chatId", "messageId"], unique = true),
         Index(value = ["status", "sourceCreatedAt", "id"]),
         Index(value = ["status", "location", "typeOfRealty", "currency", "price"]),

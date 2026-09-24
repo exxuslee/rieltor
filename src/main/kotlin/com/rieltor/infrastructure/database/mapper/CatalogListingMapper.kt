@@ -21,7 +21,7 @@ class CatalogListingMapper(
         val content = result.content
         return ListingEntity(
             adId = adId(
-                row.userId?.toString() ?: senderFromRaw(row.rawMessage)
+                row.userId?.toString()
                 ?: "unknown-${row.chatId}:${row.messageId}", result.location, type,
                 result.price, result.areaM2, result.landAreaSotka
             ),

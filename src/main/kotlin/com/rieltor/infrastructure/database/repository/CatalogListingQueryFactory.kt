@@ -29,7 +29,7 @@ object CatalogListingQueryFactory {
         }
         if (filter.programs.isNotEmpty()) {
             add(
-                "EXISTS (SELECT 1 FROM json_each(listings.governmentPrograms) " +
+                "EXISTS (SELECT 1 FROM json_each(adsTab.governmentPrograms) " +
                     "WHERE value IN (${placeholders(filter.programs.size)}))",
                 *filter.programs.toTypedArray(),
             )
@@ -49,7 +49,7 @@ object CatalogListingQueryFactory {
         }
 
         val direction = if (filter.sort.ascending) "ASC" else "DESC"
-        val sql = "SELECT ${CatalogListingRow.COLUMNS} FROM listings " +
+        val sql = "SELECT ${CatalogListingRow.COLUMNS} FROM adsTab " +
             "WHERE ${conditions.joinToString(" AND ")} " +
             "ORDER BY ${filter.sort.column} $direction, id DESC LIMIT ?"
         val values = arguments + (filter.limit + 1).toLong()

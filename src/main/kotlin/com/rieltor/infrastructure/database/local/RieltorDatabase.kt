@@ -17,7 +17,7 @@ import java.nio.file.attribute.PosixFilePermission
 
 @Database(
     entities = [IncomingEntity::class, ListingEntity::class],
-    version = 23,
+    version = 27,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -73,6 +73,62 @@ private val migrations = arrayOf(
             connection.execSQL("ALTER TABLE incomeTab DROP COLUMN leaseUntil")
             connection.execSQL("CREATE UNIQUE INDEX index_incomeTab_chatId_messageId ON incomeTab(chatId, messageId)")
             connection.execSQL("CREATE INDEX index_incomeTab_status_verifyAfter ON incomeTab(status, verifyAfter)")
+        }
+    },
+    object : Migration(23, 24) {
+        override fun migrate(connection: SQLiteConnection) {
+            // Keep the compact sender identity used for deduplication before removing the TDLib dump.
+            connection.execSQL("ALTER TABLE incomeTab ADD COLUMN senderIdentity TEXT")
+            connection.prepare("SELECT id, rawMessage FROM incomeTab").use { query ->
+                while (query.step()) {
+                    val sender = com.rieltor.domain.model.senderFromRaw(query.getText(1)) ?: continue
+                    connection.prepare("UPDATE incomeTab SET senderIdentity=? WHERE id=?").use { update ->
+                        update.bindText(1, sender)
+                        update.bindLong(2, query.getLong(0))
+                        update.step()
+                    }
+                }
+            }
+            connection.execSQL("ALTER TABLE incomeTab DROP COLUMN rawMessage")
+        }
+    },
+    object : Migration(24, 25) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE incomeTab DROP COLUMN receivedAt")
+        }
+    },
+    object : Migration(25, 26) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE listings RENAME TO adsTab")
+            // Room index names include the table name.
+            connection.execSQL("DROP INDEX index_listings_adId")
+            connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_adsTab_adId` ON `adsTab` (`adId`)")
+            connection.execSQL("DROP INDEX index_listings_chatId_messageId")
+            connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_adsTab_chatId_messageId` ON `adsTab` (`chatId`, `messageId`)")
+            connection.execSQL("DROP INDEX index_listings_status_sourceCreatedAt_id")
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_adsTab_status_sourceCreatedAt_id` ON `adsTab` (`status`, `sourceCreatedAt`, `id`)")
+            connection.execSQL("DROP INDEX index_listings_status_location_typeOfRealty_currency_price")
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_adsTab_status_location_typeOfRealty_currency_price` ON `adsTab` (`status`, `location`, `typeOfRealty`, `currency`, `price`)")
+            connection.execSQL("DROP INDEX index_listings_status_tiktokStatus_sourceCreatedAt")
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_adsTab_status_tiktokStatus_sourceCreatedAt` ON `adsTab` (`status`, `tiktokStatus`, `sourceCreatedAt`)")
+            connection.execSQL("DROP INDEX index_listings_status_threadsStatus_sourceCreatedAt")
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `index_adsTab_status_threadsStatus_sourceCreatedAt` ON `adsTab` (`status`, `threadsStatus`, `sourceCreatedAt`)")
+        }
+    },
+    object : Migration(26, 27) {
+        override fun migrate(connection: SQLiteConnection) {
+            // Recover user IDs only; channel identities are not Telegram user IDs.
+            connection.prepare("SELECT id, senderIdentity FROM incomeTab WHERE userId IS NULL AND senderIdentity IS NOT NULL").use { query ->
+                while (query.step()) {
+                    val userId = query.getText(1).toLongOrNull()?.takeIf { it > 0 } ?: continue
+                    connection.prepare("UPDATE incomeTab SET userId=? WHERE id=?").use { update ->
+                        update.bindLong(1, userId)
+                        update.bindLong(2, query.getLong(0))
+                        update.step()
+                    }
+                }
+            }
+            connection.execSQL("ALTER TABLE incomeTab DROP COLUMN senderIdentity")
         }
     },
 )

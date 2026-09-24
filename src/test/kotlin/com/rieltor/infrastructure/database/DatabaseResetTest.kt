@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 class DatabaseResetTest {
     @Test fun `version mismatch recreates all tables on upgrade and downgrade`() {
-        for (version in listOf(1, 16, 23)) {
+        for (version in listOf(1, 16, 28)) {
             val path = Files.createTempDirectory("database-reset").resolve("test.db")
             BundledSQLiteDriver().open(path.toString()).use { connection ->
                 connection.execSQL("CREATE TABLE listings (id INTEGER PRIMARY KEY, obsolete TEXT)")
@@ -28,7 +28,7 @@ class DatabaseResetTest {
             BundledSQLiteDriver().open(path.toString()).use { connection ->
                 connection.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'room_master_table'").use { query ->
                     val tables = buildSet { while (query.step()) add(query.getText(0)) }
-                    assertEquals(setOf("listings", "incomeTab"), tables)
+                    assertEquals(setOf("adsTab", "incomeTab"), tables)
                 }
                 connection.prepare("PRAGMA integrity_check").use {
                     assertTrue(it.step()); assertEquals("ok", it.getText(0))

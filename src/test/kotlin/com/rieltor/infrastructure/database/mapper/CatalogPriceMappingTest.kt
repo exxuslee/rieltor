@@ -10,9 +10,9 @@ import kotlin.test.assertEquals
 
 class CatalogPriceMappingTest {
     private fun parse(price: String, area: String = "Площа: 50,5 м²", normalizer: NormalizeCatalogPriceUseCase = NormalizeCatalogPriceUseCase()) = CatalogListingMapper(PrepareCatalogListingUseCase(priceNormalizer = normalizer)).fromIncoming(
-        IncomingEntity(chatId = -1, messageId = 1, messageThreadId = 2, rawMessage = "original",
+        IncomingEntity(chatId = -1, messageId = 1, messageThreadId = 2, 
             rawText = "Ірпінь\nКвартира\n$price\n$area\nhttps://drive.google.com/drive/folders/example",
-            sourceCreatedAt = 0, receivedAt = 0, contentHash = "h", verifyAfter = 0),
+            sourceCreatedAt = 0, contentHash = "h", verifyAfter = 0),
         "APARTMENT", 1
     )
 
