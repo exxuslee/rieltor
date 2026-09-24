@@ -12,15 +12,43 @@ import java.nio.file.Path
 import kotlin.test.*
 
 class AdsTabMigrationTest {
-    @Test fun `rename preserves all listing fields and catalog queries work`() {
+    @Test fun `v25 migration preserves listing fields and catalog queries`() = checkMigration(25)
+    @Test fun `v27 migration separates repost fields without data loss`() = checkMigration(27)
+
+    @Test fun `new listing creates repost with generated id and survives updates`() {
+        val path = Files.createTempDirectory("repost-insert").resolve("test.db")
+        RoomDatabaseStore(path).use { db ->
+            val repo = CatalogRepository(db)
+            val row = com.rieltor.infrastructure.database.model.AdEntity(
+                chatId = -100, messageId = 1, adId = "new-ad", messageThreadId = 0,
+                sourceRevision = "revision", sourceCreatedAt = 100, createdAt = 100, updatedAt = 100,
+            )
+            val id = repo.save(row)
+            assertTrue(id > 0)
+            assertEquals(row.copy(id = id), repo.listing(id))
+            db.blocking { it.catalogDao().saveRepost(requireNotNull(repo.repost(id)).copy(tiktokStatus = "PUBLISHED", tiktokRepostedAt = 200)) }
+            repo.save(requireNotNull(repo.listing(id)).copy(title = "Edited"))
+            assertEquals(200L, repo.repost(id)?.tiktokRepostedAt)
+            assertEquals("PENDING", repo.repost(id)?.threadsStatus)
+            assertFails {
+                db.blocking { it.catalogDao().saveRepost(com.rieltor.infrastructure.database.model.RepostEntity(id + 999)) }
+            }
+            assertEquals(1, repo.listings().size)
+        }
+    }
+
+    private fun checkMigration(version: Int) {
         val path = Files.createTempDirectory("ads-rename").resolve("test.db")
-        val schema = Json.parseToJsonElement(Files.readString(Path.of("schemas/com.rieltor.infrastructure.database.local.RieltorDatabase/25.json")))
+        val schema = Json.parseToJsonElement(Files.readString(Path.of("schemas/com.rieltor.infrastructure.database.local.RieltorDatabase/$version.json")))
             .jsonObject.getValue("database").jsonObject.getValue("entities").jsonArray
         fun snapshot(): List<String?> = BundledSQLiteDriver().open(path.toString()).use { connection ->
             val table = connection.prepare("SELECT name FROM sqlite_master WHERE name='adsTab'").use {
                 if (it.step()) "adsTab" else "listings"
             }
-            connection.prepare("SELECT * FROM $table WHERE id=42").use { query ->
+            val selection = if (table == "adsTab" && connection.prepare("SELECT name FROM sqlite_master WHERE name='repostTab'").use { it.step() })
+                "SELECT adsTab.*, repostTab.tiktokRepostedAt, repostTab.threadsRepostedAt, repostTab.tiktokStatus, repostTab.threadsStatus, repostTab.tiktokState, repostTab.threadsState FROM adsTab JOIN repostTab USING(id) WHERE id=42"
+            else "SELECT * FROM $table WHERE id=42"
+            connection.prepare(selection).use { query ->
                 assertTrue(query.step())
                 List(query.getColumnCount()) { if (query.isNull(it)) null else query.getText(it) }
             }
@@ -33,11 +61,13 @@ class AdsTabMigrationTest {
                 data.getValue("indices").jsonArray.forEach {
                     connection.execSQL(it.jsonObject.getValue("createSql").jsonPrimitive.content.replace("\${TABLE_NAME}", name))
                 }
-                if (name == "listings") {
+                if (name == "listings" || name == "adsTab") {
                     val values = mapOf("id" to "42", "chatId" to "-100", "messageId" to "7", "adId" to "'test-ad'",
                         "status" to "'ACTIVE'", "price" to "80000", "currency" to "'USD'",
                         "governmentPrograms" to "'[\"TEST\"]'", "tiktokRepostedAt" to "1234",
-                        "tiktokStatus" to "'PUBLISHED'", "threadsStatus" to "'PENDING'")
+                        "tiktokStatus" to "'PUBLISHED'", "threadsStatus" to "'PENDING'",
+                        "threadsRepostedAt" to "5678", "tiktokState" to "'{\"attempts\":[]}'",
+                        "threadsState" to "'{\"attempts\":[],\"marker\":\"preserve\"}'")
                     val fields = data.getValue("fields").jsonArray.map { it.jsonObject }
                     val columns = fields.joinToString { it.getValue("columnName").jsonPrimitive.content }
                     val literals = fields.joinToString { field ->
@@ -45,10 +75,10 @@ class AdsTabMigrationTest {
                             ?: if (field["notNull"]?.jsonPrimitive?.boolean != true) "NULL"
                             else if (field.getValue("affinity").jsonPrimitive.content == "TEXT") "''" else "0"
                     }
-                    connection.execSQL("INSERT INTO listings ($columns) VALUES ($literals)")
+                    connection.execSQL("INSERT INTO $name ($columns) VALUES ($literals)")
                 }
             }
-            connection.execSQL("PRAGMA user_version=25")
+            connection.execSQL("PRAGMA user_version=$version")
         }
         val before = snapshot()
         RoomDatabaseStore(path).use { db ->
@@ -58,7 +88,7 @@ class AdsTabMigrationTest {
             db.blocking { room ->
                 val dao = room.catalogDao()
                 assertEquals(42L, dao.query(CatalogListingQueryFactory.create(CatalogFilter(programs = listOf("TEST")))).single().id)
-                assertEquals(42L, dao.nextRepost(false, true)?.id)
+                assertEquals(42L, dao.nextRepost(false, true)?.listing?.id)
                 assertNull(dao.nextRepost(true, false))
             }
         }
@@ -71,8 +101,23 @@ class AdsTabMigrationTest {
             val repo = CatalogRepository(db)
             repo.save(repo.listings().single().copy(title = "Updated"))
             assertEquals("Updated", repo.listing(42)?.title)
+            db.blocking { it.catalogDao().saveRepost(requireNotNull(repo.repost(42)).copy(threadsStatus = "FAILED", threadsState = "{\"attempts\":[]}")) }
+            assertEquals("FAILED", repo.repost(42)?.threadsStatus)
+            assertEquals(1234L, repo.repost(42)?.tiktokRepostedAt)
+            assertNull(repo.nextRepost(false, true))
             db.blocking { it.catalogDao().deleteListing(42) }
             assertTrue(repo.listings().isEmpty())
+        }
+        BundledSQLiteDriver().open(path.toString()).use { connection ->
+            connection.prepare("SELECT COUNT(*) FROM repostTab").use {
+                assertTrue(it.step()); assertEquals(0L, it.getLong(0))
+            }
+            connection.prepare("PRAGMA table_info(adsTab)").use { query ->
+                val columns = buildSet { while (query.step()) add(query.getText(1)) }
+                assertTrue(columns.none { it.startsWith("tiktok") || it.startsWith("threads") })
+                assertTrue("publishedAt" in columns)
+            }
+            connection.prepare("PRAGMA foreign_key_check").use { assertFalse(it.step()) }
         }
     }
 }

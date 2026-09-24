@@ -8,7 +8,7 @@ import com.rieltor.domain.model.*
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.infrastructure.config.JsonSettingsStore
-import com.rieltor.infrastructure.database.model.ListingEntity
+import com.rieltor.infrastructure.database.model.AdEntity
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import kotlinx.coroutines.*
@@ -82,11 +82,12 @@ class RepostWorker(
     }
 
     private fun prepareNextAttempt(enabled: List<PhotoPublisher>): RepostAttempt? {
-        val row = repository.nextRepost(
+        val candidate = repository.nextRepost(
             enabled.any { it.destination == RepostDestination.TIKTOK },
             enabled.any { it.destination == RepostDestination.THREADS },
         ) ?: return null
-        val targets = enabled.filter { repository.status(row, it.destination) == RepostStatus.Pending }
+        val row = candidate.listing
+        val targets = enabled.filter { repository.status(candidate.repost, it.destination) == RepostStatus.Pending }
         val attemptId = repository.prepare(row.id, targets.map { it.destination }.toSet(), now()) ?: return null
         val attempt = RepostAttempt(row, attemptId, targets)
         if (limiter.reserve(attemptId, row.id, now()) > 0) {
@@ -155,13 +156,13 @@ class RepostWorker(
         change: (PublishAttempt) -> PublishAttempt,
     ) = repository.changeAttempt(attempt.listing.id, destination, attempt.id, now(), change)
 
-    private fun photoUrls(row: ListingEntity, maxCount: Int): List<String> {
+    private fun photoUrls(row: AdEntity, maxCount: Int): List<String> {
         val photos = Json.decodeFromString<List<CatalogPhoto>>(row.photos)
         check(photos.isNotEmpty() && photos.all { media.resolve(it.fileName) != null }) { "Listing media is unavailable" }
         return photos.take(maxCount).map { media.publicUrl(it.fileName) }
     }
 
-    private data class RepostAttempt(val listing: ListingEntity, val id: String, val publishers: List<PhotoPublisher>)
+    private data class RepostAttempt(val listing: AdEntity, val id: String, val publishers: List<PhotoPublisher>)
 
     override fun close() {
         runBlocking { scope.coroutineContext[Job]?.cancelAndJoin() }

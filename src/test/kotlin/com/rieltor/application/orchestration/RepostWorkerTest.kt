@@ -5,7 +5,7 @@ import com.rieltor.domain.model.*
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
-import com.rieltor.infrastructure.database.model.ListingEntity
+import com.rieltor.infrastructure.database.model.AdEntity
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import kotlinx.coroutines.runBlocking
@@ -24,7 +24,7 @@ class RepostWorkerTest {
                 val media = LocalPublicMediaStorage(directory.resolve("media"), "https://media.example")
                 val fileName = "00000000-0000-0000-0000-000000000001.jpg"
                 Files.write(directory.resolve("media").resolve(fileName), byteArrayOf(1))
-                val valid = ListingEntity(
+                val valid = AdEntity(
                     adId = "valid", chatId = -1, messageId = 1, messageThreadId = 1,
                     sourceRevision = "1", title = "Valid", price = 10000, currency = "USD",
                     sourceCreatedAt = 1, createdAt = 1, updatedAt = 1, status = ListingStatus.Active,
@@ -48,10 +48,10 @@ class RepostWorkerTest {
                 RepostWorker(repo, db.settings, listOf(publisher), media) { 5000L }.use { worker ->
                     worker.runOnce()
                     assertEquals(0, calls)
-                    assertEquals(RepostStatus.Failed, repo.status(repo.listing(invalidId)!!, publisher.destination))
+                    assertEquals(RepostStatus.Failed, repo.status(repo.repost(invalidId)!!, publisher.destination))
                     worker.runOnce()
                     assertEquals(1, calls)
-                    assertEquals(RepostStatus.Published, repo.status(repo.listing(validId)!!, publisher.destination))
+                    assertEquals(RepostStatus.Published, repo.status(repo.repost(validId)!!, publisher.destination))
                     worker.runOnce()
                     assertEquals(1, calls)
                 }
@@ -68,7 +68,7 @@ class RepostWorkerTest {
             val media = LocalPublicMediaStorage(directory.resolve("media"), "https://media.example")
             val fileName = "00000000-0000-0000-0000-000000000001.jpg"
             Files.write(directory.resolve("media").resolve(fileName), byteArrayOf(1))
-            val id = repo.save(ListingEntity(
+            val id = repo.save(AdEntity(
                 adId = "draft", chatId = -1, messageId = 1, messageThreadId = 1,
                 sourceRevision = "1", title = "Draft", price = 10000, currency = "USD",
                 sourceCreatedAt = 1, createdAt = 1, updatedAt = 1, status = ListingStatus.Active,
@@ -90,15 +90,15 @@ class RepostWorkerTest {
             var now = 5000L
             RepostWorker(repo, db.settings, listOf(publisher), media) { now }.use { worker ->
                 worker.runOnce()
-                assertEquals(RepostStatus.Pending, repo.status(repo.listing(id)!!, publisher.destination))
+                assertEquals(RepostStatus.Pending, repo.status(repo.repost(id)!!, publisher.destination))
                 assertEquals(0, calls)
                 blocked = false
                 worker.runOnce()
                 assertEquals(0, calls)
-                assertEquals(RepostStatus.Pending, repo.status(repo.listing(id)!!, publisher.destination))
+                assertEquals(RepostStatus.Pending, repo.status(repo.repost(id)!!, publisher.destination))
                 now += 1000
                 worker.runOnce()
-                assertEquals(RepostStatus.DeliveredDraft, repo.status(repo.listing(id)!!, publisher.destination))
+                assertEquals(RepostStatus.DeliveredDraft, repo.status(repo.repost(id)!!, publisher.destination))
                 assertEquals(1, calls)
                 now += 1000
                 worker.runOnce()
@@ -118,7 +118,7 @@ class RepostWorkerTest {
             val fileName = "00000000-0000-0000-0000-000000000001.jpg"
             Files.write(directory.resolve("media").resolve(fileName), byteArrayOf(1))
             fun add(message: Long) = repo.save(
-                ListingEntity(
+                AdEntity(
                     adId = "ad$message", chatId = -1, messageId = message, messageThreadId = 1,
                     sourceRevision = "1", title = "Listing $message", price = 10000, currency = "USD",
                     sourceCreatedAt = message, createdAt = message, updatedAt = message, status = ListingStatus.Active,
@@ -147,8 +147,8 @@ class RepostWorkerTest {
             val newest = add(2); now = 5000
             service.runOnce(); assertTrue(captions.single().contains("Listing 2"))
             assertTrue(captions.single().contains("test-contact"))
-            assertNotNull(repo.listing(newest)!!.tiktokRepostedAt); assertNull(repo.listing(newest)!!.threadsRepostedAt)
-            assertEquals(RepostStatus.Unknown, repo.status(repo.listing(newest)!!, RepostDestination.THREADS))
+            assertNotNull(repo.repost(newest)!!.tiktokRepostedAt); assertNull(repo.repost(newest)!!.threadsRepostedAt)
+            assertEquals(RepostStatus.Unknown, repo.status(repo.repost(newest)!!, RepostDestination.THREADS))
             service.runOnce(); assertEquals(2, captions.size)
             service.runOnce(); assertEquals(2, captions.size)
             service.close()

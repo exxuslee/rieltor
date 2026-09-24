@@ -5,9 +5,10 @@ import androidx.room.useWriterConnection
 import com.rieltor.domain.model.*
 import com.rieltor.infrastructure.database.local.CatalogDao
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
+import com.rieltor.infrastructure.database.model.AdEntity
 import com.rieltor.infrastructure.database.model.IncomingEntity
 import com.rieltor.infrastructure.database.model.IncomingStatus
-import com.rieltor.infrastructure.database.model.ListingEntity
+import com.rieltor.infrastructure.database.model.RepostEntity
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.util.*
@@ -47,26 +48,28 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         )
         dao.saveSource(row)
         dao.listingForSource(message.chatId, message.messageId)
-            ?.let { dao.saveListing(it.copy(status = ListingStatus.Hidden, updatedAt = now)) }
+            ?.let { dao.saveAd(it.copy(status = ListingStatus.Hidden, updatedAt = now)) }
     }
 
     fun delete(chatId: Long, messageId: Long, now: Long) = transaction { dao ->
         val row = dao.source(chatId, messageId) ?: return@transaction
         dao.saveSource(row.copy(status = IncomingStatus.Deleted))
         dao.listingForSource(row.chatId, row.messageId)
-            ?.let { dao.saveListing(it.copy(status = ListingStatus.Hidden, updatedAt = now)) }
+            ?.let { dao.saveAd(it.copy(status = ListingStatus.Hidden, updatedAt = now)) }
     }
 
     fun source(chatId: Long, messageId: Long) = transaction { it.source(chatId, messageId) }
     fun incoming(): List<IncomingEntity> = transaction { it.sources() }
 
     fun publicListing(id: Long) = database.blocking { it.catalogDao().publicListing(id) }
-    fun listing(id: Long) = transaction { it.listing(id) }
-    fun listings() = transaction { it.listings() }
+    fun listing(id: Long) = database.blocking { it.catalogDao().listing(id) }
+    fun listings() = database.blocking { it.catalogDao().listings() }
+    fun repost(id: Long) = database.blocking { it.catalogDao().repost(id) }
+    fun reposts() = database.blocking { it.catalogDao().reposts() }
 
-    fun cachedPhotos(prepared: ListingEntity): List<CatalogPhoto> = transaction { dao ->
-        dao.listings().filter { it.adId == prepared.adId }
-            .flatMap { json.decodeFromString<List<CatalogPhoto>>(it.photos) }.distinctBy { it.fileName }
+    fun cachedPhotos(prepared: AdEntity): List<CatalogPhoto> = transaction { dao ->
+        dao.photosForAd(prepared.adId)?.let { json.decodeFromString<List<CatalogPhoto>>(it) }
+            ?.distinctBy { it.fileName }.orEmpty()
     }
 
     fun discard(row: IncomingEntity): Boolean = transaction { dao ->
@@ -88,7 +91,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     fun cleanExpired(cutoff: Long): MediaRetention = transaction { dao ->
         val sources = dao.allSources()
         val listings = dao.listings()
-        fun files(sources: List<IncomingEntity>, listings: List<ListingEntity>) =
+        fun files(sources: List<IncomingEntity>, listings: List<AdEntity>) =
             (sources.flatMap { json.decodeFromString<List<CatalogPhoto>>(it.mediaManifest) } +
                     listings.flatMap { json.decodeFromString<List<CatalogPhoto>>(it.photos) }).map { it.fileName }
                 .toSet()
@@ -114,7 +117,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         MediaRetention(remaining, before - remaining)
     }
 
-    private fun validate(row: ListingEntity): ListingEntity {
+    private fun validate(row: AdEntity): AdEntity {
         require(row.status != ListingStatus.Active || (row.currency == "USD" && (row.price ?: 0) > 0)) {
             "Active listings require a positive total price in USD"
         }
@@ -125,7 +128,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         it.catalogDao().nextRepost(tiktok, threads)
     }
 
-    fun save(row: ListingEntity): Long =
+    fun save(row: AdEntity): Long =
         transaction { it.saveListing(validate(row)).takeIf { id -> id > 0 } ?: row.id }
 
     fun query(query: androidx.room.RoomRawQuery) = database.blocking { it.catalogDao().query(query) }
@@ -180,15 +183,14 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
             true
         }
 
-    fun promote(row: IncomingEntity, prepared: ListingEntity, now: Long): Boolean =
+    fun promote(row: IncomingEntity, prepared: AdEntity, now: Long): Boolean =
         transaction { dao ->
             val current = dao.source(row.chatId, row.messageId ?: return@transaction false) ?: return@transaction false
             if (revision(current) != revision(row) || current.status != IncomingStatus.Downloading) {
                 return@transaction false
             }
             // Same source is an edit; different posts are duplicates only when their adId matches.
-            val matches = dao.listings()
-                .filter { (it.chatId == prepared.chatId && it.messageId == prepared.messageId) || it.adId == prepared.adId }
+            val matches = dao.promotionMatches(prepared.chatId, prepared.messageId, prepared.adId)
             val old = matches.maxByOrNull { it.sourceCreatedAt }
             // An old queued/replayed message must not overwrite a newer price or extend its lifetime.
             if (old != null && old.sourceCreatedAt > prepared.sourceCreatedAt) {
@@ -202,9 +204,6 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
                 .forEach { dao.deleteSource(it.chatId, it.messageId) }
             val listingRow = if (old == null) prepared else prepared.copy(
                 id = old.id, createdAt = old.createdAt, publishedAt = old.publishedAt ?: now,
-                tiktokRepostedAt = old.tiktokRepostedAt, threadsRepostedAt = old.threadsRepostedAt,
-                tiktokStatus = old.tiktokStatus, threadsStatus = old.threadsStatus,
-                tiktokState = old.tiktokState, threadsState = old.threadsState
             )
             dao.saveListing(validate(listingRow))
             dao.saveSource(current.copy(status = IncomingStatus.Promoted))
@@ -220,7 +219,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
                 )
             )
         }
-        dao.listings().forEach { row ->
+        dao.reposts().forEach { row ->
             var updated = row
             RepostDestination.entries.forEach { destination ->
                 val state = publication(updated, destination)
@@ -236,13 +235,13 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
                     if (state.attempts.last().status == RepostStatus.Prepared) RepostStatus.Pending else RepostStatus.Unknown
                 )
             }
-            if (updated != row) dao.saveListing(updated)
+            if (updated != row) dao.saveRepost(updated)
         }
     }
 
     fun prepare(id: Long, destinations: Set<RepostDestination>, now: Long): String? = transaction { dao ->
-        val row = dao.listing(id) ?: return@transaction null
-        if (row.status != ListingStatus.Active) return@transaction null
+        val row = dao.repost(id) ?: return@transaction null
+        if (!dao.isActive(id)) return@transaction null
         val attemptId = UUID.randomUUID().toString()
         var updated = row
         destinations.filter { status(row, it) == RepostStatus.Pending }.forEach { destination ->
@@ -255,54 +254,53 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
             )
         }
         if (updated == row) return@transaction null
-        dao.saveListing(updated); attemptId
+        dao.saveRepost(updated); attemptId
     }
 
     fun changeAttempt(
         id: Long, destination: RepostDestination, attemptId: String, now: Long,
         change: (PublishAttempt) -> PublishAttempt
     ) = transaction { dao ->
-        val row = dao.listing(id) ?: return@transaction
+        val row = dao.repost(id) ?: return@transaction
         val state = publication(row, destination)
         val next =
             state.copy(attempts = state.attempts.map { if (it.attemptId == attemptId) change(it).copy(updatedAt = now) else it })
-        dao.saveListing(applyPublication(row, destination, next, now))
+        dao.saveRepost(applyPublication(row, destination, next, now))
     }
 
     fun updatePublish(publishId: String, now: Long, change: (PublishAttempt) -> PublishAttempt) = transaction { dao ->
-        dao.listings().forEach { row ->
+        dao.reposts().forEach { row ->
             val state = publication(row, RepostDestination.TIKTOK)
             if (state.attempts.any { it.publishId == publishId }) {
                 val next =
                     state.copy(attempts = state.attempts.map { if (it.publishId == publishId) change(it).copy(updatedAt = now) else it })
-                dao.saveListing(applyPublication(row, RepostDestination.TIKTOK, next, now))
+                dao.saveRepost(applyPublication(row, RepostDestination.TIKTOK, next, now))
             }
         }
     }
 
-    fun publication(row: ListingEntity, destination: RepostDestination): PublicationState =
+    fun publication(row: RepostEntity, destination: RepostDestination): PublicationState =
         json.decodeFromString(if (destination == RepostDestination.TIKTOK) row.tiktokState else row.threadsState)
 
-    fun status(row: ListingEntity, destination: RepostDestination): RepostStatus =
+    fun status(row: RepostEntity, destination: RepostDestination): RepostStatus =
         RepostStatus.fromCode(if (destination == RepostDestination.TIKTOK) row.tiktokStatus else row.threadsStatus)
 
     private fun applyPublication(
-        row: ListingEntity, destination: RepostDestination, state: PublicationState, now: Long,
+        row: RepostEntity, destination: RepostDestination, state: PublicationState, now: Long,
         overrideStatus: RepostStatus? = null
-    ): ListingEntity {
+    ): RepostEntity {
         val last = state.attempts.lastOrNull()
         val published = state.attempts.any { it.status == RepostStatus.Published }
         val status = (overrideStatus ?: last?.status ?: RepostStatus.Pending).code
         return if (destination == RepostDestination.TIKTOK) row.copy(
             tiktokState = json.encodeToString(state),
             tiktokStatus = status,
-            tiktokRepostedAt = row.tiktokRepostedAt ?: now.takeIf { published }, updatedAt = now
+            tiktokRepostedAt = row.tiktokRepostedAt ?: now.takeIf { published }
         )
         else row.copy(
             threadsState = json.encodeToString(state),
             threadsStatus = status,
-            threadsRepostedAt = row.threadsRepostedAt ?: now.takeIf { published },
-            updatedAt = now
+            threadsRepostedAt = row.threadsRepostedAt ?: now.takeIf { published }
         )
     }
 }

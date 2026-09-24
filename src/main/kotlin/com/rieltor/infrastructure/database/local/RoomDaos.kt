@@ -1,12 +1,7 @@
 package com.rieltor.infrastructure.database.local
 
-import androidx.room.Dao
-import androidx.room.Query
-import androidx.room.RawQuery
-import androidx.room.Upsert
-import com.rieltor.infrastructure.database.model.CatalogListingRow
-import com.rieltor.infrastructure.database.model.IncomingEntity
-import com.rieltor.infrastructure.database.model.ListingEntity
+import androidx.room.*
+import com.rieltor.infrastructure.database.model.*
 
 @Dao
 internal interface CatalogDao {
@@ -16,7 +11,7 @@ internal interface CatalogDao {
     @Query("DELETE FROM incomeTab WHERE chatId=:chat AND messageId IS :message")
     suspend fun deleteSource(chat: Long, message: Long?)
 
-    @Query("DELETE FROM adsTab WHERE id=:id")
+    @Query("DELETE FROM adsTab WHERE adsTab.id=:id")
     suspend fun deleteListing(id: Long)
 
     @Query("SELECT * FROM incomeTab WHERE chatId=:chat AND messageId=:message")
@@ -29,22 +24,59 @@ internal interface CatalogDao {
     suspend fun saveSource(row: IncomingEntity): Long
 
     @Query("SELECT * FROM adsTab WHERE id=:id")
-    suspend fun listing(id: Long): ListingEntity?
+    suspend fun listing(id: Long): AdEntity?
 
     @Query("SELECT * FROM adsTab WHERE chatId=:chat AND messageId IS :message")
-    suspend fun listingForSource(chat: Long, message: Long?): ListingEntity?
+    suspend fun listingForSource(chat: Long, message: Long?): AdEntity?
 
     @Query("SELECT * FROM adsTab ORDER BY sourceCreatedAt DESC, id DESC")
-    suspend fun listings(): List<ListingEntity>
+    suspend fun listings(): List<AdEntity>
 
-    @Query("SELECT * FROM adsTab WHERE status='ACTIVE' AND ((:tiktok AND tiktokStatus='PENDING') OR (:threads AND threadsStatus='PENDING')) ORDER BY sourceCreatedAt DESC, id DESC LIMIT 1")
-    suspend fun nextRepost(tiktok: Boolean, threads: Boolean): ListingEntity?
+    @Query("""
+        SELECT adsTab.*, r.id AS repost_id,
+            r.tiktokRepostedAt AS repost_tiktokRepostedAt, r.threadsRepostedAt AS repost_threadsRepostedAt,
+            r.tiktokStatus AS repost_tiktokStatus, r.threadsStatus AS repost_threadsStatus,
+            r.tiktokState AS repost_tiktokState, r.threadsState AS repost_threadsState
+        FROM adsTab JOIN repostTab r ON r.id=adsTab.id
+        WHERE status='ACTIVE' AND ((:tiktok AND tiktokStatus='PENDING') OR (:threads AND threadsStatus='PENDING'))
+        ORDER BY sourceCreatedAt DESC, adsTab.id DESC LIMIT 1
+    """)
+    suspend fun nextRepost(tiktok: Boolean, threads: Boolean): RepostCandidate?
+
+    @Query("SELECT * FROM repostTab WHERE id=:id")
+    suspend fun repost(id: Long): RepostEntity?
+
+    @Query("SELECT * FROM repostTab")
+    suspend fun reposts(): List<RepostEntity>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM adsTab WHERE id=:id AND status='ACTIVE')")
+    suspend fun isActive(id: Long): Boolean
+
+    @Query("SELECT photos FROM adsTab WHERE adId=:adId")
+    suspend fun photosForAd(adId: String): String?
+
+    @Query("SELECT * FROM adsTab WHERE (chatId=:chat AND messageId IS :message) OR adId=:adId")
+    suspend fun promotionMatches(chat: Long, message: Long?, adId: String): List<AdEntity>
 
     @Query("SELECT COUNT(*) FROM adsTab")
     suspend fun count(): Int
 
     @Upsert
-    suspend fun saveListing(row: ListingEntity): Long
+    suspend fun saveAd(row: AdEntity): Long
+
+    @Upsert
+    suspend fun saveRepost(row: RepostEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun initializeRepost(row: RepostEntity)
+
+    /** Preserve publication history when advertisement content changes. */
+    @Transaction
+    suspend fun saveListing(row: AdEntity): Long {
+        val id = saveAd(row).takeIf { it > 0 } ?: row.id
+        initializeRepost(RepostEntity(id))
+        return id
+    }
 
     @Query("SELECT " + CatalogListingRow.COLUMNS + " FROM adsTab WHERE id=:id AND status='ACTIVE' AND currency='USD' AND price>0")
     suspend fun publicListing(id: Long): CatalogListingRow?

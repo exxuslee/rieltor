@@ -7,8 +7,9 @@ import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
+import com.rieltor.infrastructure.database.model.AdEntity
 import com.rieltor.infrastructure.database.model.IncomingEntity
-import com.rieltor.infrastructure.database.model.ListingEntity
+import com.rieltor.infrastructure.database.model.RepostEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
@@ -16,8 +17,8 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
 
 @Database(
-    entities = [IncomingEntity::class, ListingEntity::class],
-    version = 27,
+    entities = [IncomingEntity::class, AdEntity::class, RepostEntity::class],
+    version = 28,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -129,6 +130,28 @@ private val migrations = arrayOf(
                 }
             }
             connection.execSQL("ALTER TABLE incomeTab DROP COLUMN senderIdentity")
+        }
+    },
+    object : Migration(27, 28) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("""
+                CREATE TABLE repostTab (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    tiktokRepostedAt INTEGER, threadsRepostedAt INTEGER,
+                    tiktokStatus TEXT NOT NULL, threadsStatus TEXT NOT NULL,
+                    tiktokState TEXT NOT NULL, threadsState TEXT NOT NULL,
+                    FOREIGN KEY(id) REFERENCES adsTab(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+            """.trimIndent())
+            val columns = "id, tiktokRepostedAt, threadsRepostedAt, tiktokStatus, threadsStatus, tiktokState, threadsState"
+            connection.execSQL("INSERT INTO repostTab ($columns) SELECT $columns FROM adsTab")
+            connection.execSQL("DROP INDEX index_adsTab_status_tiktokStatus_sourceCreatedAt")
+            connection.execSQL("DROP INDEX index_adsTab_status_threadsStatus_sourceCreatedAt")
+            columns.split(", ").drop(1).forEach { column ->
+                connection.execSQL("ALTER TABLE adsTab DROP COLUMN $column")
+            }
+            connection.execSQL("CREATE INDEX index_repostTab_tiktokStatus ON repostTab(tiktokStatus)")
+            connection.execSQL("CREATE INDEX index_repostTab_threadsStatus ON repostTab(threadsStatus)")
         }
     },
 )

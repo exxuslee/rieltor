@@ -30,7 +30,7 @@ class TikTokRepositoryImpl(
     }
 
     override fun trackedPublishes(nowMillis: Long, retentionMillis: Long): List<TrackedTikTokPublish> =
-        catalog.listings().flatMap { catalog.publication(it, RepostDestination.TIKTOK).attempts }
+        catalog.reposts().flatMap { catalog.publication(it, RepostDestination.TIKTOK).attempts }
             .filter {
                 it.publishId != null && it.status in setOf(
                     RepostStatus.AwaitingConfirmation,

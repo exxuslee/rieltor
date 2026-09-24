@@ -2,15 +2,15 @@ package com.rieltor.infrastructure.database.mapper
 
 import com.rieltor.domain.model.*
 import com.rieltor.domain.usecase.PrepareCatalogListingUseCase
+import com.rieltor.infrastructure.database.model.AdEntity
 import com.rieltor.infrastructure.database.model.IncomingEntity
-import com.rieltor.infrastructure.database.model.ListingEntity
 import com.rieltor.infrastructure.google.GoogleDriveLinkExtractor
 import kotlinx.serialization.json.*
 
 class CatalogListingMapper(
     private val prepareListing: PrepareCatalogListingUseCase = PrepareCatalogListingUseCase(),
 ) {
-    fun fromIncoming(row: IncomingEntity, type: String?, now: Long): ListingEntity {
+    fun fromIncoming(row: IncomingEntity, type: String?, now: Long): AdEntity {
         val result = prepareListing(
             ListingImportSource(
                 text = row.rawText, typeOfRealty = type,
@@ -19,7 +19,7 @@ class CatalogListingMapper(
                 .getOrDefault(emptyList()).isNotEmpty(),
         ))
         val content = result.content
-        return ListingEntity(
+        return AdEntity(
             adId = adId(
                 row.userId?.toString()
                 ?: "unknown-${row.chatId}:${row.messageId}", result.location, type,

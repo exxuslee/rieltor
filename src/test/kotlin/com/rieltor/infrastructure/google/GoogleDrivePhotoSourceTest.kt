@@ -1,6 +1,6 @@
 package com.rieltor.infrastructure.google
 
-import com.rieltor.application.service.AdsService
+import com.rieltor.application.worker.AdsWorker
 import com.rieltor.domain.model.ListingStatus
 import com.rieltor.domain.model.StoredGoogleDriveTokens
 import com.rieltor.domain.repository.GoogleDriveTokenRepository
@@ -40,7 +40,7 @@ class GoogleDrivePhotoSourceTest {
                     else com.rieltor.domain.model.SourceRefresh.Found(messages.getValue(messageId))
             }
             val storage = com.rieltor.infrastructure.media.LocalPublicMediaStorage(directory.resolve("media"), "https://api.example")
-            val service = AdsService(telegram, repo, db.settings, createSource(client), storage) { time }
+            val service = AdsWorker(telegram, repo, db.settings, createSource(client), storage) { time }
             messages.values.forEach { repo.receive(it, time, 1_200_000) }
             time = 1_199_999
             service.verifyDue(); assertFalse(service.downloadNext()); assertEquals(0, downloads)
@@ -50,7 +50,7 @@ class GoogleDrivePhotoSourceTest {
             service.verifyDue(); assertTrue(service.downloadNext())
             assertEquals(2, repo.listings().single().messageId); assertEquals(1, downloads)
             assertTrue(service.downloadNext()); assertEquals(2, repo.listings().size)
-            assertTrue(repo.listings().all { it.status == ListingStatus.Active && it.tiktokRepostedAt == null })
+            assertTrue(repo.listings().all { it.status == ListingStatus.Active && repo.repost(it.id)?.tiktokRepostedAt == null })
             val original = repo.listings().first { it.messageId == 2L }
             val originalPhotos = Json.decodeFromString<List<com.rieltor.domain.model.CatalogPhoto>>(original.photos)
             time += 7 * 86_400_000

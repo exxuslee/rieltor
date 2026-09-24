@@ -2,7 +2,7 @@ package com.rieltor.application.service
 
 import com.rieltor.domain.model.ListingMessage
 import com.rieltor.domain.model.MediaTextOverlay
-import com.rieltor.infrastructure.database.model.ListingEntity
+import com.rieltor.infrastructure.database.model.AdEntity
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -10,7 +10,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /** Presentation of already prepared public content; no source parsing. */
 class ListingCaptionFormatter {
-    fun forCatalog(row: ListingEntity, phone: String): String? = forTikTok(
+    fun forCatalog(row: AdEntity, phone: String): String? = forTikTok(
         ListingMessage(
             title = row.title,
             price = "${requireNotNull(row.price)} ${row.currency}",

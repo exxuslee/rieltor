@@ -65,10 +65,10 @@ class AdIdentityTest {
             }
             publish(1)
             val old = repo.listings().single()
-            repo.save(old.copy(tiktokStatus = "PUBLISHED", tiktokRepostedAt = 1234))
+            db.blocking { it.catalogDao().saveRepost(requireNotNull(repo.repost(old.id)).copy(tiktokStatus = "PUBLISHED", tiktokRepostedAt = 1234)) }
             publish(2, chat = -200, area = "40.0")
             assertEquals(old.id, repo.listings().single().id)
-            assertEquals(1234L, repo.listings().single().tiktokRepostedAt)
+            assertEquals(1234L, repo.reposts().single().tiktokRepostedAt)
             assertEquals("123:IRPIN:APARTMENT 1:80000:40:null", repo.listings().single().adId)
             publish(3, sender = "456")
             publish(4, price = 79000)
@@ -123,8 +123,8 @@ class AdIdentityTest {
             val merged = repo.listings().single { it.adId.startsWith("123:") }
             assertEquals(2, merged.id)
             assertEquals("123:IRPIN:HOUSE:80000:40:null", merged.adId)
-            assertEquals(1234, merged.tiktokRepostedAt)
-            assertEquals("PUBLISHED", merged.tiktokStatus)
+            assertEquals(1234, repo.repost(merged.id)?.tiktokRepostedAt)
+            assertEquals("PUBLISHED", repo.repost(merged.id)?.tiktokStatus)
             assertEquals(123L, repo.source(-100, 1)?.userId)
         }
     }

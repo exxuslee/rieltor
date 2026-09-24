@@ -2,7 +2,7 @@
 
 Ревью прежнего `domain/service` выявило смешение правил объявления с хранением и представлением:
 
-- `CatalogAdsParser` принимал `IncomingEntity`, создавал `ListingEntity`, читал и записывал JSON. Эти операции перенесены в `infrastructure/database/mapper/CatalogListingMapper`.
+- `CatalogAdsParser` принимал `IncomingEntity`, создавал `AdEntity`, читал и записывал JSON. Эти операции перенесены в `infrastructure/database/mapper/CatalogListingMapper`.
 - `ListingCaptionFormatter` объединял очистку исходного текста и оформление подписи. Очистка — доменное правило, оформление текста и оверлея осталось в `application/service/ListingCaptionFormatter`.
 - Цена выбиралась по разным правилам: каталог предпочитал новую/последнюю цену, подпись использовала первую. Теперь оба сценария используют `ExtractListingPriceUseCase`; старые цены не остаются в публичных параметрах.
 - `GoogleDriveLinkExtractor` знает формат URL конкретного провайдера, поэтому перенесён в `infrastructure/google`.

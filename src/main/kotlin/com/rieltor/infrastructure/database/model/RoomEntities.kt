@@ -39,13 +39,11 @@ data class IncomingEntity(
         Index(value = ["adId"], unique = true), Index(value = ["chatId", "messageId"], unique = true),
         Index(value = ["status", "sourceCreatedAt", "id"]),
         Index(value = ["status", "location", "typeOfRealty", "currency", "price"]),
-        Index(value = ["status", "tiktokStatus", "sourceCreatedAt"]),
-        Index(value = ["status", "threadsStatus", "sourceCreatedAt"]),
     ]
 )
 @kotlinx.serialization.Serializable
 @androidx.room.TypeConverters(ListingStatusConverters::class)
-data class ListingEntity(
+data class AdEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val chatId: Long, val messageId: Long?,
     val adId: String,
@@ -71,10 +69,29 @@ data class ListingEntity(
     val sourceCreatedAt: Long, val createdAt: Long,
     val updatedAt: Long,
     val publishedAt: Long? = null,
+)
+
+@Entity(
+    tableName = "repostTab",
+    foreignKeys = [androidx.room.ForeignKey(
+        entity = AdEntity::class, parentColumns = ["id"], childColumns = ["id"],
+        onDelete = androidx.room.ForeignKey.CASCADE,
+    )],
+    indices = [Index(value = ["tiktokStatus"]), Index(value = ["threadsStatus"])],
+)
+data class RepostEntity(
+    @PrimaryKey val id: Long,
     val tiktokRepostedAt: Long? = null,
     val threadsRepostedAt: Long? = null,
     val tiktokStatus: String = "PENDING",
     val threadsStatus: String = "PENDING",
     val tiktokState: String = "{\"attempts\":[]}",
     val threadsState: String = "{\"attempts\":[]}",
+)
+
+/** Only the repost worker needs both the advertisement and its publication state. */
+@androidx.room.TypeConverters(ListingStatusConverters::class)
+data class RepostCandidate(
+    @androidx.room.Embedded val listing: AdEntity,
+    @androidx.room.Embedded(prefix = "repost_") val repost: RepostEntity,
 )
