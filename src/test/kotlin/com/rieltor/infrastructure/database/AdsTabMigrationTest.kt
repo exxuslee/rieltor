@@ -15,13 +15,15 @@ class AdsTabMigrationTest {
     @Test fun `v25 migration preserves listing fields and catalog queries`() = checkMigration(25)
     @Test fun `v27 migration separates repost fields without data loss`() = checkMigration(27)
 
+    @Test fun `v28 migration preserves source timestamp and reposts`() = checkMigration(28)
+
     @Test fun `new listing creates repost with generated id and survives updates`() {
         val path = Files.createTempDirectory("repost-insert").resolve("test.db")
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db)
             val row = com.rieltor.infrastructure.database.model.AdEntity(
                 chatId = -100, messageId = 1, adId = "new-ad", messageThreadId = 0,
-                sourceRevision = "revision", sourceCreatedAt = 100, createdAt = 100, updatedAt = 100,
+                sourceRevision = "revision", timestamp = 100,
             )
             val id = repo.save(row)
             assertTrue(id > 0)
@@ -50,7 +52,8 @@ class AdsTabMigrationTest {
             else "SELECT * FROM $table WHERE id=42"
             connection.prepare(selection).use { query ->
                 assertTrue(query.step())
-                List(query.getColumnCount()) { if (query.isNull(it)) null else query.getText(it) }
+                (0 until query.getColumnCount()).filter { query.getColumnName(it) !in setOf("createdAt", "updatedAt", "publishedAt") }
+                    .map { if (query.isNull(it)) null else query.getText(it) }
             }
         }
         BundledSQLiteDriver().open(path.toString()).use { connection ->
@@ -61,8 +64,9 @@ class AdsTabMigrationTest {
                 data.getValue("indices").jsonArray.forEach {
                     connection.execSQL(it.jsonObject.getValue("createSql").jsonPrimitive.content.replace("\${TABLE_NAME}", name))
                 }
-                if (name == "listings" || name == "adsTab") {
+                if (name == "listings" || name == "adsTab" || name == "repostTab") {
                     val values = mapOf("id" to "42", "chatId" to "-100", "messageId" to "7", "adId" to "'test-ad'",
+                        "sourceCreatedAt" to "1111", "createdAt" to "2222", "updatedAt" to "3333", "publishedAt" to "4444",
                         "status" to "'ACTIVE'", "price" to "80000", "currency" to "'USD'",
                         "governmentPrograms" to "'[\"TEST\"]'", "tiktokRepostedAt" to "1234",
                         "tiktokStatus" to "'PUBLISHED'", "threadsStatus" to "'PENDING'",
@@ -84,6 +88,7 @@ class AdsTabMigrationTest {
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db)
             assertEquals(42L, repo.listings().single().id)
+            assertEquals(1111L, repo.listings().single().timestamp)
             assertEquals(42L, repo.publicListing(42)?.id)
             db.blocking { room ->
                 val dao = room.catalogDao()
@@ -115,7 +120,8 @@ class AdsTabMigrationTest {
             connection.prepare("PRAGMA table_info(adsTab)").use { query ->
                 val columns = buildSet { while (query.step()) add(query.getText(1)) }
                 assertTrue(columns.none { it.startsWith("tiktok") || it.startsWith("threads") })
-                assertTrue("publishedAt" in columns)
+                assertTrue("timestamp" in columns)
+                assertTrue(columns.intersect(setOf("sourceCreatedAt", "createdAt", "updatedAt", "publishedAt")).isEmpty())
             }
             connection.prepare("PRAGMA foreign_key_check").use { assertFalse(it.step()) }
         }

@@ -38,7 +38,7 @@ class AdIdentityTest {
             val rows = repo.incoming()
             assertEquals(1961809113L, rows.single().userId)
             assertEquals("1961809113:IRPIN:APARTMENT 1:79000:null:null",
-                CatalogListingMapper().fromIncoming(rows, "APARTMENT 1", 2000).adId)
+                CatalogListingMapper().fromIncoming(rows.single(), "APARTMENT 1", 2000).adId)
         }
     }
 
@@ -58,7 +58,7 @@ class AdIdentityTest {
                     "Квартира\nІрпінь\nПлоща: $area м²\nЦіна: $price USD\nhttps://drive.google.com/drive/folders/folder$id",
                     "raw", id * 1000, userId = sender.toLong())
                 repo.receive(source, 10000, 0)
-                val rows = repo.incoming(source.chatId, source.messageId)
+                val rows = assertNotNull(repo.source(source.chatId, source.messageId))
                 repo.stage(rows, IncomingStatus.ReadyForMedia, 10000)
                 assertTrue(repo.claim(rows, 10000))
                 assertTrue(repo.promote(rows, CatalogListingMapper().fromIncoming(rows, "APARTMENT 1", 10000), 10000))
@@ -109,7 +109,7 @@ class AdIdentityTest {
                 val sender = if (id == 3) 456 else 123
                 val common = mapOf("id" to "$id", "chatId" to "-100", "messageId" to "$id", "groupKey" to "'-100:$id'", "sourceCreatedAt" to "${id * 1000}")
                 insert("incoming_telegram_messages", common + mapOf("rawMessage" to "'senderId = MessageSenderUser { userId = $sender }'", "status" to "'PROMOTED'"))
-                insert("listings", common + mapOf("location" to "'IRPIN'", "typeOfRealty" to "'HOUSE'", "price" to "80000", "areaM2" to "40.0",
+                insert("listings", common + mapOf("status" to "'ACTIVE'", "location" to "'IRPIN'", "typeOfRealty" to "'HOUSE'", "price" to "80000", "areaM2" to "40.0",
                     "tiktokRepostedAt" to if (id == 1) "1234" else "NULL",
                     "tiktokStatus" to if (id == 1) "'PUBLISHED'" else "'PENDING'", "threadsStatus" to "'PENDING'",
                     "tiktokState" to "'{\"attempts\":[]}'", "threadsState" to "'{\"attempts\":[]}'"))

@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 /** Sort orders supported by the public catalog API. */
 enum class CatalogSort(val code: String, val column: String, val ascending: Boolean) {
-    NEWEST("newest", "sourceCreatedAt", false),
+    NEWEST("newest", "timestamp", false),
     PRICE_ASC("priceAsc", "price", true),
     PRICE_DESC("priceDesc", "price", false),
     ;

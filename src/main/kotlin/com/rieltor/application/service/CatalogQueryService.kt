@@ -25,5 +25,5 @@ class CatalogQueryService(
     fun listing(id: Long): CatalogListingRow? = repository.publicListing(id)
 
     private fun sortValue(sort: CatalogSort, row: CatalogListingRow): Long =
-        if (sort == CatalogSort.NEWEST) row.sourceCreatedAt else requireNotNull(row.price)
+        if (sort == CatalogSort.NEWEST) row.timestamp else requireNotNull(row.price)
 }

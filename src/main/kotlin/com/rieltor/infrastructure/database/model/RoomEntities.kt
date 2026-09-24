@@ -37,7 +37,7 @@ data class IncomingEntity(
 @Entity(
     tableName = "adsTab", indices = [
         Index(value = ["adId"], unique = true), Index(value = ["chatId", "messageId"], unique = true),
-        Index(value = ["status", "sourceCreatedAt", "id"]),
+        Index(value = ["status", "timestamp", "id"]),
         Index(value = ["status", "location", "typeOfRealty", "currency", "price"]),
     ]
 )
@@ -66,9 +66,7 @@ data class AdEntity(
     val floor: Int? = null, val totalFloors: Int? = null,
     val photos: String = "[]",
     val status: ListingStatus = ListingStatus.NeedsReview,
-    val sourceCreatedAt: Long, val createdAt: Long,
-    val updatedAt: Long,
-    val publishedAt: Long? = null,
+    val timestamp: Long,
 )
 
 @Entity(

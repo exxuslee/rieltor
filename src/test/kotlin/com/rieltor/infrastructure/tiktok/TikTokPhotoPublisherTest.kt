@@ -1,6 +1,6 @@
 package com.rieltor.infrastructure.tiktok
 
-import com.rieltor.application.orchestration.PublicationContext
+import com.rieltor.application.port.PublicationContext
 import com.rieltor.domain.model.StoredTokens
 import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.domain.repository.TikTokRepository

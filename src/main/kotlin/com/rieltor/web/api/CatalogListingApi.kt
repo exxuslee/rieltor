@@ -58,8 +58,7 @@ class CatalogListingApi(
             json.decodeFromString(row.tags),
             json.parseToJsonElement(row.primeParams).jsonObject,
             json.parseToJsonElement(row.secondaryParams).jsonObject,
-            row.createdAt,
-            row.sourceCreatedAt,
+            row.timestamp,
         )
     }
 

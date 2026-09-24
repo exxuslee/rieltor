@@ -6,11 +6,11 @@ data class CatalogListingRow(
     val address: String?, val typeOfRealty: String?, val price: Long?, val currency: String?,
     val areaM2: Double?, val landAreaSotka: Double?, val rooms: Int?, val floor: Int?, val totalFloors: Int?,
     val photos: String, val governmentPrograms: String, val tags: String,
-    val primeParams: String, val secondaryParams: String, val createdAt: Long, val sourceCreatedAt: Long,
+    val primeParams: String, val secondaryParams: String, val timestamp: Long,
 ) {
     companion object {
         const val COLUMNS = "id, title, description, rawText, location, address, typeOfRealty, price, currency, " +
                 "areaM2, landAreaSotka, rooms, floor, totalFloors, photos, governmentPrograms, tags, " +
-                "primeParams, secondaryParams, createdAt, sourceCreatedAt"
+                "primeParams, secondaryParams, timestamp"
     }
 }

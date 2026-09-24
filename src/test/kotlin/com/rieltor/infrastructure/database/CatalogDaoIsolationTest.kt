@@ -18,7 +18,7 @@ import kotlin.test.*
 class CatalogDaoIsolationTest {
     private fun ad() = AdEntity(
         chatId = -100, messageId = 1, adId = "ad", messageThreadId = 0,
-        sourceRevision = "revision", sourceCreatedAt = 100, createdAt = 100, updatedAt = 100,
+        sourceRevision = "revision", timestamp = 100,
         title = "House", status = ListingStatus.Active, price = 80000, currency = "USD",
     )
 
@@ -65,7 +65,7 @@ class CatalogDaoIsolationTest {
             assertEquals(before, repo.listing(id))
             val published = assertNotNull(repo.repost(id))
             assertEquals(600L, published.tiktokRepostedAt)
-            repo.save(assertNotNull(before).copy(title = "Edited", updatedAt = 700))
+            repo.save(assertNotNull(before).copy(title = "Edited"))
             assertEquals(published, repo.repost(id))
             assertNull(repo.nextRepost(true, false))
         }

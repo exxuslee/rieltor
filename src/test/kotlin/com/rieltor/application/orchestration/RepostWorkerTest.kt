@@ -27,12 +27,12 @@ class RepostWorkerTest {
                 val valid = AdEntity(
                     adId = "valid", chatId = -1, messageId = 1, messageThreadId = 1,
                     sourceRevision = "1", title = "Valid", price = 10000, currency = "USD",
-                    sourceCreatedAt = 1, createdAt = 1, updatedAt = 1, status = ListingStatus.Active,
+                    timestamp = 1, status = ListingStatus.Active,
                     photos = Json.encodeToString(listOf(CatalogPhoto(fileName, "file", "1", 1, 1, "hash")))
                 )
                 val validId = repo.save(valid)
                 val invalidId = repo.save(valid.copy(
-                    adId = "invalid", messageId = 2, sourceCreatedAt = 2,
+                    adId = "invalid", messageId = 2, timestamp = 2,
                     photos = if (invalidPhotos) "broken" else valid.photos,
                     primeParams = if (invalidPhotos) valid.primeParams else "broken",
                 ))
@@ -71,7 +71,7 @@ class RepostWorkerTest {
             val id = repo.save(AdEntity(
                 adId = "draft", chatId = -1, messageId = 1, messageThreadId = 1,
                 sourceRevision = "1", title = "Draft", price = 10000, currency = "USD",
-                sourceCreatedAt = 1, createdAt = 1, updatedAt = 1, status = ListingStatus.Active,
+                timestamp = 1, status = ListingStatus.Active,
                 photos = Json.encodeToString(listOf(CatalogPhoto(fileName, "file", "1", 1, 1, "hash")))
             ))
             var blocked = true
@@ -121,7 +121,7 @@ class RepostWorkerTest {
                 AdEntity(
                     adId = "ad$message", chatId = -1, messageId = message, messageThreadId = 1,
                     sourceRevision = "1", title = "Listing $message", price = 10000, currency = "USD",
-                    sourceCreatedAt = message, createdAt = message, updatedAt = message, status = ListingStatus.Active,
+                    timestamp = message, status = ListingStatus.Active,
                     photos = Json.encodeToString(listOf(CatalogPhoto(fileName, "file", "1", 1, 1, "hash")))
                 )
             )

@@ -18,7 +18,7 @@ import java.nio.file.attribute.PosixFilePermission
 
 @Database(
     entities = [IncomingEntity::class, AdEntity::class, RepostEntity::class],
-    version = 28,
+    version = 29,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -152,6 +152,16 @@ private val migrations = arrayOf(
             }
             connection.execSQL("CREATE INDEX index_repostTab_tiktokStatus ON repostTab(tiktokStatus)")
             connection.execSQL("CREATE INDEX index_repostTab_threadsStatus ON repostTab(threadsStatus)")
+        }
+    },
+    object : Migration(28, 29) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("DROP INDEX index_adsTab_status_sourceCreatedAt_id")
+            connection.execSQL("ALTER TABLE adsTab RENAME COLUMN sourceCreatedAt TO timestamp")
+            listOf("createdAt", "updatedAt", "publishedAt").forEach { column ->
+                connection.execSQL("ALTER TABLE adsTab DROP COLUMN $column")
+            }
+            connection.execSQL("CREATE INDEX index_adsTab_status_timestamp_id ON adsTab(status, timestamp, id)")
         }
     },
 )

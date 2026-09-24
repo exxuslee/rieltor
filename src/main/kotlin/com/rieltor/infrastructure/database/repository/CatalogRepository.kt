@@ -48,14 +48,14 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         )
         dao.saveSource(row)
         dao.listingForSource(message.chatId, message.messageId)
-            ?.let { dao.saveAd(it.copy(status = ListingStatus.Hidden, updatedAt = now)) }
+            ?.let { dao.saveAd(it.copy(status = ListingStatus.Hidden)) }
     }
 
     fun delete(chatId: Long, messageId: Long, now: Long) = transaction { dao ->
         val row = dao.source(chatId, messageId) ?: return@transaction
         dao.saveSource(row.copy(status = IncomingStatus.Deleted))
         dao.listingForSource(row.chatId, row.messageId)
-            ?.let { dao.saveAd(it.copy(status = ListingStatus.Hidden, updatedAt = now)) }
+            ?.let { dao.saveAd(it.copy(status = ListingStatus.Hidden)) }
     }
 
     fun source(chatId: Long, messageId: Long) = transaction { it.source(chatId, messageId) }
@@ -99,7 +99,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         val before = files(sources, listings)
         val expired = listings.filter { listing ->
             maxOf(
-                listing.sourceCreatedAt,
+                listing.timestamp,
                 sources.filter { (it.chatId == listing.chatId && it.messageId == listing.messageId) }
                     .maxOfOrNull { maxOf(it.sourceCreatedAt, it.sourceEditedAt) } ?: 0) < cutoff
         }
@@ -191,9 +191,9 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
             }
             // Same source is an edit; different posts are duplicates only when their adId matches.
             val matches = dao.promotionMatches(prepared.chatId, prepared.messageId, prepared.adId)
-            val old = matches.maxByOrNull { it.sourceCreatedAt }
+            val old = matches.maxByOrNull { it.timestamp }
             // An old queued/replayed message must not overwrite a newer price or extend its lifetime.
-            if (old != null && old.sourceCreatedAt > prepared.sourceCreatedAt) {
+            if (old != null && old.timestamp > prepared.timestamp) {
                 if (old.chatId != prepared.chatId || old.messageId != prepared.messageId) {
                     dao.deleteSource(prepared.chatId, prepared.messageId)
                 }
@@ -203,7 +203,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
             matches.filter { (it.chatId != prepared.chatId || it.messageId != prepared.messageId) }
                 .forEach { dao.deleteSource(it.chatId, it.messageId) }
             val listingRow = if (old == null) prepared else prepared.copy(
-                id = old.id, createdAt = old.createdAt, publishedAt = old.publishedAt ?: now,
+                id = old.id,
             )
             dao.saveListing(validate(listingRow))
             dao.saveSource(current.copy(status = IncomingStatus.Promoted))

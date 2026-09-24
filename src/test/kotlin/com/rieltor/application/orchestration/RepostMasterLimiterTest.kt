@@ -1,61 +1,39 @@
 package com.rieltor.application.orchestration
-
-import com.rieltor.infrastructure.database.local.RoomDatabaseStore
-import com.rieltor.infrastructure.database.repository.TikTokRepositoryImpl
-import kotlinx.coroutines.runBlocking
+import com.rieltor.application.service.CatalogRepostMasterLimiter
+import com.rieltor.infrastructure.config.JsonSettingsStore
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class RepostMasterLimiterTest {
-    @Test
-    fun `shared TikTok block pauses the global FIFO master limiter`() = runBlocking {
-        val path = Files.createTempDirectory("master-global-block-test").resolve("rieltor.db")
-        var clock = 1_000L
-        val delays = mutableListOf<Long>()
-
-        RoomDatabaseStore(path).use { database ->
-            val repository = TikTokRepositoryImpl(database)
-            repository.blockUntil(clock + 86_400_000L)
-            PersistentRepostMasterLimiter(
-                repository = repository,
-                maxMessagesPer24Hours = 36,
-                minIntervalMillis = 0,
-                nowMillis = { clock },
-                delayMillis = { wait -> delays += wait; clock += wait },
-            ).awaitSlot()
+    @Test fun `shared block prevents reservations until it expires`() {
+        JsonSettingsStore(Files.createTempDirectory("limiter-block").resolve("settings.json")).use { settings ->
+            settings.update { it.copy(blockedUntil = 86_401_000, minIntervalMs = 0) }
+            val limiter = CatalogRepostMasterLimiter(settings)
+            assertEquals(86_400_000L, limiter.waitUntilMillis(1000))
+            assertEquals(86_400_000L, limiter.reserve("blocked", 1, 1000))
+            assertTrue(settings.snapshot().slotReservations.isEmpty())
+            assertEquals(0L, limiter.reserve("allowed", 1, 86_401_000))
+            assertEquals(1, settings.snapshot().slotReservations.size)
         }
-
-        assertEquals(listOf(86_400_000L), delays)
     }
-
-    @Test
-    fun `master limiter spaces FIFO messages and enforces a rolling window after restart`() = runBlocking {
-        val path = Files.createTempDirectory("master-limiter-test").resolve("rieltor.db")
-        var clock = 0L
-        val delays = mutableListOf<Long>()
-
-        RoomDatabaseStore(path).use { database ->
-            val limiter = PersistentRepostMasterLimiter(
-                repository = TikTokRepositoryImpl(database),
-                maxMessagesPer24Hours = 2,
-                minIntervalMillis = 10,
-                nowMillis = { clock },
-                delayMillis = { wait -> delays += wait; clock += wait },
-            )
-            limiter.awaitSlot()
-            limiter.awaitSlot()
+    @Test fun `spacing and rolling quota survive restart without duplicate reservations`() {
+        val path = Files.createTempDirectory("limiter-restart").resolve("settings.json")
+        JsonSettingsStore(path).use { settings ->
+            settings.update { it.copy(minIntervalMs = 10, maxMessagesPer24Hours = 2) }
+            val limiter = CatalogRepostMasterLimiter(settings)
+            assertEquals(0L, limiter.reserve("first", 1, 0))
+            assertEquals(10L, limiter.reserve("second", 2, 0))
+            assertEquals(0L, limiter.reserve("second", 2, 10))
+            assertEquals(0L, limiter.reserve("second", 2, 10))
+            assertEquals(2, settings.snapshot().slotReservations.size)
         }
-        RoomDatabaseStore(path).use { database ->
-            PersistentRepostMasterLimiter(
-                repository = TikTokRepositoryImpl(database),
-                maxMessagesPer24Hours = 2,
-                minIntervalMillis = 10,
-                nowMillis = { clock },
-                delayMillis = { wait -> delays += wait; clock += wait },
-            ).awaitSlot()
+        JsonSettingsStore(path).use { settings ->
+            val limiter = CatalogRepostMasterLimiter(settings)
+            assertEquals(86_399_990L, limiter.waitUntilMillis(10))
+            assertEquals(86_399_990L, limiter.reserve("third", 3, 10))
+            assertEquals(0L, limiter.reserve("third", 3, 86_400_000))
         }
-
-        assertEquals(listOf(10L, PersistentRepostMasterLimiter.WINDOW_MILLIS - 10L), delays)
     }
 }

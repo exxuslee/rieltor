@@ -44,7 +44,7 @@
             return codes.join(',');
         },
         telegramDate: item => {
-            const timestamp = Number(item.sourceCreatedAt);
+            const timestamp = Number(item.timestamp);
             if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
             const date = new Date(timestamp);
             if (!Number.isFinite(date.getTime())) return null;

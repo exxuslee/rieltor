@@ -12,9 +12,7 @@ data class PublicListing(
     val area: Double?, val rooms: Int?, val floor: String?, val landAreaSotka: Double?,
     val image: String, val photos: List<String>, val governmentPrograms: List<String>,
     val tags: List<String>, val primeParams: JsonObject, val secondaryParams: JsonObject,
-    // Keep the existing API key while the database uses the clearer createdAt name.
-    val cdt: Long,
-    val sourceCreatedAt: Long,
+    val timestamp: Long,
 )
 
 @Serializable

@@ -45,8 +45,7 @@ class CatalogListingMapper(
             landAreaSotka = result.landAreaSotka, rooms = result.rooms,
             floor = result.floor, totalFloors = result.totalFloors,
             status = if (result.readyForPublication) ListingStatus.Active else ListingStatus.NeedsReview,
-            sourceCreatedAt = maxOf(row.sourceCreatedAt, row.sourceEditedAt),
-            createdAt = now, updatedAt = now, publishedAt = now.takeIf { result.readyForPublication },
+            timestamp = maxOf(row.sourceCreatedAt, row.sourceEditedAt),
         )
     }
 }

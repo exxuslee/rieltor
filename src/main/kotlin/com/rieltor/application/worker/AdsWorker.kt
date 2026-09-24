@@ -199,7 +199,7 @@ class AdsWorker(
                     media.resolve(photo.fileName)?.let {
                         Files.setLastModifiedTime(
                             it,
-                            FileTime.fromMillis(parsed.sourceCreatedAt)
+                            FileTime.fromMillis(parsed.timestamp)
                         )
                     }
                 }

@@ -29,7 +29,7 @@ internal interface CatalogDao {
     @Query("SELECT * FROM adsTab WHERE chatId=:chat AND messageId IS :message")
     suspend fun listingForSource(chat: Long, message: Long?): AdEntity?
 
-    @Query("SELECT * FROM adsTab ORDER BY sourceCreatedAt DESC, id DESC")
+    @Query("SELECT * FROM adsTab ORDER BY timestamp DESC, id DESC")
     suspend fun listings(): List<AdEntity>
 
     @Query("""
@@ -39,7 +39,7 @@ internal interface CatalogDao {
             r.tiktokState AS repost_tiktokState, r.threadsState AS repost_threadsState
         FROM adsTab JOIN repostTab r ON r.id=adsTab.id
         WHERE status='ACTIVE' AND ((:tiktok AND tiktokStatus='PENDING') OR (:threads AND threadsStatus='PENDING'))
-        ORDER BY sourceCreatedAt DESC, adsTab.id DESC LIMIT 1
+        ORDER BY timestamp DESC, adsTab.id DESC LIMIT 1
     """)
     suspend fun nextRepost(tiktok: Boolean, threads: Boolean): RepostCandidate?
 
