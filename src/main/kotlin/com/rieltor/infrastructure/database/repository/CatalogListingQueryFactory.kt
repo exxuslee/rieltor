@@ -30,15 +30,20 @@ object CatalogListingQueryFactory {
         if (filter.programs.isNotEmpty()) {
             add(
                 "EXISTS (SELECT 1 FROM json_each(adsTab.governmentPrograms) " +
-                    "WHERE value IN (${placeholders(filter.programs.size)}))",
+                        "WHERE value IN (${placeholders(filter.programs.size)}))",
                 *filter.programs.toTypedArray(),
             )
         }
         filter.priceMin?.let { add("price >= ?", it) }
         filter.priceMax?.let { add("price <= ?", it) }
         filter.rooms?.let { add("rooms = ?", it) }
-        filter.search?.let {
-            add("(instr(lower(title), lower(?)) > 0 OR instr(lower(COALESCE(address,'')), lower(?)) > 0)", it, it)
+        filter.search?.lowercase()?.split(Regex("\\s+"))?.filter { it.isNotEmpty() }?.distinct()?.forEach { word ->
+            // SQLite lower() handles ASCII only. Fold Ukrainian/Russian capitals explicitly.
+            val text = word.filter { it in "абвгґдеєёжзиіїйклмнопрстуфхцчшщъыьэюя" }.toSet()
+                .fold("lower(COALESCE(rawText,''))") { sql, letter ->
+                    "replace($sql, '${letter.uppercaseChar()}', '$letter')"
+                }
+            add("instr($text, ?) > 0", word)
         }
         filter.cursor?.let { cursor ->
             val comparison = if (filter.sort.ascending) ">" else "<"
@@ -50,8 +55,8 @@ object CatalogListingQueryFactory {
 
         val direction = if (filter.sort.ascending) "ASC" else "DESC"
         val sql = "SELECT ${CatalogListingRow.COLUMNS} FROM adsTab " +
-            "WHERE ${conditions.joinToString(" AND ")} " +
-            "ORDER BY ${filter.sort.column} $direction, id DESC LIMIT ?"
+                "WHERE ${conditions.joinToString(" AND ")} " +
+                "ORDER BY ${filter.sort.column} $direction, id DESC LIMIT ?"
         val values = arguments + (filter.limit + 1).toLong()
 
         return RoomRawQuery(sql) { statement ->

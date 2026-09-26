@@ -22,6 +22,25 @@ class CatalogDaoIsolationTest {
         title = "House", status = ListingStatus.Active, price = 80000, currency = "USD",
     )
 
+    @Test fun `catalog searches all raw text words ignoring Cyrillic case and combines filters`() {
+        val path = Files.createTempDirectory("catalog-search").resolve("test.db")
+        RoomDatabaseStore(path).use { db ->
+            val repo = CatalogRepository(db)
+            repo.save(ad().copy(rawText = "ІРПІНЬ: ТЕРАСА та паркінг, знижка 5%_!"))
+            val api = CatalogListingApi("https://example.test", CatalogQueryService(repo))
+            fun count(query: String, max: String = "90000") = api.list(parametersOf(
+                "query" to listOf(query), "priceMax" to listOf(max),
+            )).items.size
+            assertEquals(1, count("  ПАРКІНГ   ірпінь тераса  "))
+            assertEquals(0, count("тераса басейн"))
+            assertEquals(0, count("House"))
+            assertEquals(0, count("тераса", "70000"))
+            assertEquals(1, count("5%_"))
+            assertEquals(0, count("' OR 1=1 --"))
+            assertEquals(1, count("   "))
+        }
+    }
+
     @Test fun `catalog reads work without the repost table`() {
         val path = Files.createTempDirectory("catalog-isolation").resolve("test.db")
         RoomDatabaseStore(path).use { db ->
