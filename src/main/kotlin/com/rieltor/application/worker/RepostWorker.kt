@@ -76,18 +76,22 @@ class RepostWorker(
         require(id > 0) { "Expected a positive adsTab.id" }
         val row = checkNotNull(repository.listing(id)) { "adsTab.id=$id was not found" }
         check(row.status == ListingStatus.Active) { "adsTab.id=$id is not ACTIVE" }
+
         val publisher = publishers.single { it.destination == RepostDestination.TIKTOK }
         // Validate local inputs before creating a persistent attempt.
         photoUrls(row, publisher.maxPhotoCount)
         captionFormatter.forCatalog(row, settings.snapshot().repostContactPhone)
+
         val attemptId = repository.prepareManual(id, publisher.destination, now())
         publishToDestination(RepostAttempt(row, attemptId, listOf(publisher)), publisher)
         val state = repository.publication(checkNotNull(repository.repost(id)), publisher.destination)
         val result = state.attempts.single { it.attemptId == attemptId }
+
         check(result.status in setOf(RepostStatus.Published, RepostStatus.DeliveredDraft)) {
             "TikTok repost incomplete: adsTab.id=$id, status=${result.status.code}, " +
-                "publishId=${result.publishId}, error=${result.error}"
+                    "publishId=${result.publishId}, error=${result.error}"
         }
+
         return result
     }
 
