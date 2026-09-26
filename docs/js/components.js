@@ -1,3 +1,17 @@
+// Count a browser once per calendar day on the server. Never block the site on analytics.
+(() => {
+    if (navigator.webdriver || document.body?.dataset.page === 'statistics') return;
+    try {
+        let id = localStorage.getItem('site-visitor-id');
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id || '')) {
+            id = crypto.randomUUID(); localStorage.setItem('site-visitor-id', id);
+        }
+        const base = document.querySelector('meta[name="catalog-api"]')?.content ||
+            (['localhost', '127.0.0.1'].includes(location.hostname) ? 'http://localhost:8080' : 'https://api.rieltor.dpdns.org');
+        fetch(`${base}/api/visits/${encodeURIComponent(id)}`, {method: 'POST', keepalive: true}).catch(() => {});
+    } catch (_) { /* Storage may be disabled; avoid counting every page as a new visitor. */ }
+})();
+
 const icon = (name) => {
     const paths = {
         sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/>',

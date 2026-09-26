@@ -12,6 +12,7 @@ import java.nio.file.Path
 import kotlin.test.*
 
 class AdsTabMigrationTest {
+    @Test fun `v29 migration preserves catalog and backfills statistics`() = checkMigration(29)
     @Test fun `v25 migration preserves listing fields and catalog queries`() = checkMigration(25)
     @Test fun `v27 migration separates repost fields without data loss`() = checkMigration(27)
 
@@ -66,7 +67,7 @@ class AdsTabMigrationTest {
                 }
                 if (name == "listings" || name == "adsTab" || name == "repostTab") {
                     val values = mapOf("id" to "42", "chatId" to "-100", "messageId" to "7", "adId" to "'test-ad'",
-                        "sourceCreatedAt" to "1111", "createdAt" to "2222", "updatedAt" to "3333", "publishedAt" to "4444",
+                        "sourceCreatedAt" to "1111", "timestamp" to "1111", "createdAt" to "2222", "updatedAt" to "3333", "publishedAt" to "4444",
                         "status" to "'ACTIVE'", "price" to "80000", "currency" to "'USD'",
                         "governmentPrograms" to "'[\"TEST\"]'", "tiktokRepostedAt" to "1234",
                         "tiktokStatus" to "'PUBLISHED'", "threadsStatus" to "'PENDING'",
@@ -90,6 +91,14 @@ class AdsTabMigrationTest {
             assertEquals(42L, repo.listings().single().id)
             assertEquals(1111L, repo.listings().single().timestamp)
             assertEquals(42L, repo.publicListing(42)?.id)
+            db.blocking { room ->
+                val counts = room.statisticsDao().counts(null).associate { it.kind to it.count }
+                assertEquals(1L, counts["RECEIVED"])
+                assertEquals(1L, counts["ACCEPTED"])
+                assertEquals(1L, counts["TIKTOK"])
+                assertEquals(1L, counts["THREADS"])
+                assertTrue(room.statisticsDao().counts(0).none { it.kind == "ACCEPTED" })
+            }
             db.blocking { room ->
                 val dao = room.catalogDao()
                 assertEquals(42L, dao.query(CatalogListingQueryFactory.create(CatalogFilter(programs = listOf("TEST")))).single().id)

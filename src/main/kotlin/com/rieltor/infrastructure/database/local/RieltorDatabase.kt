@@ -7,9 +7,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
-import com.rieltor.infrastructure.database.model.AdEntity
-import com.rieltor.infrastructure.database.model.IncomingEntity
-import com.rieltor.infrastructure.database.model.RepostEntity
+import com.rieltor.infrastructure.database.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
@@ -17,17 +15,34 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
 
 @Database(
-    entities = [IncomingEntity::class, AdEntity::class, RepostEntity::class],
-    version = 29,
+    entities = [IncomingEntity::class, AdEntity::class, RepostEntity::class, StatisticsEvent::class, SiteVisitor::class],
+    version = 30,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
     abstract fun catalogDao(): CatalogDao
+    abstract fun statisticsDao(): StatisticsDao
 }
 
 // Migrations up to 22 intentionally keep the historical table name `incoming_telegram_messages`:
 // it is what the schema was called at those versions. The table becomes `incomeTab` in 22 -> 23.
 private val migrations = arrayOf(
+    object : Migration(29, 30) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("CREATE TABLE IF NOT EXISTS statisticsEvents (kind TEXT NOT NULL, sourceKey TEXT NOT NULL, chatId INTEGER NOT NULL, messageId INTEGER, listingId INTEGER, adId TEXT, occurredAt INTEGER, PRIMARY KEY(kind, sourceKey))")
+            connection.execSQL("CREATE INDEX index_statisticsEvents_occurredAt ON statisticsEvents(occurredAt)")
+            connection.execSQL("CREATE TABLE IF NOT EXISTS siteVisitors (day TEXT NOT NULL, visitorId TEXT NOT NULL, PRIMARY KEY(day, visitorId))")
+            // Historical receipt/acceptance times are unknown; include these rows only in all-time totals.
+            connection.execSQL("INSERT OR IGNORE INTO statisticsEvents SELECT 'RECEIVED', chatId || ':' || messageId, chatId, messageId, NULL, NULL, NULL FROM incomeTab WHERE messageId IS NOT NULL")
+            connection.execSQL("INSERT OR IGNORE INTO statisticsEvents SELECT 'PROCESSED', chatId || ':' || messageId, chatId, messageId, NULL, NULL, NULL FROM incomeTab WHERE messageId IS NOT NULL AND status IN ('PROMOTED','NEEDS_REVIEW')")
+            for (kind in listOf("RECEIVED", "PROCESSED", "ACCEPTED")) {
+                connection.execSQL("INSERT OR IGNORE INTO statisticsEvents SELECT '$kind', chatId || ':' || COALESCE(messageId, 'ad-' || id), chatId, messageId, id, adId, NULL FROM adsTab")
+            }
+            for ((kind, column) in listOf("TIKTOK" to "tiktokRepostedAt", "THREADS" to "threadsRepostedAt")) {
+                connection.execSQL("INSERT OR IGNORE INTO statisticsEvents SELECT '$kind', a.adId, a.chatId, a.messageId, a.id, a.adId, r.$column FROM adsTab a JOIN repostTab r ON a.id=r.id WHERE r.$column IS NOT NULL")
+            }
+        }
+    },
     object : Migration(17, 18) {
         override fun migrate(connection: SQLiteConnection) {
             connection.execSQL("ALTER TABLE listings ADD COLUMN rawText TEXT NOT NULL DEFAULT ''")

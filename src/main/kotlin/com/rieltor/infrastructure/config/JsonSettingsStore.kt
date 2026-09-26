@@ -19,6 +19,7 @@ data class SlotReservation(val attemptId: String, val listingId: Long, val reser
 data class MonitoredTelegramChat(
     val chatId: Long,
     val messageThreadIds: List<Long> = emptyList(),
+    val name: String = "",
 )
 
 @Serializable

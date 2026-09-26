@@ -106,6 +106,18 @@ class TelegramClientAdapter(
                     scope.launch {
                         delay(STARTUP_MONITORING_LOG_DELAY_MILLIS.milliseconds)
                         client?.let(diagnostics::logStartupSnapshot)
+                        client?.let { telegram ->
+                            monitoredTopics.map { it.chatId }.distinct().forEach { chatId ->
+                                telegram.send(TdApi.GetChat(chatId)).whenComplete { chat, error ->
+                                    if (error == null && chat != null) {
+                                        settings.update { current -> current.copy(monitoredTelegramChats =
+                                            current.monitoredTelegramChats.map {
+                                                if (it.chatId == chatId && it.name.isBlank()) it.copy(name = chat.title) else it
+                                            }) }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

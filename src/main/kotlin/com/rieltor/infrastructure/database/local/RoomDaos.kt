@@ -65,7 +65,19 @@ internal interface CatalogDao {
     suspend fun saveAd(row: AdEntity): Long
 
     @Upsert
-    suspend fun saveRepost(row: RepostEntity)
+    suspend fun persistRepost(row: RepostEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun recordStatistic(event: StatisticsEvent)
+
+    @Transaction
+    suspend fun saveRepost(row: RepostEntity) {
+        persistRepost(row)
+        val ad = listing(row.id) ?: return
+        listOf("TIKTOK" to row.tiktokRepostedAt, "THREADS" to row.threadsRepostedAt).forEach { (kind, time) ->
+            if (time != null) recordStatistic(StatisticsEvent(kind, ad.adId, ad.chatId, ad.messageId, ad.id, ad.adId, time))
+        }
+    }
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun initializeRepost(row: RepostEntity)

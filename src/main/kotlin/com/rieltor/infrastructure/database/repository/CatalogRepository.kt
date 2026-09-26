@@ -22,6 +22,12 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         room.useWriterConnection { it.immediateTransaction { block(room.catalogDao()) } }
     }
 
+    private suspend fun record(kind: String, row: IncomingEntity, now: Long, listingId: Long? = null, adId: String? = null) {
+        database.room.statisticsDao().record(com.rieltor.infrastructure.database.model.StatisticsEvent(
+            kind, row.chatId.toString() + ":" + row.messageId, row.chatId, row.messageId, listingId, adId, now
+        ))
+    }
+
     fun receive(message: SourceMessage, now: Long, stabilityMs: Long) = transaction { dao ->
         val old = dao.source(message.chatId, message.messageId)
         if (old?.contentHash == message.fingerprint() || old?.status == IncomingStatus.Deleted) {
@@ -47,6 +53,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
             else json.encodeToString(message.photos),
         )
         dao.saveSource(row)
+        record("RECEIVED", row, now)
         dao.listingForSource(message.chatId, message.messageId)
             ?.let { dao.saveAd(it.copy(status = ListingStatus.Hidden)) }
     }
@@ -75,6 +82,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     fun discard(row: IncomingEntity): Boolean = transaction { dao ->
         val current = dao.source(row.chatId, row.messageId ?: return@transaction false) ?: return@transaction false
         if (revision(current) != revision(row)) return@transaction false
+        record("PROCESSED", current, System.currentTimeMillis())
         dao.listingForSource(row.chatId, row.messageId)?.let { dao.deleteListing(it.id) }
         dao.deleteSource(row.chatId, row.messageId)
         true
@@ -145,6 +153,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         transaction { dao ->
             val current = dao.source(row.chatId, row.messageId ?: return@transaction false) ?: return@transaction false
             if (revision(current) != revision(row) || current.status == IncomingStatus.Deleted) return@transaction false
+            if (status == IncomingStatus.NeedsReview) record("PROCESSED", current, now)
             dao.saveSource(
                 current.copy(
                     status = status,
@@ -189,6 +198,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
             if (revision(current) != revision(row) || current.status != IncomingStatus.Downloading) {
                 return@transaction false
             }
+            record("PROCESSED", current, now)
             // Same source is an edit; different posts are duplicates only when their adId matches.
             val matches = dao.promotionMatches(prepared.chatId, prepared.messageId, prepared.adId)
             val old = matches.maxByOrNull { it.timestamp }
@@ -205,7 +215,8 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
             val listingRow = if (old == null) prepared else prepared.copy(
                 id = old.id,
             )
-            dao.saveListing(validate(listingRow))
+            val acceptedId = dao.saveListing(validate(listingRow))
+            record("ACCEPTED", current, now, acceptedId, listingRow.adId)
             dao.saveSource(current.copy(status = IncomingStatus.Promoted))
             true
         }

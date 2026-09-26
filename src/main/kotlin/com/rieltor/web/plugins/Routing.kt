@@ -19,7 +19,7 @@ fun Application.configureRouting() {
     val catalog = get<CatalogListingApi>()
 
     routing {
-        systemRoutes()
+        systemRoutes(com.rieltor.application.service.StatisticsService(get()))
         verificationRoutes(verificationFiles)
         mediaRoutes(mediaStorage)
         oauthRoutes(oauth)

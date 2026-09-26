@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width,initial-scale=1" name="viewport">
+    <meta content="noindex,nofollow" name="robots">
+    <meta content="Статистика отриманих повідомлень, активних оголошень, репостів TikTok і Threads та відвідувачів сайту." name="description">
+    <title>Статистика каналів | Ірина Ліннік</title>
+    <script src="js/theme.js"></script>
+    <link href="css/styles.css?v=8.4" rel="stylesheet">
+    <link href="css/statistics.css" rel="stylesheet">
+    <script defer src="js/components.js"></script>
+    <script defer src="js/statistics.js"></script>
+</head>
+<body data-page="statistics">
+<site-header></site-header>
+<main class="container statistics-page">
+    <p class="stats-eyebrow">ОГЛЯД РОБОТИ</p>
+    <div class="stats-heading"><div><h1>Канали та публікації</h1><p>Від першого повідомлення до оголошення й репосту.</p></div><button id="refresh" type="button">Оновити дані</button></div>
+    <p aria-live="polite" id="stats-status" role="status">Завантажуємо статистику…</p>
+    <section aria-label="Відвідувачі сайту" class="stats-cards">
+        <article><span>Відвідувачі сьогодні</span><strong id="visitors-day">—</strong></article>
+        <article><span>Відвідувачі цього місяця</span><strong id="visitors-month">—</strong></article>
+        <article><span>Відвідувачі за весь час</span><strong id="visitors-total">—</strong></article>
+    </section>
+    <p class="stats-note">Унікальні браузери за анонімним ідентифікатором. Повторні перегляди не збільшують кількість відвідувачів. Після очищення сховища браузер враховується знову.</p>
+    <section aria-labelledby="channels-heading" class="stats-panel">
+        <div class="stats-toolbar"><h2 id="channels-heading">Джерела оголошень</h2><label>Період <select id="period"><option value="day">Сьогодні</option><option value="month">Цей місяць</option><option value="total">За весь час</option></select></label></div>
+        <div aria-label="Таблиця каналів, прокручується горизонтально" class="stats-scroll" role="region" tabindex="0"><table>
+            <caption id="period-caption">Статистика повідомлень за сьогодні</caption>
+            <thead><tr><th scope="col">Канал</th><th scope="col">Отримано</th><th scope="col">Оброблено</th><th scope="col">Прийнято в AdsTab</th><th scope="col">Активні зараз</th><th scope="col">TikTok</th><th scope="col">Threads</th></tr></thead>
+            <tbody id="channels"><tr><td colspan="7">Завантаження…</td></tr></tbody>
+            <tfoot id="totals"></tfoot>
+        </table></div>
+        <p class="stats-note">Отримано — унікальні повідомлення (альбом = один допис). Оброблено — отримали результат перевірки, включно з відхиленими. Прийнято — збережені в AdsTab. Активні — поточний стан, незалежно від періоду. TikTok / Threads — оголошення з підтвердженим першим репостом.</p>
+    </section>
+    <section aria-labelledby="publications-heading" class="stats-panel">
+        <div class="stats-toolbar"><h2 id="publications-heading">Підтверджені репости</h2><span>Ідентифікатори оголошень</span></div>
+        <div aria-label="Таблиця репостів, прокручується горизонтально" class="stats-scroll" role="region" tabindex="0"><table>
+            <caption>Репости за обраний період</caption>
+            <thead><tr><th scope="col">Платформа</th><th scope="col">Канал</th><th scope="col">ID AdsTab</th><th scope="col">ID оголошення</th><th scope="col">ID повідомлення</th><th scope="col">Опубліковано</th></tr></thead>
+            <tbody id="publications"><tr><td colspan="6">Завантаження…</td></tr></tbody>
+        </table></div>
+        <div class="stats-pagination"><button disabled id="previous" type="button">Назад</button><span id="page-info"></span><button disabled id="next" type="button">Далі</button></div>
+    </section>
+    <p class="stats-note" id="historical-note"></p>
+    <p class="stats-note">День і місяць — календарні, часовий пояс Europe/Kyiv. Лічильники зберігаються після очищення каталогу. Відвідування враховуються з моменту підключення цієї статистики.</p>
+</main>
+<site-footer></site-footer>
+</body>
+</html>
