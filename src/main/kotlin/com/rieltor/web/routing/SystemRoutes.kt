@@ -14,20 +14,11 @@ fun Route.systemRoutes(statistics: StatisticsService) {
         val period = call.request.queryParameters["period"] ?: "day"
         val rawOffset = call.request.queryParameters["offset"]
         val offset = rawOffset?.toIntOrNull() ?: if (rawOffset == null) 0 else -1
-        if (period !in setOf("day", "month", "total") || offset < 0) {
+        if (period !in setOf("day", "week", "total") || offset < 0) {
             call.respondText("Invalid period or offset", status = HttpStatusCode.BadRequest)
             return@get
         }
         call.response.header(HttpHeaders.CacheControl, "no-store")
         call.respondText(statisticsJson.encodeToString(statistics.snapshot(period, offset)), ContentType.Application.Json)
-    }
-    post("/api/visits/{visitorId}") {
-        val visitorId = call.parameters["visitorId"].orEmpty()
-        if (!Regex("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}").matches(visitorId)) {
-            call.respond(HttpStatusCode.BadRequest)
-            return@post
-        }
-        statistics.visit(visitorId)
-        call.respond(HttpStatusCode.NoContent)
     }
 }

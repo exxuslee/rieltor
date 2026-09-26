@@ -20,7 +20,6 @@
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             if (controller !== request) return;
-            ['day', 'month', 'total'].forEach(key => { $(`visitors-${key}`).textContent = number(data.visitors[key]); });
             $('channels').replaceChildren();
             const totals = Object.fromEntries(fields.map(key => [key, 0]));
             data.channels.forEach(channel => {
@@ -28,6 +27,15 @@
                 id.textContent = channel.chatId; name.append(id);
                 fields.forEach(key => { const value = key === 'active' ? channel.active : channel[period][key]; cell(row, number(value)); totals[key] += value; });
                 $('channels').append(row);
+                row.classList.add('stats-channel-row');
+                (channel.topics || []).forEach(topic => {
+                    const topicRow = document.createElement('tr'); topicRow.className = 'stats-topic-row';
+                    const topicName = cell(topicRow, topic.name), topicId = document.createElement('small');
+                    topicId.textContent = topic.messageThreadId == null ? 'Історичні записи' : `ID підгрупи: ${topic.messageThreadId}`;
+                    topicName.append(topicId);
+                    fields.forEach(key => cell(topicRow, number(key === 'active' ? topic.active : topic[period][key])));
+                    $('channels').append(topicRow);
+                });
             });
             if (!data.channels.length) empty($('channels'), 7, 'Канали ще не додані.');
             const total = document.createElement('tr'); cell(total, 'Усього'); fields.forEach(key => cell(total, number(totals[key]))); $('totals').append(total);
@@ -36,7 +44,8 @@
             data.publications.forEach(publication => {
                 const row = document.createElement('tr');
                 const platform = document.createElement('span'); platform.className = 'stats-platform'; platform.textContent = publication.platform === 'TIKTOK' ? 'TikTok' : 'Threads'; cell(row, '').append(platform);
-                cell(row, data.channels.find(channel => channel.chatId === publication.chatId)?.name || publication.chatId);
+                const source = cell(row, data.channels.find(channel => channel.chatId === publication.chatId)?.name || publication.chatId);
+                const topic = document.createElement('small'); topic.textContent = publication.topicName; source.append(topic);
                 cell(row, publication.listingId); cell(row, publication.adId); cell(row, publication.messageId);
                 cell(row, publication.publishedAt == null ? 'Час невідомий' : new Date(publication.publishedAt).toLocaleString('uk-UA', {timeZone: data.timezone}));
                 $('publications').append(row);
@@ -50,7 +59,6 @@
             if (controller !== request) return;
             $('stats-status').dataset.error = 'true'; $('stats-status').textContent = 'Не вдалося отримати статистику. Перевірте з’єднання та натисніть «Оновити дані».';
             empty($('channels'), 7, 'Дані недоступні'); empty($('publications'), 6, 'Дані недоступні');
-            ['day', 'month', 'total'].forEach(key => { $(`visitors-${key}`).textContent = '—'; });
         } finally { clearTimeout(timeout); if (controller === request) $('refresh').disabled = false; }
     }
     $('refresh').addEventListener('click', load);

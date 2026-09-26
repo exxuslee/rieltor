@@ -7,7 +7,10 @@ import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
-import com.rieltor.infrastructure.database.model.*
+import com.rieltor.infrastructure.database.model.AdEntity
+import com.rieltor.infrastructure.database.model.IncomingEntity
+import com.rieltor.infrastructure.database.model.RepostEntity
+import com.rieltor.infrastructure.database.model.StatisticsEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
@@ -15,8 +18,8 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
 
 @Database(
-    entities = [IncomingEntity::class, AdEntity::class, RepostEntity::class, StatisticsEvent::class, SiteVisitor::class],
-    version = 30,
+    entities = [IncomingEntity::class, AdEntity::class, RepostEntity::class, StatisticsEvent::class],
+    version = 32,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -27,6 +30,25 @@ internal abstract class RieltorDatabase : RoomDatabase() {
 // Migrations up to 22 intentionally keep the historical table name `incoming_telegram_messages`:
 // it is what the schema was called at those versions. The table becomes `incomeTab` in 22 -> 23.
 private val migrations = arrayOf(
+    object : Migration(31, 32) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("DROP TABLE IF EXISTS siteVisitors")
+        }
+    },
+    object : Migration(30, 31) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE statisticsEvents ADD COLUMN messageThreadId INTEGER")
+            // Match the original source, never a reused row ID or a newer duplicate from another topic.
+            connection.execSQL("""
+                UPDATE statisticsEvents SET messageThreadId = COALESCE(
+                    (SELECT i.messageThreadId FROM incomeTab i
+                     WHERE i.chatId=statisticsEvents.chatId AND i.messageId IS statisticsEvents.messageId LIMIT 1),
+                    (SELECT a.messageThreadId FROM adsTab a
+                     WHERE a.chatId=statisticsEvents.chatId AND a.messageId IS statisticsEvents.messageId LIMIT 1)
+                )
+            """.trimIndent())
+        }
+    },
     object : Migration(29, 30) {
         override fun migrate(connection: SQLiteConnection) {
             connection.execSQL("CREATE TABLE IF NOT EXISTS statisticsEvents (kind TEXT NOT NULL, sourceKey TEXT NOT NULL, chatId INTEGER NOT NULL, messageId INTEGER, listingId INTEGER, adId TEXT, occurredAt INTEGER, PRIMARY KEY(kind, sourceKey))")

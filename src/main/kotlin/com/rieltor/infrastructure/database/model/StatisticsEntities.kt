@@ -13,9 +13,7 @@ data class StatisticsEvent(
     val listingId: Long? = null,
     val adId: String? = null,
     val occurredAt: Long?,
+    val messageThreadId: Long? = null,
 )
 
-@Entity(tableName = "siteVisitors", primaryKeys = ["day", "visitorId"])
-data class SiteVisitor(val day: String, val visitorId: String)
-
-data class ChannelCount(val chatId: Long, val kind: String, val count: Long)
+data class ChannelCount(val chatId: Long, val messageThreadId: Long?, val kind: String, val count: Long)

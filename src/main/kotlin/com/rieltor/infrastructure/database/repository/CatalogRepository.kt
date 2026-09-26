@@ -24,7 +24,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
 
     private suspend fun record(kind: String, row: IncomingEntity, now: Long, listingId: Long? = null, adId: String? = null) {
         database.room.statisticsDao().record(com.rieltor.infrastructure.database.model.StatisticsEvent(
-            kind, row.chatId.toString() + ":" + row.messageId, row.chatId, row.messageId, listingId, adId, now
+            kind, row.chatId.toString() + ":" + row.messageId, row.chatId, row.messageId, listingId, adId, now, row.messageThreadId
         ))
     }
 

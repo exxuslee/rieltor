@@ -36,7 +36,7 @@ class DatabaseResetTest {
             BundledSQLiteDriver().open(path.toString()).use { connection ->
                 connection.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'room_master_table'").use { query ->
                     val tables = buildSet { while (query.step()) add(query.getText(0)) }
-                    assertEquals(setOf("adsTab", "incomeTab", "repostTab", "statisticsEvents", "siteVisitors"), tables)
+                    assertEquals(setOf("adsTab", "incomeTab", "repostTab", "statisticsEvents"), tables)
                 }
                 connection.prepare("PRAGMA integrity_check").use {
                     assertTrue(it.step()); assertEquals("ok", it.getText(0))

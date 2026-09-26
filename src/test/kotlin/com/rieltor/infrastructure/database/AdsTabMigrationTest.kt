@@ -12,6 +12,7 @@ import java.nio.file.Path
 import kotlin.test.*
 
 class AdsTabMigrationTest {
+    @Test fun `v30 migration recovers topics and preserves unknown historical topics`() = checkMigration(30)
     @Test fun `v29 migration preserves catalog and backfills statistics`() = checkMigration(29)
     @Test fun `v25 migration preserves listing fields and catalog queries`() = checkMigration(25)
     @Test fun `v27 migration separates repost fields without data loss`() = checkMigration(27)
@@ -62,11 +63,11 @@ class AdsTabMigrationTest {
                 val data = entity.jsonObject
                 val name = data.getValue("tableName").jsonPrimitive.content
                 connection.execSQL(data.getValue("createSql").jsonPrimitive.content.replace("\${TABLE_NAME}", name))
-                data.getValue("indices").jsonArray.forEach {
+                data["indices"]?.jsonArray.orEmpty().forEach {
                     connection.execSQL(it.jsonObject.getValue("createSql").jsonPrimitive.content.replace("\${TABLE_NAME}", name))
                 }
                 if (name == "listings" || name == "adsTab" || name == "repostTab") {
-                    val values = mapOf("id" to "42", "chatId" to "-100", "messageId" to "7", "adId" to "'test-ad'",
+                    val values = mapOf("id" to "42", "chatId" to "-100", "messageId" to "7", "adId" to "'test-ad'", "messageThreadId" to "777",
                         "sourceCreatedAt" to "1111", "timestamp" to "1111", "createdAt" to "2222", "updatedAt" to "3333", "publishedAt" to "4444",
                         "status" to "'ACTIVE'", "price" to "80000", "currency" to "'USD'",
                         "governmentPrograms" to "'[\"TEST\"]'", "tiktokRepostedAt" to "1234",
@@ -83,6 +84,14 @@ class AdsTabMigrationTest {
                     connection.execSQL("INSERT INTO $name ($columns) VALUES ($literals)")
                 }
             }
+            if (version == 30) {
+                for (kind in listOf("RECEIVED", "PROCESSED", "ACCEPTED", "TIKTOK", "THREADS")) {
+                    val time = if (kind in setOf("TIKTOK", "THREADS")) "1234" else "NULL"
+                    val key = if (kind in setOf("TIKTOK", "THREADS")) "test-ad" else "-100:7"
+                    connection.execSQL("INSERT INTO statisticsEvents VALUES ('$kind', '$key', -100, 7, 42, 'test-ad', $time)")
+                }
+                connection.execSQL("INSERT INTO statisticsEvents VALUES ('RECEIVED', '-100:999', -100, 999, NULL, NULL, NULL)")
+            }
             connection.execSQL("PRAGMA user_version=$version")
         }
         val before = snapshot()
@@ -92,12 +101,15 @@ class AdsTabMigrationTest {
             assertEquals(1111L, repo.listings().single().timestamp)
             assertEquals(42L, repo.publicListing(42)?.id)
             db.blocking { room ->
-                val counts = room.statisticsDao().counts(null).associate { it.kind to it.count }
-                assertEquals(1L, counts["RECEIVED"])
+                val rows = room.statisticsDao().counts(null)
+                val counts = rows.groupBy { it.kind }.mapValues { (_, group) -> group.sumOf { it.count } }
+                assertEquals(if (version == 30) 2L else 1L, counts["RECEIVED"])
                 assertEquals(1L, counts["ACCEPTED"])
                 assertEquals(1L, counts["TIKTOK"])
                 assertEquals(1L, counts["THREADS"])
                 assertTrue(room.statisticsDao().counts(0).none { it.kind == "ACCEPTED" })
+                assertTrue(room.statisticsDao().publications(null, 50, 0).all { it.messageThreadId == 777L })
+                if (version == 30) assertEquals(1L, rows.single { it.messageThreadId == null }.count)
             }
             db.blocking { room ->
                 val dao = room.catalogDao()

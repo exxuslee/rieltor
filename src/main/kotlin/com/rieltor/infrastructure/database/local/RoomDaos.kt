@@ -75,7 +75,7 @@ internal interface CatalogDao {
         persistRepost(row)
         val ad = listing(row.id) ?: return
         listOf("TIKTOK" to row.tiktokRepostedAt, "THREADS" to row.threadsRepostedAt).forEach { (kind, time) ->
-            if (time != null) recordStatistic(StatisticsEvent(kind, ad.adId, ad.chatId, ad.messageId, ad.id, ad.adId, time))
+            if (time != null) recordStatistic(StatisticsEvent(kind, ad.adId, ad.chatId, ad.messageId, ad.id, ad.adId, time, ad.messageThreadId))
         }
     }
 
