@@ -30,6 +30,13 @@ tasks.register<JavaExec>("importTelegramHistory") {
     standardInput = System.`in`
 }
 
+tasks.register<JavaExec>("repostTikTok") {
+    group = "application"
+    description = "Manually repost one adsTab row to TikTok: --args=\"<id>\""
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.rieltor.tools.TikTokRepostMainKt")
+}
+
 repositories {
     google()
     mavenCentral()

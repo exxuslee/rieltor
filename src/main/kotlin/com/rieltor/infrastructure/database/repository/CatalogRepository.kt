@@ -257,6 +257,23 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         dao.saveRepost(updated); attemptId
     }
 
+    /** Explicit manual repost; retain history and refuse unresolved external sends. */
+    fun prepareManual(id: Long, destination: RepostDestination, now: Long): String = transaction { dao ->
+        check(dao.isActive(id)) { "adsTab.id=$id does not exist or is not ACTIVE" }
+        val row = checkNotNull(dao.repost(id)) { "Missing repostTab row for adsTab.id=$id" }
+        val state = publication(row, destination)
+        val unresolved = setOf(RepostStatus.Prepared, RepostStatus.Sending,
+            RepostStatus.AwaitingConfirmation, RepostStatus.Unknown)
+        check(state.attempts.none { it.status in unresolved }) {
+            "adsTab.id=$id has an unresolved $destination attempt; reconcile it before reposting"
+        }
+        val attemptId = UUID.randomUUID().toString()
+        dao.saveRepost(applyPublication(row, destination, state.copy(
+            attempts = state.attempts + PublishAttempt(attemptId, createdAt = now, updatedAt = now)
+        ), now))
+        attemptId
+    }
+
     fun changeAttempt(
         id: Long, destination: RepostDestination, attemptId: String, now: Long,
         change: (PublishAttempt) -> PublishAttempt

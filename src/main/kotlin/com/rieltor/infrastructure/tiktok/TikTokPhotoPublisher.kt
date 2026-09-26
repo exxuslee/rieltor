@@ -41,6 +41,7 @@ class TikTokPhotoPublisher(
     private val delayMillis: suspend (Long) -> Unit = { delay(it) },
     private val publishRepository: TikTokRepository? = null,
     private val globalCooldownMillis: Long = DEFAULT_GLOBAL_COOLDOWN_MILLIS,
+    private val enforceLocalPendingShareLimit: Boolean = true,
 ) : PhotoPublisher {
     private val logger = LoggerFactory.getLogger(javaClass)
     override val destination = RepostDestination.TIKTOK
@@ -280,7 +281,7 @@ class TikTokPhotoPublisher(
     private suspend fun reconcileTrackedPublishes(accessToken: String) {
         val repository = publishRepository ?: return
         val snapshot = refreshTrackedPublishes(accessToken, repository)
-        if (snapshot.active.size >= MAX_PENDING_SHARES) {
+        if (enforceLocalPendingShareLimit && snapshot.active.size >= MAX_PENDING_SHARES) {
             pauseGlobalPublishing("locally tracked pending-share limit")
             throw TikTokPendingShareLimitException(
                 "TikTok has ${snapshot.active.size} locally tracked pending shares; waiting for status/fetch to report " +

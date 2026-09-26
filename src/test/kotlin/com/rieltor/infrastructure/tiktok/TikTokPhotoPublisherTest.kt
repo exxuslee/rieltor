@@ -258,6 +258,55 @@ class TikTokPhotoPublisherTest {
     }
 
     @Test
+    fun `manual publish delegates pending limit to API while retaining tracking`() = runBlocking(PublicationContext(42L, "attempt-1")) {
+        for (apiRejects in listOf(false, true)) {
+            val json = Json { ignoreUnknownKeys = true }
+            val repository = CapturingThrottleRepository().apply {
+                tracked += (1..5).map { TrackedTikTokPublish("draft-$it", "DRAFT", 1000L, "SEND_TO_USER_INBOX") }
+            }
+            var initializations = 0
+            HttpClient(MockEngine { request ->
+                when {
+                    request.method == HttpMethod.Head -> publicPhoto()
+                    request.url.encodedPath.contains("status/fetch") -> respond(
+                        content = """{"data":{"status":"SEND_TO_USER_INBOX"},"error":{"code":"ok"}}""",
+                        status = HttpStatusCode.OK, headers = jsonHeaders(),
+                    )
+                    request.url.encodedPath.contains("creator_info") -> creatorInfo()
+                    else -> {
+                        initializations++
+                        if (apiRejects) respond(
+                            content = """{"error":{"code":"spam_risk_too_many_pending_share","message":"Pending limit"}}""",
+                            status = HttpStatusCode.BadRequest, headers = jsonHeaders(),
+                        ) else publishAccepted("manual-publish")
+                    }
+                }
+            }).use { client ->
+                val publisher = TikTokPhotoPublisher(
+                    client, TikTokAuthService(client, settings(), validTokens(), json), json,
+                    tikTokMode = TikTokMode.DRAFT, nowMillis = { 2000L },
+                    publishRepository = repository, enforceLocalPendingShareLimit = false,
+                )
+                publisher.awaitPublishSlot()
+                if (apiRejects) {
+                    val error = kotlin.test.assertFailsWith<PublisherBackpressureException> {
+                        publisher.publish(listOf("https://api.example/media/photo.jpg"), null)
+                    }
+                    assertTrue(error.message.orEmpty().contains("spam_risk_too_many_pending_share"))
+                    assertTrue(repository.blockedUntil != null)
+                } else {
+                    val receipt = publisher.publish(listOf("https://api.example/media/photo.jpg"), null)
+                    assertEquals("manual-publish", receipt.publishId)
+                    assertEquals("DRAFT", receipt.privacyLevel)
+                    assertEquals(6, repository.tracked.size)
+                    assertEquals(null, repository.blockedUntil)
+                }
+                assertEquals(1, initializations)
+            }
+        }
+    }
+
+    @Test
     fun `pending diagnostics refreshes status fetch and reports unpublished count`() = runBlocking(PublicationContext(42L, "attempt-1")) {
         val json = Json { ignoreUnknownKeys = true }
         val throttle = CapturingThrottleRepository().apply {
