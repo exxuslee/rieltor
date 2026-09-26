@@ -48,6 +48,11 @@ class CatalogFilterParser(private val cursors: CatalogCursorCodec = CatalogCurso
         val values = parameters[name].orEmpty()
             .flatMap { it.split(',') }
             .filter { it.isNotEmpty() }
+            .map { value ->
+                if (name == "typeOfRealty") {
+                    CatalogCodes.normalizeType(value) ?: value
+                } else value
+            }
             .distinct()
         require(values.all { it in allowed }) { "Invalid $name" }
         return values

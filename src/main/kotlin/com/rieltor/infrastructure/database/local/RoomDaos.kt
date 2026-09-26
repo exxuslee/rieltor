@@ -85,7 +85,7 @@ internal interface CatalogDao {
     /** Preserve publication history when advertisement content changes. */
     @Transaction
     suspend fun saveListing(row: AdEntity): Long {
-        val id = saveAd(row).takeIf { it > 0 } ?: row.id
+        val id = saveAd(row.copy(typeOfRealty = com.rieltor.domain.model.CatalogCodes.normalizeType(row.typeOfRealty))).takeIf { it > 0 } ?: row.id
         initializeRepost(RepostEntity(id))
         return id
     }

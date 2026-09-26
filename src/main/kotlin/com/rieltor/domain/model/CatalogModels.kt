@@ -68,7 +68,7 @@ data class PublicationState(val attempts: List<PublishAttempt> = emptyList())
 object CatalogCodes {
 
     val types = setOf(
-        "APARTMENT 1", "APARTMENT 1+", "APARTMENT 2", "APARTMENT 2+", "APARTMENT 3", "APARTMENT 3+",
+        "APARTMENT1", "APARTMENT1+", "APARTMENT2", "APARTMENT2+", "APARTMENT3", "APARTMENT3+",
         "HOUSE", "HOUSE+", "HOUSE-", "DUPLEX", "DUPLEX+", "LAND",
     )
     private val locationNames = linkedMapOf(
@@ -99,6 +99,9 @@ object CatalogCodes {
         else -> ""
     }
 
-    fun apartmentRooms(type: String?): Int? = Regex("^APARTMENT ([123])(?:\\+)?$")
-        .matchEntire(type.orEmpty())?.groupValues?.get(1)?.toInt()
+    fun normalizeType(type: String?): String? =
+        type?.replace(Regex("^APARTMENT ([123]\\+?)$"), "APARTMENT$1")
+
+    fun apartmentRooms(type: String?): Int? = Regex("^APARTMENT([123])(?:\\+)?$")
+        .matchEntire(normalizeType(type).orEmpty())?.groupValues?.get(1)?.toInt()
 }

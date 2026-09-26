@@ -11,6 +11,14 @@ class CatalogFilterParserTest {
     private val parser = CatalogFilterParser()
 
     @Test
+    fun `accepts compact apartment codes and keeps stored codes compatible`() {
+        assertEquals(
+            listOf("APARTMENT1", "APARTMENT2+", "APARTMENT3"),
+            parser.parse(mapOf("typeOfRealty" to listOf("APARTMENT1,APARTMENT2+,APARTMENT 3"))).types,
+        )
+    }
+
+    @Test
     fun `parses source chat ids and rejects invalid ids`() {
         assertEquals(emptyList(), parser.parse(emptyMap()).chatIds)
         assertEquals(

@@ -12,6 +12,50 @@ import java.nio.file.Path
 import kotlin.test.*
 
 class AdsTabMigrationTest {
+    @Test fun `v32 migration compacts apartment codes and preserves advertisement data`() {
+        val path = Files.createTempDirectory("apartment-types").resolve("test.db")
+        val types = listOf("APARTMENT 1", "APARTMENT 1+", "APARTMENT 2", "APARTMENT 2+",
+            "APARTMENT 3", "APARTMENT 3+", "HOUSE", "APARTMENT1", null)
+        RoomDatabaseStore(path).use { db ->
+            val repo = CatalogRepository(db)
+            types.forEachIndexed { index, type ->
+                repo.save(com.rieltor.infrastructure.database.model.AdEntity(
+                    chatId = -100, messageId = index.toLong(), adId = "stable-$index", messageThreadId = 0,
+                    sourceRevision = "revision", timestamp = 100, typeOfRealty = type,
+                    rawText = "Original text", status = com.rieltor.domain.model.ListingStatus.Active,
+                    price = 80000, currency = "USD",
+                ))
+            }
+        }
+        // Restore the v32 values and schema marker to exercise the actual registered migration.
+        BundledSQLiteDriver().open(path.toString()).use { connection ->
+            types.forEachIndexed { index, type ->
+                connection.prepare("UPDATE adsTab SET typeOfRealty=? WHERE messageId=?").use {
+                    if (type == null) it.bindNull(1) else it.bindText(1, type)
+                    it.bindLong(2, index.toLong()); it.step()
+                }
+            }
+            connection.execSQL("PRAGMA user_version=32")
+        }
+        repeat(2) {
+            RoomDatabaseStore(path).use { db ->
+                val repo = CatalogRepository(db)
+                val rows = repo.listings().sortedBy { it.messageId }
+                assertEquals(types.map { it?.replace(" ", "") }, rows.map { it.typeOfRealty })
+                rows.forEachIndexed { index, row ->
+                    assertEquals("stable-$index", row.adId)
+                    assertEquals("Original text", row.rawText)
+                    assertNotNull(repo.repost(row.id))
+                }
+                db.blocking { room ->
+                    assertEquals(2, room.catalogDao().query(CatalogListingQueryFactory.create(
+                        CatalogFilter(types = listOf("APARTMENT1"))
+                    )).size)
+                }
+            }
+        }
+    }
+
     @Test fun `v30 migration recovers topics and preserves unknown historical topics`() = checkMigration(30)
     @Test fun `v29 migration preserves catalog and backfills statistics`() = checkMigration(29)
     @Test fun `v25 migration preserves listing fields and catalog queries`() = checkMigration(25)

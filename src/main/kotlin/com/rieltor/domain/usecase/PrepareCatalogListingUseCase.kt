@@ -11,7 +11,7 @@ class PrepareCatalogListingUseCase(
     private val priceNormalizer: NormalizeCatalogPriceUseCase = NormalizeCatalogPriceUseCase()
 ) {
     operator fun invoke(source: ListingImportSource): PreparedCatalogListing {
-        val type = source.typeOfRealty
+        val type = CatalogCodes.normalizeType(source.typeOfRealty)
         val clean = prepareContent(source.text)
         val warnings = mutableListOf<String>()
         val locationText = distanceToCity.replace(source.text, "")

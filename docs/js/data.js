@@ -4,12 +4,12 @@
     const base = configured || (['localhost', '127.0.0.1'].includes(location.hostname)
         ? 'http://localhost:8080' : 'https://api.rieltor.dpdns.org');
     const typeGroups = {
-        APARTMENT: ['APARTMENT', 'APARTMENT 1', 'APARTMENT 1+', 'APARTMENT 2', 'APARTMENT 2+', 'APARTMENT 3', 'APARTMENT 3+'],
+        APARTMENT: ['APARTMENT1', 'APARTMENT1+', 'APARTMENT2', 'APARTMENT2+', 'APARTMENT3', 'APARTMENT3+'],
         HOUSE: ['HOUSE', 'HOUSE+', 'HOUSE-'],
         DUPLEX: ['DUPLEX', 'DUPLEX+'],
         LAND: ['LAND']
     };
-    const unfinishedTypes = new Set(['APARTMENT 1', 'APARTMENT 2', 'APARTMENT 3', 'HOUSE', 'DUPLEX']);
+    const unfinishedTypes = new Set(['APARTMENT1', 'APARTMENT2', 'APARTMENT3', 'HOUSE', 'DUPLEX']);
 
     async function request(path, signal) {
         const response = await fetch(`${base}${path}`, {signal, headers: {Accept: 'application/json'}});
@@ -35,7 +35,7 @@
             if (!types.length && conditions.length) codes = codes.filter(type => type !== 'LAND');
             codes = codes.filter(type => {
                 // Room counts apply to apartments; condition does not apply to land.
-                if (type.startsWith('APARTMENT') && roomCounts.length && !roomCounts.some(room => type.startsWith(`APARTMENT ${room}`))) return false;
+                if (type.startsWith('APARTMENT') && roomCounts.length && !roomCounts.some(room => type.startsWith(`APARTMENT${room}`))) return false;
                 if (type === 'LAND' || !conditions.length) return true;
                 return conditions.some(condition => condition === 'RENOVATED' ? type.endsWith('+')
                     : condition === 'UNFINISHED' ? unfinishedTypes.has(type)

@@ -139,7 +139,7 @@ class JsonSettingsStore(val path: Path, defaults: LocalSettings = LocalSettings(
         require(value.monitoredTelegramChats.all { chat ->
             chat.messageThreadIds.all { it > 0 } && chat.messageThreadIds.distinct().size == chat.messageThreadIds.size
         })
-        require(value.topicTypeMapping.all { (key, type) -> key.matches(Regex("-?\\d+:\\d+")) && type in CatalogCodes.types })
+        require(value.topicTypeMapping.all { (key, type) -> key.matches(Regex("-?\\d+:\\d+")) && CatalogCodes.normalizeType(type) in CatalogCodes.types })
     }
 
     private fun persist(value: LocalSettings) {
