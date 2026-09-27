@@ -13,6 +13,7 @@ fun Route.oauthRoutes(registry: OAuthRegistry) {
 }
 
 fun Route.oauthRoutes(service: OAuthLoginService) {
+
     get("/auth/${service.providerId}/login") {
         call.respondRedirect(service.authorizeUrl())
     }
@@ -36,4 +37,5 @@ fun Route.oauthRoutes(service: OAuthLoginService) {
                 call.respondText("Invalid or expired OAuth callback.", status = HttpStatusCode.Unauthorized)
         }
     }
+
 }

@@ -9,7 +9,9 @@ import kotlinx.serialization.json.Json
 /** Liveness and greeting endpoints. */
 fun Route.systemRoutes(statistics: StatisticsService) {
     val statisticsJson = Json { encodeDefaults = true }
+
     get("/") { call.respondText("Rieltor Telegram → TikTok/Threads integration is running.") }
+
     get("/health") {
         val period = call.request.queryParameters["period"] ?: "day"
         val rawOffset = call.request.queryParameters["offset"]
@@ -19,6 +21,8 @@ fun Route.systemRoutes(statistics: StatisticsService) {
             return@get
         }
         call.response.header(HttpHeaders.CacheControl, "no-store")
-        call.respondText(statisticsJson.encodeToString(statistics.snapshot(period, offset)), ContentType.Application.Json)
+        val healsStatistic = statistics.snapshot(period, offset)
+        call.respondText(statisticsJson.encodeToString(healsStatistic), ContentType.Application.Json)
     }
+
 }

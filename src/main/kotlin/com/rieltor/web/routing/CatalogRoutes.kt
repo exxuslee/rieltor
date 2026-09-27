@@ -8,6 +8,7 @@ import io.ktor.server.routing.*
 
 /** Public catalog API consumed by the landing site. */
 fun Route.catalogRoutes(api: CatalogListingApi) {
+
     get("/api/listings") {
         try {
             call.respond(api.list(call.request.queryParameters))
@@ -24,4 +25,5 @@ fun Route.catalogRoutes(api: CatalogListingApi) {
             call.respond(listing)
         }
     }
+
 }

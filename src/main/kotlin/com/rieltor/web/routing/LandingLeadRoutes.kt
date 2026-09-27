@@ -12,11 +12,13 @@ import io.ktor.server.routing.*
 
 /** Contact forms of the landing site. */
 fun Route.landingLeadRoutes(service: LandingLeadService) {
+
     post("/v1/landing/leads") {
         val clientId = call.request.headers[CLIENT_IP_HEADER] ?: call.request.origin.remoteHost
         val result = service.submit(clientId, call.receive<LandingLeadRequest>().toSubmission())
         call.respond(result.status(), ApiAcknowledgement(result == LandingLeadResult.ACCEPTED))
     }
+
 }
 
 private const val CLIENT_IP_HEADER = "X-Real-IP"

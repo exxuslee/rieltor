@@ -7,6 +7,7 @@ import io.ktor.server.routing.*
 
 /** Public photos referenced by published listings. */
 fun Route.mediaRoutes(storage: LocalPublicMediaStorage) {
+
     get("/media/{fileName}") {
         val media = call.parameters["fileName"]?.let(storage::resolve)
         if (media == null) {
@@ -15,4 +16,5 @@ fun Route.mediaRoutes(storage: LocalPublicMediaStorage) {
             call.respondFile(media.toFile())
         }
     }
+
 }
