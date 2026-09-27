@@ -16,6 +16,40 @@ import java.nio.file.Files
 import kotlin.test.*
 
 class CatalogDaoIsolationTest {
+    @Test fun `pending shares expire by creation time without losing history after restart`() {
+        val path = Files.createTempDirectory("pending-share-expiry").resolve("test.db")
+        val window = 86_400_000L
+        val createdAt = 1000L
+        val cutoff = createdAt + window
+        RoomDatabaseStore(path).use { db ->
+            val catalog = CatalogRepository(db)
+            val tiktok = TikTokRepositoryImpl(db, catalog)
+            for (n in 1L..6L) {
+                val id = catalog.save(ad().copy(adId = "ad$n", messageId = n))
+                val attempt = assertNotNull(catalog.prepare(id, setOf(RepostDestination.TIKTOK), createdAt))
+                tiktok.trackPublishForListing(id, attempt, "draft-$n", "DRAFT", createdAt)
+                tiktok.updateTrackedStatus("draft-$n", "SEND_TO_USER_INBOX", cutoff - 1)
+            }
+            assertEquals(6, tiktok.trackedPublishes(cutoff - 1, window).size)
+            assertTrue(tiktok.trackedPublishes(cutoff, window).isEmpty())
+        }
+        RoomDatabaseStore(path).use { db ->
+            val catalog = CatalogRepository(db)
+            val tiktok = TikTokRepositoryImpl(db, catalog)
+            assertTrue(tiktok.trackedPublishes(cutoff + 1, window).isEmpty())
+            assertEquals(6, catalog.reposts().size)
+            catalog.reposts().forEach {
+                assertEquals(RepostStatus.DeliveredDraft, catalog.status(it, RepostDestination.TIKTOK))
+                assertNotNull(catalog.publication(it, RepostDestination.TIKTOK).attempts.single().publishId)
+            }
+            assertNull(catalog.nextRepost(true, false))
+            val id = catalog.save(ad().copy(adId = "fresh", messageId = 7))
+            val attempt = assertNotNull(catalog.prepare(id, setOf(RepostDestination.TIKTOK), cutoff))
+            tiktok.trackPublishForListing(id, attempt, "fresh-draft", "DRAFT", cutoff)
+            assertEquals("fresh-draft", tiktok.trackedPublishes(cutoff + 1, window).single().publishId)
+        }
+    }
+
     private fun ad() = AdEntity(
         chatId = -100, messageId = 1, adId = "ad", messageThreadId = 0,
         sourceRevision = "revision", timestamp = 100,
