@@ -3,6 +3,7 @@ package com.rieltor.application.service
 import com.rieltor.domain.model.CatalogCodes
 import com.rieltor.domain.model.ListingMessage
 import com.rieltor.domain.model.MediaTextOverlay
+import com.rieltor.domain.usecase.PrepareListingContentUseCase
 import com.rieltor.infrastructure.database.model.AdEntity
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -11,6 +12,8 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /** Presentation of already prepared public content; no source parsing. */
 class ListingCaptionFormatter {
+    private val prepareContent = PrepareListingContentUseCase()
+
     fun forCatalog(row: AdEntity, phone: String): String? = forTikTok(
         ListingMessage(
             title = row.title,
@@ -18,7 +21,8 @@ class ListingCaptionFormatter {
             address = row.address,
             keyParameters = Json.parseToJsonElement(row.primeParams).jsonObject["details"]
                 ?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
-            additionalParameters = row.description.lines().filter { it.isNotBlank() },
+            additionalParameters = prepareContent(row.rawText)?.additionalParameters
+                ?: row.description.lines().filter { it.isNotBlank() },
             governmentPrograms = Json.decodeFromString<List<String>>(row.governmentPrograms)
                 .joinToString(transform = CatalogCodes::programName).takeIf { it.isNotEmpty() },
             registration = null,

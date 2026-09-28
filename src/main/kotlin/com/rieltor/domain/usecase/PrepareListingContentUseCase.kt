@@ -82,7 +82,9 @@ class PrepareListingContentUseCase(
     private fun cleanLine(source: String): String {
         var line = source.trim()
         if (line.isBlank() || phone.containsMatchIn(line)) return ""
-        if (agencyLine.matches(line) || commissionSplit.matches(line) || taxCostLine.containsMatchIn(line)) return ""
+        if (agencyLine.matches(line) || commissionSplit.matches(line) ||
+            (registrationCostLine.containsMatchIn(line) && !priceLine.containsMatchIn(line)) ||
+            taxCostLine.containsMatchIn(line)) return ""
         if (internalNoise.matches(line) || standalonePercentage.matches(line)) return ""
 
         line = googleUrl.replace(line, "")
@@ -144,7 +146,7 @@ class PrepareListingContentUseCase(
         val googleUrl = Regex("""(?iu)https?://(?:drive|docs)\.google\.com/\S+""")
         val distanceToCity = Regex("""(?iu)\d+(?:[.,]\d+)?\s*км\s*(?:від|до|от)\s+[\p{L}’'ʼ-]+""")
         val agencyLine = Regex("""(?iu)^\s*(?:АН|AH)\s+.+$""")
-        val commissionSplit = Regex("""^\s*\d{3,}(?:[.,]\d+)?\s*%?\s*[/\\]\s*2\s*$""")
+        val commissionSplit = Regex("""^\s*\d+(?:[.,]\d+)?\s*%?\s*[/\\]\s*2\s*$""")
         val taxCostLine = Regex("""(?iu)^\s*(?:подат\p{L}*|налог\p{L}*)\s*[:\-–—]?\s*\d""")
         val phone = Regex("""(?<!\d)(?:\+?38[\s().-]*)?0\d{2}(?:[\s().-]*\d){7}(?!\d)""")
         val agency = Regex("""(?iu)(?<!\p{L})АН\s*[«\"']?\s*(?:НОВАТОР|NOVATOR)\s*[»\"']?|(?<!\p{L})(?:АН\s+)?НОВАТОР(?!\p{L})""")
@@ -184,9 +186,9 @@ class PrepareListingContentUseCase(
         )
         val priceLine = Regex("""(?iu)(?:ціна|вартість|від\s+\d|\d[\d\s.,]*\s*(?:[$€₴]|грн\.?|usd|eur))""")
         val governmentProgramsLine = Regex("""(?iu)(?:держ(?:авні|\.)?\s*програм\p{L}*|єосел\p{L}*|сертифікат|постанова)""")
-        val registrationLine = Regex("""(?iu)(?:оформлення|оф\.?(?=\s)|переуступк[ау])""")
+        val registrationLine = Regex("""(?iu)(?:оформлення|оф(?:\.|(?=\s|$))|переуступк[ау])""")
         val registrationCostLine = Regex(
-            """(?iu)(?:оформлення|оф\.?(?=\s)|переуступк[ау]).*(?:\d|%|[$€₴]|грн\.?|мінімальн\p{L}*|минимальн\p{L}*)"""
+            """(?iu)(?:(?:оформлення|оф(?:\.|(?=\s|$))|переуступк[ау]).*(?:\d|%|[$€₴]|грн\.?|мінімальн\p{L}*|минимальн\p{L}*)|(?:\d+(?:[.,]\d+)?\s*%).*(?:оформлення|оф(?:\.|(?=\s|$))|переуступк[ау]))"""
         )
         val boilerCostLine = Regex(
             """(?iu)кот[её]л\p{L}*.*\d[\d\s.,]*(?:[$€₴]|грн\.?|usd|eur|євро|евро)"""

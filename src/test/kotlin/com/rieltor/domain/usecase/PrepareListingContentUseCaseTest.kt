@@ -10,6 +10,23 @@ class PrepareListingContentUseCaseTest {
     private val prepareContent = PrepareListingContentUseCase()
     private val filter = ListingCaptionFormatter()
 
+    @Test
+    fun `removes abbreviated commission and registration cost lines`() {
+        val listing = requireNotNull(prepareContent("""
+            1-кімнатна квартира з ремонтом та меблями
+            Ірпінь
+            Повністю укомплектована меблями та технікою!
+            5%/2
+            2% Оф.
+            71500${'$'}
+        """.trimIndent()))
+
+        val caption = requireNotNull(filter.forTikTok(listing))
+        assertFalse(listing.additionalParameters.any { it.contains("%/2") || it.contains("Оф.") })
+        assertFalse(caption.contains("5%/2"))
+        assertFalse(caption.contains("2% Оф."))
+    }
+
     @Test fun `recognizes studio and abbreviated apartment titles`() {
         listOf("Студія з ремонтом", "2кк з якісним ремонтом", "1к з новим ремонтом").forEach { title ->
             val listing = assertNotNull(prepareContent("Ірпінь\nЖК Приклад\n$title\nЦіна 76500$"))

@@ -75,6 +75,22 @@ class CatalogDaoIsolationTest {
         }
     }
 
+    @Test fun `catalog hides abbreviated internal costs from already imported descriptions`() {
+        val path = Files.createTempDirectory("catalog-public-description").resolve("test.db")
+        RoomDatabaseStore(path).use { db ->
+            val repo = CatalogRepository(db)
+            val id = repo.save(ad().copy(
+                rawText = "Квартира в Ірпені\nМеблі та техніка\n5%/2\n2% Оф.\nЦіна 80000$",
+                description = "Меблі та техніка\n5%/2\n2% Оф.",
+            ))
+            val description = CatalogListingApi("https://example.test", CatalogQueryService(repo)).one(id)?.description
+            assertNotNull(description)
+            assertContains(description, "Меблі та техніка")
+            assertFalse(description.contains("5%/2"))
+            assertFalse(description.contains("2% Оф."))
+        }
+    }
+
     @Test fun `catalog reads work without the repost table`() {
         val path = Files.createTempDirectory("catalog-isolation").resolve("test.db")
         RoomDatabaseStore(path).use { db ->

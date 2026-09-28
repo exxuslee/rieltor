@@ -4,6 +4,7 @@ import com.rieltor.application.service.CatalogFilterParser
 import com.rieltor.application.service.CatalogQueryService
 import com.rieltor.domain.model.CatalogCodes
 import com.rieltor.domain.model.CatalogPhoto
+import com.rieltor.domain.usecase.PrepareListingContentUseCase
 import com.rieltor.infrastructure.database.model.CatalogListingRow
 import com.rieltor.web.dto.ListingPage
 import com.rieltor.web.dto.PublicListing
@@ -23,6 +24,7 @@ class CatalogListingApi(
     private val json: Json = Json,
 ) {
     private val mediaBaseUrl = "${publicBaseUrl.trimEnd('/')}/media"
+    private val prepareContent = PrepareListingContentUseCase()
 
     fun list(parameters: Parameters): ListingPage {
         val page = service.page(parser.parse(parameters.toMap()))
@@ -38,7 +40,7 @@ class CatalogListingApi(
         return PublicListing(
             row.id.toString(),
             row.title,
-            row.description,
+            publicDescription(row),
             row.rawText,
             locationOf(row),
             row.location,
@@ -70,6 +72,10 @@ class CatalogListingApi(
     private fun floorOf(row: CatalogListingRow): String? = row.floor?.let { floor ->
         row.totalFloors?.let { total -> "$floor із $total" } ?: floor.toString()
     }
+
+    /** Reformat source text at read time so already-imported listings also hide internal costs. */
+    private fun publicDescription(row: CatalogListingRow): String =
+        prepareContent(row.rawText)?.additionalParameters?.joinToString("\n") ?: row.description
 
     private companion object {
         const val PRICE_PERIOD = "TOTAL"
