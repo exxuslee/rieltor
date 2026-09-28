@@ -1,5 +1,6 @@
 package com.rieltor.application.service
 
+import com.rieltor.domain.model.CatalogCodes
 import com.rieltor.domain.model.ListingMessage
 import com.rieltor.domain.model.MediaTextOverlay
 import com.rieltor.infrastructure.database.model.AdEntity
@@ -19,7 +20,7 @@ class ListingCaptionFormatter {
                 ?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
             additionalParameters = row.description.lines().filter { it.isNotBlank() },
             governmentPrograms = Json.decodeFromString<List<String>>(row.governmentPrograms)
-                .joinToString().takeIf { it.isNotEmpty() },
+                .joinToString(transform = CatalogCodes::programName).takeIf { it.isNotEmpty() },
             registration = null,
             hashtags = Json.decodeFromString(row.tags),
             phone = phone,

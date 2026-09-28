@@ -84,10 +84,19 @@ object CatalogCodes {
         "OTHER" to "Інша локація",
     )
     val locations: Set<String> = locationNames.keys
-    val programs = setOf("EOSELIA", "VOUCHER", "CERTIFICATE", "POSTANOVA")
+    private val programNames = linkedMapOf(
+        "EOSELIA" to "єОселя",
+        "VOUCHER" to "Ваучер",
+        "CERTIFICATE" to "Сертифікат",
+        "POSTANOVA" to "Постанова",
+    )
+    val programs: Set<String> = programNames.keys
 
     /** Display name of a location code, empty when the code is unknown. */
     fun locationName(code: String?): String = code?.let(locationNames::get).orEmpty()
+
+    /** Human-readable label for a government programme code used in public content. */
+    fun programName(code: String): String = programNames[code] ?: code
 
     fun category(type: String?): String = when {
         type?.startsWith("APARTMENT") == true -> "apartments"

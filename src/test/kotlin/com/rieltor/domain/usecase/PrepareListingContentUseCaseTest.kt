@@ -1,6 +1,8 @@
 package com.rieltor.domain.usecase
 
 import com.rieltor.application.service.ListingCaptionFormatter
+import com.rieltor.domain.model.ListingStatus
+import com.rieltor.infrastructure.database.model.AdEntity
 
 import kotlin.test.*
 
@@ -158,6 +160,32 @@ class PrepareListingContentUseCaseTest {
         assertFalse(tiktok.contains("0961733824"))
         assertFalse(tiktok.contains("Комісія"))
         assertFalse(tiktok.contains("Оформлення"))
+    }
+
+    @Test
+    fun `uses human-readable government programme names in repost caption`() {
+        val caption = requireNotNull(filter.forCatalog(
+            AdEntity(
+                chatId = -1,
+                messageId = 1,
+                messageThreadId = 0,
+                adId = "programs",
+                sourceRevision = "test",
+                title = "Квартира",
+                price = 50_000,
+                currency = "USD",
+                governmentPrograms = "[\"EOSELIA\",\"VOUCHER\",\"CERTIFICATE\",\"POSTANOVA\"]",
+                status = ListingStatus.Active,
+                timestamp = 0,
+            ),
+            "066-372-71-02",
+        ))
+
+        assertContains(caption, "🏦 єОселя, Ваучер, Сертифікат, Постанова")
+        assertFalse(caption.contains("EOSELIA"))
+        assertFalse(caption.contains("VOUCHER"))
+        assertFalse(caption.contains("CERTIFICATE"))
+        assertFalse(caption.contains("POSTANOVA"))
     }
 
     @Test
