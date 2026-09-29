@@ -95,14 +95,14 @@ class StatisticsTest {
         val path = Files.createTempDirectory("statistics").resolve("test.db")
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db)
-            val source = SourceMessage(-100, 7, 0, "text", "{}", now.toEpochMilli())
+            val source = SourceMessage(-1002681732909L, 7, 0, "text", "{}", now.toEpochMilli())
             repo.receive(source, now.toEpochMilli(), 0)
             repo.receive(source, now.toEpochMilli(), 0)
             repo.receive(source.copy(text = "edited", sourceEditedAt = now.toEpochMilli()), now.toEpochMilli(), 0)
-            val row = requireNotNull(repo.source(-100, 7))
+            val row = requireNotNull(repo.source(-1002681732909L, 7))
             assertTrue(repo.stage(row, IncomingStatus.ReadyForMedia, now.toEpochMilli()))
             assertTrue(repo.claim(row, now.toEpochMilli()))
-            assertTrue(repo.promote(row, AdEntity(chatId = -100, messageId = 7, messageThreadId = 0,
+            assertTrue(repo.promote(row, AdEntity(chatId = -1002681732909L, messageId = 7, messageThreadId = 0,
                 adId = "unique-ad", sourceRevision = "r", timestamp = now.toEpochMilli(),
                 status = ListingStatus.Active, price = 50000, currency = "USD"), now.toEpochMilli()))
             val id = repo.listings().single().id

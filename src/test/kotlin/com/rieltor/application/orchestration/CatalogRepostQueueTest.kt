@@ -53,7 +53,7 @@ class CatalogRepostQueueTest {
         }
     }
 
-    private fun listing(n: Long) = AdEntity(adId = "ad$n", chatId = -1, messageId = n,
+    private fun listing(n: Long) = AdEntity(adId = "ad$n", chatId = -1002681732909L, messageId = n,
         messageThreadId = 1, sourceRevision = "1", timestamp = n, status = ListingStatus.Active,
         title = "Listing $n", price = 80000, currency = "USD")
 }

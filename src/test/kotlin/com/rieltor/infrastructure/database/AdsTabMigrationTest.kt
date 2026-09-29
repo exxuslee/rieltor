@@ -158,8 +158,8 @@ class AdsTabMigrationTest {
             db.blocking { room ->
                 val dao = room.catalogDao()
                 assertEquals(42L, dao.query(CatalogListingQueryFactory.create(CatalogFilter(programs = listOf("TEST")))).single().id)
-                assertEquals(42L, dao.nextRepost(false, true)?.listing?.id)
-                assertNull(dao.nextRepost(true, false))
+                assertEquals(42L, dao.nextRepost(false, true, -100)?.listing?.id)
+                assertNull(dao.nextRepost(true, false, -100))
             }
         }
         assertEquals(before, snapshot())

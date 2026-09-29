@@ -33,7 +33,7 @@ class TikTokRepostTest {
             Files.write(directory.resolve("media").resolve(fileName), byteArrayOf(1))
             fun add(message: Long, status: ListingStatus = ListingStatus.Active, photos: String =
                 Json.encodeToString(listOf(CatalogPhoto(fileName, "file", "1", 1, 1, "hash")))) = repo.save(
-                AdEntity(adId = "ad$message", chatId = -1, messageId = message, messageThreadId = 1,
+                AdEntity(adId = "ad$message", chatId = -1002681732909L, messageId = message, messageThreadId = 1,
                     sourceRevision = "1", title = "Listing $message", price = 10000, currency = "USD",
                     timestamp = message, status = status, photos = photos)
             )
@@ -84,7 +84,7 @@ class TikTokRepostTest {
         val directory = Files.createTempDirectory("manual-tiktok-claim")
         RoomDatabaseStore(directory.resolve("test.db")).use { db ->
             val repo = CatalogRepository(db)
-            val id = repo.save(AdEntity(adId = "ad", chatId = -1, messageId = 1, messageThreadId = 1,
+            val id = repo.save(AdEntity(adId = "ad", chatId = -1002681732909L, messageId = 1, messageThreadId = 1,
                 sourceRevision = "1", title = "Listing", price = 10000, currency = "USD",
                 timestamp = 1, status = ListingStatus.Active))
             val destination = RepostDestination.TIKTOK

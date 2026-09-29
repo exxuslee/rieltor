@@ -51,7 +51,7 @@ class CatalogDaoIsolationTest {
     }
 
     private fun ad() = AdEntity(
-        chatId = -100, messageId = 1, adId = "ad", messageThreadId = 0,
+        chatId = -1002681732909L, messageId = 1, adId = "ad", messageThreadId = 0,
         sourceRevision = "revision", timestamp = 100,
         title = "House", status = ListingStatus.Active, price = 80000, currency = "USD",
     )
@@ -103,8 +103,8 @@ class CatalogDaoIsolationTest {
             assertTrue(repo.cachedPhotos(ad()).isEmpty())
             db.blocking { room ->
                 val dao = room.catalogDao()
-                assertEquals(id, dao.listingForSource(-100, 1)?.id)
-                assertEquals(id, dao.promotionMatches(-100, 1, "ad").single().id)
+                assertEquals(id, dao.listingForSource(-1002681732909L, 1)?.id)
+                assertEquals(id, dao.promotionMatches(-1002681732909L, 1, "ad").single().id)
                 assertTrue(dao.isActive(id))
             }
             val api = CatalogListingApi("https://example.test", CatalogQueryService(repo))

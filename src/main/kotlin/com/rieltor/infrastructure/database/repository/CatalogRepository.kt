@@ -133,7 +133,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     }
 
     fun nextRepost(tiktok: Boolean, threads: Boolean) = database.blocking {
-        it.catalogDao().nextRepost(tiktok, threads)
+        it.catalogDao().nextRepost(tiktok, threads, REPOST_SOURCE_CHAT_ID)
     }
 
     fun save(row: AdEntity): Long =
@@ -253,6 +253,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     fun prepare(id: Long, destinations: Set<RepostDestination>, now: Long): String? = transaction { dao ->
         val row = dao.repost(id) ?: return@transaction null
         if (!dao.isActive(id)) return@transaction null
+        if (dao.listing(id)?.chatId != REPOST_SOURCE_CHAT_ID) return@transaction null
         val attemptId = UUID.randomUUID().toString()
         var updated = row
         destinations.filter { status(row, it) == RepostStatus.Pending }.forEach { destination ->
@@ -271,6 +272,9 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     /** Explicit manual repost; retain history and refuse unresolved external sends. */
     fun prepareManual(id: Long, destination: RepostDestination, now: Long): String = transaction { dao ->
         check(dao.isActive(id)) { "adsTab.id=$id does not exist or is not ACTIVE" }
+        check(dao.listing(id)?.chatId == REPOST_SOURCE_CHAT_ID) {
+            "Reposts are allowed only from chatId=$REPOST_SOURCE_CHAT_ID"
+        }
         val row = checkNotNull(dao.repost(id)) { "Missing repostTab row for adsTab.id=$id" }
         val state = publication(row, destination)
         val unresolved = setOf(RepostStatus.Prepared, RepostStatus.Sending,

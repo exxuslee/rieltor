@@ -38,10 +38,10 @@ internal interface CatalogDao {
             r.tiktokStatus AS repost_tiktokStatus, r.threadsStatus AS repost_threadsStatus,
             r.tiktokState AS repost_tiktokState, r.threadsState AS repost_threadsState
         FROM adsTab JOIN repostTab r ON r.id=adsTab.id
-        WHERE status='ACTIVE' AND ((:tiktok AND tiktokStatus='PENDING') OR (:threads AND threadsStatus='PENDING'))
+        WHERE adsTab.chatId=:chatId AND status='ACTIVE' AND ((:tiktok AND tiktokStatus='PENDING') OR (:threads AND threadsStatus='PENDING'))
         ORDER BY timestamp DESC, adsTab.id DESC LIMIT 1
     """)
-    suspend fun nextRepost(tiktok: Boolean, threads: Boolean): RepostCandidate?
+    suspend fun nextRepost(tiktok: Boolean, threads: Boolean, chatId: Long): RepostCandidate?
 
     @Query("SELECT * FROM repostTab WHERE id=:id")
     suspend fun repost(id: Long): RepostEntity?

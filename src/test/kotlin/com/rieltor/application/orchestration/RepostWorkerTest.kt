@@ -15,6 +15,55 @@ import kotlin.test.*
 
 class RepostWorkerTest {
     @Test
+    fun `other chats cannot repost automatically or manually and do not consume slots`() = runBlocking<Unit> {
+        val directory = Files.createTempDirectory("repost-source")
+        RoomDatabaseStore(directory.resolve("test.db")).use { db ->
+            db.settings.update { it.copy(tiktokEnabled = true, threadsEnabled = true, minIntervalMs = 0) }
+            val repo = CatalogRepository(db)
+            val media = LocalPublicMediaStorage(directory.resolve("media"), "https://media.example")
+            val fileName = "00000000-0000-0000-0000-000000000001.jpg"
+            Files.write(directory.resolve("media").resolve(fileName), byteArrayOf(1))
+            val allowed = AdEntity(
+                adId = "allowed", chatId = -1002681732909L, messageId = 1, messageThreadId = 1,
+                sourceRevision = "1", title = "Allowed", price = 10000, currency = "USD",
+                timestamp = 1, status = ListingStatus.Active,
+                photos = Json.encodeToString(listOf(CatalogPhoto(fileName, "file", "1", 1, 1, "hash")))
+            )
+            val deniedId = repo.save(allowed.copy(adId = "denied", chatId = -1002691100301L, timestamp = 2))
+            val calls = mutableListOf<RepostDestination>()
+            val publishers = RepostDestination.entries.map { target ->
+                object : PhotoPublisher {
+                    override val destination = target
+                    override val maxPhotoCount = 20
+                    override suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt {
+                        calls += target
+                        return PublishReceipt("published-$target", "creator", "PUBLIC")
+                    }
+                }
+            }
+            RepostWorker(repo, db.settings, publishers, media) { 5000L }.use { worker ->
+                worker.runOnce()
+                assertTrue(calls.isEmpty())
+                assertTrue(db.settings.snapshot().slotReservations.isEmpty())
+                val error = assertFailsWith<IllegalStateException> { worker.repostTikTok(deniedId) }
+                assertContains(error.message.orEmpty(), "-1002681732909")
+                for (destination in RepostDestination.entries) {
+                    assertNull(repo.prepare(deniedId, setOf(destination), 5000))
+                    assertFailsWith<IllegalStateException> { repo.prepareManual(deniedId, destination, 5000) }
+                    assertTrue(repo.publication(repo.repost(deniedId)!!, destination).attempts.isEmpty())
+                }
+                repo.save(allowed)
+                worker.runOnce()
+                assertEquals(RepostDestination.entries.toSet(), calls.toSet())
+                assertEquals(2, calls.size)
+                worker.runOnce()
+                assertEquals(2, calls.size)
+                assertNotNull(repo.publicListing(deniedId))
+            }
+        }
+    }
+
+    @Test
     fun `invalid media or caption fails before sending and does not block other listings`() = runBlocking {
         for (invalidPhotos in listOf(true, false)) {
             val directory = Files.createTempDirectory("repost-invalid")
@@ -25,7 +74,7 @@ class RepostWorkerTest {
                 val fileName = "00000000-0000-0000-0000-000000000001.jpg"
                 Files.write(directory.resolve("media").resolve(fileName), byteArrayOf(1))
                 val valid = AdEntity(
-                    adId = "valid", chatId = -1, messageId = 1, messageThreadId = 1,
+                    adId = "valid", chatId = -1002681732909L, messageId = 1, messageThreadId = 1,
                     sourceRevision = "1", title = "Valid", price = 10000, currency = "USD",
                     timestamp = 1, status = ListingStatus.Active,
                     photos = Json.encodeToString(listOf(CatalogPhoto(fileName, "file", "1", 1, 1, "hash")))
@@ -69,7 +118,7 @@ class RepostWorkerTest {
             val fileName = "00000000-0000-0000-0000-000000000001.jpg"
             Files.write(directory.resolve("media").resolve(fileName), byteArrayOf(1))
             val id = repo.save(AdEntity(
-                adId = "draft", chatId = -1, messageId = 1, messageThreadId = 1,
+                adId = "draft", chatId = -1002681732909L, messageId = 1, messageThreadId = 1,
                 sourceRevision = "1", title = "Draft", price = 10000, currency = "USD",
                 timestamp = 1, status = ListingStatus.Active,
                 photos = Json.encodeToString(listOf(CatalogPhoto(fileName, "file", "1", 1, 1, "hash")))
@@ -119,7 +168,7 @@ class RepostWorkerTest {
             Files.write(directory.resolve("media").resolve(fileName), byteArrayOf(1))
             fun add(message: Long) = repo.save(
                 AdEntity(
-                    adId = "ad$message", chatId = -1, messageId = message, messageThreadId = 1,
+                    adId = "ad$message", chatId = -1002681732909L, messageId = message, messageThreadId = 1,
                     sourceRevision = "1", title = "Listing $message", price = 10000, currency = "USD",
                     timestamp = message, status = ListingStatus.Active,
                     photos = Json.encodeToString(listOf(CatalogPhoto(fileName, "file", "1", 1, 1, "hash")))

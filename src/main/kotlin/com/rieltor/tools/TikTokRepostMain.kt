@@ -44,7 +44,10 @@ fun main(args: Array<String>) = runBlocking {
             }.use { client ->
                 val auth = TikTokAuthService(client, app, JsonTikTokTokenRepository(secrets), json)
                 val publisher = TikTokPhotoPublisher(
-                    client, auth, json, tikTokMode = app.tikTokMode,
+                    client,
+                    auth,
+                    json,
+                    tikTokMode = app.tikTokMode,
                     maxPhotoCount = app.repostMaxPhotoCount,
                     publishRepository = TikTokRepositoryImpl(database),
                     globalCooldownMillis = app.tikTokDailyLimitCooldownHours * 3_600_000L,
