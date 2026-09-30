@@ -123,7 +123,7 @@ class PrepareCatalogListingUseCase(
             allProgramsExplicitlyDisabled -> linkedSetOf()
             allProgramsExplicitlyEnabled -> linkedSetOf<String>().apply { addAll(ALL_PROGRAMS) }
             explicitPositive.isNotEmpty() -> explicitPositive
-            else -> linkedSetOf<String>().apply { addAll(ALL_PROGRAMS) }
+            else -> linkedSetOf()
         }
         selected.removeAll(explicitNegative)
         return selected

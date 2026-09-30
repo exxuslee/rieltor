@@ -13,16 +13,18 @@ class CatalogListingMapper(
     fun fromIncoming(row: IncomingEntity, type: String?, now: Long): AdEntity {
         val result = prepareListing(
             ListingImportSource(
-                text = row.rawText, typeOfRealty = type,
-            photoLinks = GoogleDriveLinkExtractor().extract(row.rawText),
-            hasAttachedPhotos = runCatching { Json.decodeFromString<List<SourcePhoto>>(row.sourcePhotos) }
-                .getOrDefault(emptyList()).isNotEmpty(),
-        ))
+                text = row.rawText,
+                typeOfRealty = type,
+                photoLinks = GoogleDriveLinkExtractor().extract(row.rawText),
+                hasAttachedPhotos = runCatching { Json.decodeFromString<List<SourcePhoto>>(row.sourcePhotos) }
+                    .getOrDefault(emptyList()).isNotEmpty(),
+            )
+        )
         val content = result.content
         return AdEntity(
             adId = adId(
                 row.userId?.toString()
-                ?: "unknown-${row.chatId}:${row.messageId}", result.location, type,
+                    ?: "unknown-${row.chatId}:${row.messageId}", result.location, type,
                 result.price, result.areaM2, result.landAreaSotka
             ),
             chatId = row.chatId, messageId = row.messageId, messageThreadId = row.messageThreadId,
