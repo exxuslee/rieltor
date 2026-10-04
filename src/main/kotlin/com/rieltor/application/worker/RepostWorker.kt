@@ -87,7 +87,7 @@ class RepostWorker(
 
         val attemptId = repository.prepareManual(id, publisher.destination, now())
         publishToDestination(RepostAttempt(row, attemptId, listOf(publisher)), publisher)
-        val state = repository.publication(checkNotNull(repository.repost(id)), publisher.destination)
+        val state = repository.publication(checkNotNull(repository.repostState(id)), publisher.destination)
         val result = state.attempts.single { it.attemptId == attemptId }
 
         check(result.status in setOf(RepostStatus.Published, RepostStatus.DeliveredDraft)) {

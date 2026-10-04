@@ -30,8 +30,22 @@ class PrepareListingContentUseCaseTest {
     @Test fun `recognizes studio and abbreviated apartment titles`() {
         listOf("Студія з ремонтом", "2кк з якісним ремонтом", "1к з новим ремонтом").forEach { title ->
             val listing = assertNotNull(prepareContent("Ірпінь\nЖК Приклад\n$title\nЦіна 76500$"))
-            assertEquals("$title — Ірпінь", listing.title)
+            assertEquals("Продам ${title.replaceFirstChar(Char::lowercase)}", listing.title)
             assertEquals("ЖК Приклад", listing.address)
+        }
+    }
+
+    @Test fun `builds sale titles for apartments houses townhouses and duplexes`() {
+        listOf("1к з ремонтом", "дом", "таун", "дуплекс", "Будинок", "Таунхаус з ремонтом").forEach { type ->
+            val listing = assertNotNull(prepareContent("Ірпінь\n$type\nЦіна 76500$"))
+            assertEquals("Продам ${type.replaceFirstChar(Char::lowercase)}", listing.title)
+        }
+    }
+
+    @Test fun `does not duplicate an existing sale prefix`() {
+        listOf("Продам", "ПРОДАМ", "Продаж").forEach { prefix ->
+            val listing = assertNotNull(prepareContent("• $prefix 1к з ремонтом.\nЦіна 76500$"))
+            assertEquals("Продам 1к з ремонтом", listing.title)
         }
     }
 
@@ -55,7 +69,7 @@ class PrepareListingContentUseCaseTest {
         val listing = requireNotNull(prepareContent(source))
         val result = requireNotNull(filter.forTikTok(listing))
 
-        assertEquals("Таунхаус з ремонтом — Ірпінь", listing.title)
+        assertEquals("Продам таунхаус з ремонтом", listing.title)
         assertEquals("175000${'$'}", listing.price)
         assertEquals("Вул Мечнікова", listing.address)
         assertEquals(listOf("Три кімнати", "84 кв.м", "ГАЗ"), listing.keyParameters)
@@ -142,7 +156,7 @@ class PrepareListingContentUseCaseTest {
 
         val overlay = requireNotNull(filter.photoOverlay(listing))
 
-        assertEquals("Квартира в Ірпені", overlay.title)
+        assertEquals("Продам квартира в Ірпені", overlay.title)
         assertEquals("22 000${'$'}", overlay.price)
         assertEquals("066-372-71-02 Ірина", overlay.contact)
     }
@@ -166,7 +180,7 @@ class PrepareListingContentUseCaseTest {
         val listing = requireNotNull(prepareContent(source))
         val tiktok = requireNotNull(filter.forTikTok(listing))
 
-        assertEquals("Квартира в ЖК На Прорізній — Гостомель", listing.title)
+        assertEquals("Продам квартира в ЖК На Прорізній", listing.title)
         assertEquals("вул. Прорізна, 2", listing.address)
         assertNull(listing.registration)
         assertEquals("Держ. програми: Так", listing.governmentPrograms)
@@ -287,7 +301,7 @@ class PrepareListingContentUseCaseTest {
 
         val listing = requireNotNull(prepareContent(source))
 
-        assertEquals("Квартира в Ірпені", listing.title)
+        assertEquals("Продам квартира в Ірпені", listing.title)
         assertEquals(
             listOf("Житловий комплекс", "Введений в експлуатацію", "Гарний ремонт"),
             listing.additionalParameters,

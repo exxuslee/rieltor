@@ -7,10 +7,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
-import com.rieltor.infrastructure.database.model.AdEntity
-import com.rieltor.infrastructure.database.model.IncomingEntity
-import com.rieltor.infrastructure.database.model.RepostEntity
-import com.rieltor.infrastructure.database.model.StatisticsEvent
+import com.rieltor.infrastructure.database.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
@@ -18,8 +15,8 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
 
 @Database(
-    entities = [IncomingEntity::class, AdEntity::class, RepostEntity::class, StatisticsEvent::class],
-    version = 33,
+    entities = [IncomingEntity::class, AdEntity::class, RepostEntity::class, RepostAttemptEntity::class, StatisticsEvent::class],
+    version = 34,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -30,6 +27,58 @@ internal abstract class RieltorDatabase : RoomDatabase() {
 // Migrations up to 22 intentionally keep the historical table name `incoming_telegram_messages`:
 // it is what the schema was called at those versions. The table becomes `incomeTab` in 22 -> 23.
 private val migrations = arrayOf(
+    object : Migration(33, 34) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("""
+                CREATE TABLE IF NOT EXISTS repostAttemptsTab (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    tiktokRepostedAt INTEGER, threadsRepostedAt INTEGER,
+                    tiktokStatus TEXT NOT NULL, threadsStatus TEXT NOT NULL,
+                    tiktokState TEXT NOT NULL, threadsState TEXT NOT NULL,
+                    FOREIGN KEY(id) REFERENCES adsTab(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+            """.trimIndent())
+            // Pending-only catalog placeholders need no persisted dispatch state.
+            connection.execSQL("""
+                INSERT OR REPLACE INTO repostAttemptsTab SELECT * FROM repostTab
+                WHERE tiktokRepostedAt IS NOT NULL OR threadsRepostedAt IS NOT NULL
+                    OR tiktokStatus != 'PENDING' OR threadsStatus != 'PENDING'
+                    OR tiktokState != '{"attempts":[]}' OR threadsState != '{"attempts":[]}'
+            """.trimIndent())
+            connection.execSQL("CREATE INDEX IF NOT EXISTS index_repostAttemptsTab_tiktokStatus ON repostAttemptsTab(tiktokStatus)")
+            connection.execSQL("CREATE INDEX IF NOT EXISTS index_repostAttemptsTab_threadsStatus ON repostAttemptsTab(threadsStatus)")
+            val rows = mutableListOf<RepostEntity>()
+            connection.prepare("SELECT * FROM repostTab").use { query ->
+                while (query.step()) rows += RepostEntity(
+                    id = query.getLong(0),
+                    tiktokRepostedAt = if (query.isNull(1)) null else query.getLong(1),
+                    threadsRepostedAt = if (query.isNull(2)) null else query.getLong(2),
+                    tiktokStatus = query.getText(3), threadsStatus = query.getText(4),
+                    tiktokState = query.getText(5), threadsState = query.getText(6),
+                )
+            }
+            rows.forEach { original ->
+                val row = original.recoverDeliveryTimes()
+                for (table in listOf("repostTab", "repostAttemptsTab")) {
+                    connection.prepare("UPDATE $table SET tiktokRepostedAt=?, threadsRepostedAt=? WHERE id=?").use {
+                        if (row.tiktokRepostedAt == null) it.bindNull(1) else it.bindLong(1, row.tiktokRepostedAt)
+                        if (row.threadsRepostedAt == null) it.bindNull(2) else it.bindLong(2, row.threadsRepostedAt)
+                        it.bindLong(3, row.id); it.step()
+                    }
+                }
+                if (!row.hasExternalSend()) {
+                    connection.prepare("DELETE FROM repostTab WHERE id=?").use { it.bindLong(1, row.id); it.step() }
+                }
+            }
+            for ((kind, column) in listOf("TIKTOK" to "tiktokRepostedAt", "THREADS" to "threadsRepostedAt")) {
+                connection.execSQL("""
+                    INSERT OR IGNORE INTO statisticsEvents
+                    SELECT '$kind', a.adId, a.chatId, a.messageId, a.id, a.adId, r.$column, a.messageThreadId
+                    FROM adsTab a JOIN repostTab r ON a.id=r.id WHERE r.$column IS NOT NULL
+                """.trimIndent())
+            }
+        }
+    },
     object : Migration(32, 33) {
         override fun migrate(connection: SQLiteConnection) {
             connection.execSQL("""

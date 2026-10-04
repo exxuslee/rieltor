@@ -33,12 +33,16 @@ internal interface CatalogDao {
     suspend fun listings(): List<AdEntity>
 
     @Query("""
-        SELECT adsTab.*, r.id AS repost_id,
+        SELECT adsTab.*, COALESCE(r.id, adsTab.id) AS repost_id,
             r.tiktokRepostedAt AS repost_tiktokRepostedAt, r.threadsRepostedAt AS repost_threadsRepostedAt,
-            r.tiktokStatus AS repost_tiktokStatus, r.threadsStatus AS repost_threadsStatus,
-            r.tiktokState AS repost_tiktokState, r.threadsState AS repost_threadsState
-        FROM adsTab JOIN repostTab r ON r.id=adsTab.id
-        WHERE adsTab.chatId=:chatId AND status='ACTIVE' AND ((:tiktok AND tiktokStatus='PENDING') OR (:threads AND threadsStatus='PENDING'))
+            COALESCE(r.tiktokStatus, 'PENDING') AS repost_tiktokStatus,
+            COALESCE(r.threadsStatus, 'PENDING') AS repost_threadsStatus,
+            COALESCE(r.tiktokState, '{"attempts":[]}') AS repost_tiktokState,
+            COALESCE(r.threadsState, '{"attempts":[]}') AS repost_threadsState
+        FROM adsTab LEFT JOIN repostAttemptsTab r ON r.id=adsTab.id
+        WHERE adsTab.chatId=:chatId AND status='ACTIVE'
+            AND ((:tiktok AND COALESCE(r.tiktokStatus, 'PENDING')='PENDING')
+                OR (:threads AND COALESCE(r.threadsStatus, 'PENDING')='PENDING'))
         ORDER BY timestamp DESC, adsTab.id DESC LIMIT 1
     """)
     suspend fun nextRepost(tiktok: Boolean, threads: Boolean, chatId: Long): RepostCandidate?
@@ -48,6 +52,12 @@ internal interface CatalogDao {
 
     @Query("SELECT * FROM repostTab")
     suspend fun reposts(): List<RepostEntity>
+
+    @Query("SELECT * FROM repostAttemptsTab WHERE id=:id")
+    suspend fun repostState(id: Long): RepostEntity?
+
+    @Query("SELECT * FROM repostAttemptsTab")
+    suspend fun repostStates(): List<RepostEntity>
 
     @Query("SELECT EXISTS(SELECT 1 FROM adsTab WHERE id=:id AND status='ACTIVE')")
     suspend fun isActive(id: Long): Boolean
@@ -67,11 +77,16 @@ internal interface CatalogDao {
     @Upsert
     suspend fun persistRepost(row: RepostEntity)
 
+    @Upsert
+    suspend fun persistRepostAttempt(row: RepostAttemptEntity)
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun recordStatistic(event: StatisticsEvent)
 
     @Transaction
     suspend fun saveRepost(row: RepostEntity) {
+        persistRepostAttempt(RepostAttemptEntity(row))
+        if (!row.hasExternalSend()) return
         persistRepost(row)
         val ad = listing(row.id) ?: return
         listOf("TIKTOK" to row.tiktokRepostedAt, "THREADS" to row.threadsRepostedAt).forEach { (kind, time) ->
@@ -79,14 +94,10 @@ internal interface CatalogDao {
         }
     }
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun initializeRepost(row: RepostEntity)
-
     /** Preserve publication history when advertisement content changes. */
     @Transaction
     suspend fun saveListing(row: AdEntity): Long {
         val id = saveAd(row.copy(typeOfRealty = com.rieltor.domain.model.CatalogCodes.normalizeType(row.typeOfRealty))).takeIf { it > 0 } ?: row.id
-        initializeRepost(RepostEntity(id))
         return id
     }
 

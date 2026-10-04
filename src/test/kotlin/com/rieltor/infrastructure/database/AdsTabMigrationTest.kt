@@ -45,7 +45,7 @@ class AdsTabMigrationTest {
                 rows.forEachIndexed { index, row ->
                     assertEquals("stable-$index", row.adId)
                     assertEquals("Original text", row.rawText)
-                    assertNotNull(repo.repost(row.id))
+                    assertNull(repo.repost(row.id))
                 }
                 db.blocking { room ->
                     assertEquals(2, room.catalogDao().query(CatalogListingQueryFactory.create(
@@ -63,7 +63,7 @@ class AdsTabMigrationTest {
 
     @Test fun `v28 migration preserves source timestamp and reposts`() = checkMigration(28)
 
-    @Test fun `new listing creates repost with generated id and survives updates`() {
+    @Test fun `new listing has no repost until sent and publication survives content updates`() {
         val path = Files.createTempDirectory("repost-insert").resolve("test.db")
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db)
@@ -74,7 +74,9 @@ class AdsTabMigrationTest {
             val id = repo.save(row)
             assertTrue(id > 0)
             assertEquals(row.copy(id = id), repo.listing(id))
-            db.blocking { it.catalogDao().saveRepost(requireNotNull(repo.repost(id)).copy(tiktokStatus = "PUBLISHED", tiktokRepostedAt = 200)) }
+            assertNull(repo.repost(id))
+            assertNull(repo.repostState(id))
+            db.blocking { it.catalogDao().saveRepost(com.rieltor.infrastructure.database.model.RepostEntity(id, tiktokStatus = "PUBLISHED", tiktokRepostedAt = 200)) }
             repo.save(requireNotNull(repo.listing(id)).copy(title = "Edited"))
             assertEquals(200L, repo.repost(id)?.tiktokRepostedAt)
             assertEquals("PENDING", repo.repost(id)?.threadsStatus)

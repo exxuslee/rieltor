@@ -50,7 +50,8 @@ class RepostWorkerTest {
                 for (destination in RepostDestination.entries) {
                     assertNull(repo.prepare(deniedId, setOf(destination), 5000))
                     assertFailsWith<IllegalStateException> { repo.prepareManual(deniedId, destination, 5000) }
-                    assertTrue(repo.publication(repo.repost(deniedId)!!, destination).attempts.isEmpty())
+                    assertNull(repo.repost(deniedId))
+                    assertNull(repo.repostState(deniedId))
                 }
                 repo.save(allowed)
                 worker.runOnce()
@@ -97,7 +98,8 @@ class RepostWorkerTest {
                 RepostWorker(repo, db.settings, listOf(publisher), media) { 5000L }.use { worker ->
                     worker.runOnce()
                     assertEquals(0, calls)
-                    assertEquals(RepostStatus.Failed, repo.status(repo.repost(invalidId)!!, publisher.destination))
+                    assertNull(repo.repost(invalidId))
+                    assertEquals(RepostStatus.Failed, repo.status(repo.repostState(invalidId)!!, publisher.destination))
                     worker.runOnce()
                     assertEquals(1, calls)
                     assertEquals(RepostStatus.Published, repo.status(repo.repost(validId)!!, publisher.destination))
@@ -139,15 +141,19 @@ class RepostWorkerTest {
             var now = 5000L
             RepostWorker(repo, db.settings, listOf(publisher), media) { now }.use { worker ->
                 worker.runOnce()
-                assertEquals(RepostStatus.Pending, repo.status(repo.repost(id)!!, publisher.destination))
+                assertNull(repo.repost(id))
+                assertEquals(RepostStatus.Pending, repo.status(repo.repostState(id)!!, publisher.destination))
                 assertEquals(0, calls)
                 blocked = false
                 worker.runOnce()
                 assertEquals(0, calls)
-                assertEquals(RepostStatus.Pending, repo.status(repo.repost(id)!!, publisher.destination))
+                assertNull(repo.repost(id))
+                assertEquals(RepostStatus.Pending, repo.status(repo.repostState(id)!!, publisher.destination))
                 now += 1000
                 worker.runOnce()
                 assertEquals(RepostStatus.DeliveredDraft, repo.status(repo.repost(id)!!, publisher.destination))
+                assertEquals(now, repo.repost(id)!!.tiktokRepostedAt)
+                assertEquals(1L, db.blocking { it.statisticsDao().counts(null) }.single { it.kind == "TIKTOK" }.count)
                 assertEquals(1, calls)
                 now += 1000
                 worker.runOnce()

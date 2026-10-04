@@ -65,7 +65,7 @@ class AdIdentityTest {
             }
             publish(1)
             val old = repo.listings().single()
-            db.blocking { it.catalogDao().saveRepost(requireNotNull(repo.repost(old.id)).copy(tiktokStatus = "PUBLISHED", tiktokRepostedAt = 1234)) }
+            db.blocking { it.catalogDao().saveRepost(com.rieltor.infrastructure.database.model.RepostEntity(old.id, tiktokStatus = "PUBLISHED", tiktokRepostedAt = 1234)) }
             publish(2, chat = -200, area = "40.0")
             assertEquals(old.id, repo.listings().single().id)
             assertEquals(1234L, repo.reposts().single().tiktokRepostedAt)

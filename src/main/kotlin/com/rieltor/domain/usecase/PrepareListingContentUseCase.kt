@@ -39,8 +39,7 @@ class PrepareListingContentUseCase(
         val locationIndex = (0 until titleIndex).lastOrNull { index ->
             index != addressIndex && looksLikeLocation(lines[index])
         }
-        val location = locationIndex?.let(lines::get)
-        val title = buildTitle(lines[titleIndex], location)
+        val title = buildTitle(lines[titleIndex])
 
         val content = lines.filterIndexed { index, _ ->
             index != titleIndex && index != locationIndex && index != addressIndex
@@ -98,10 +97,12 @@ class PrepareListingContentUseCase(
         return line.takeUnless { it.isBlank() || internalNoise.matches(it) } ?: ""
     }
 
-    private fun buildTitle(titleLine: String, location: String?): String {
-        val cleanTitle = titleLine.removeListMarker().trim().trimEnd('.', ',', ':')
-        if (location == null || containsLocation(cleanTitle)) return cleanTitle
-        return "$cleanTitle — ${location.trim().trimEnd('.', ',', ':')}"
+    private fun buildTitle(titleLine: String): String {
+        val cleanTitle = titleLine.removeListMarker()
+            .replaceFirst(saleTitlePrefix, "")
+            .trim().trimEnd('.', ',', ':')
+            .replaceFirstChar(Char::lowercase)
+        return "Продам $cleanTitle"
     }
 
     private fun looksLikePropertyTitle(line: String): Boolean = propertyType.containsMatchIn(line)
@@ -109,8 +110,6 @@ class PrepareListingContentUseCase(
     private fun looksLikeLocation(line: String): Boolean =
         !distanceToCity.containsMatchIn(line) && (locationWords.containsMatchIn(line) ||
             (line.length <= 60 && !line.any(Char::isDigit) && !propertyType.containsMatchIn(line)))
-
-    private fun containsLocation(line: String): Boolean = cityWords.containsMatchIn(line)
 
     private fun looksLikeAddress(line: String): Boolean = addressWords.containsMatchIn(line)
 
@@ -166,17 +165,15 @@ class PrepareListingContentUseCase(
         )
         val repeatedWhitespace = Regex("""[\t ]{2,}""")
         val listMarker = Regex("""^[\-–—•*]+\s*""")
+        val saleTitlePrefix = Regex("""(?iu)^(?:(?:продам|продаж)\s+)+""")
         val contactNameOnly = Regex(
             """(?iu)^\s*[\p{L}][\p{L}'ʼ’.-]*(?:\s+[\p{L}][\p{L}'ʼ’.-]*){0,2}(?:\s*,?\s+АН\s+НОВАТОР)?\s*$"""
         )
         val propertyType = Regex(
-            """(?iu)(?:таунхаус\p{L}*|дуплекс\p{L}*|квартир\p{L}*|студі\p{L}*|(?<![\p{L}\p{N}])\d\s*-?\s*кк?(?!\p{L})|будинок|будинки|ділянк\p{L}*|комерці\p{L}*|офіс\p{L}*)"""
+            """(?iu)(?:таунхаус\p{L}*|дуплекс\p{L}*|квартир\p{L}*|студі\p{L}*|(?<![\p{L}\p{N}])\d\s*-?\s*кк?(?!\p{L})|будинок|будинки|ділянк\p{L}*|комерці\p{L}*|офіс\p{L}*|^(?:продам\s+|продаж\s+)?(?:дом|таун)(?!\p{L}))"""
         )
         val locationWords = Regex(
             """(?iu)(?:ірпін\p{L}*|буч\p{L}*|гостомел\p{L}*|горенич\p{L}*|стоянк\p{L}*|софіївськ\p{L}*|михайлівц\p{L}*|северинівк\p{L}*|гнатівк\p{L}*|(?:^|\s)жк(?:\s|$)|(?:^|\s)вул\.?\s|вулиц\p{L}*)"""
-        )
-        val cityWords = Regex(
-            """(?iu)(?:ірпін\p{L}*|буч\p{L}*|гостомел\p{L}*|горенич\p{L}*|стоянк\p{L}*|софіївськ\p{L}*|михайлівц\p{L}*|северинівк\p{L}*|гнатівк\p{L}*)"""
         )
         val addressWords = Regex(
             """(?iu)(?:(?:^|\s)(?:вул\.?|вулиц\p{L}*|пров\.?|провул\p{L}*|просп\.?|проспект\p{L}*)\s|(?:^|\s)жк(?:\s|$))"""

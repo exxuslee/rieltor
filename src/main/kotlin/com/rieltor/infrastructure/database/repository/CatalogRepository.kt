@@ -73,6 +73,8 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     fun listings() = database.blocking { it.catalogDao().listings() }
     fun repost(id: Long) = database.blocking { it.catalogDao().repost(id) }
     fun reposts() = database.blocking { it.catalogDao().reposts() }
+    fun repostState(id: Long) = database.blocking { it.catalogDao().repostState(id) }
+    fun repostStates() = database.blocking { it.catalogDao().repostStates() }
 
     fun cachedPhotos(prepared: AdEntity): List<CatalogPhoto> = transaction { dao ->
         dao.photosForAd(prepared.adId)?.let { json.decodeFromString<List<CatalogPhoto>>(it) }
@@ -230,7 +232,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
                 )
             )
         }
-        dao.reposts().forEach { row ->
+        dao.repostStates().forEach { row ->
             var updated = row
             RepostDestination.entries.forEach { destination ->
                 val state = publication(updated, destination)
@@ -251,7 +253,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     }
 
     fun prepare(id: Long, destinations: Set<RepostDestination>, now: Long): String? = transaction { dao ->
-        val row = dao.repost(id) ?: return@transaction null
+        val row = dao.repostState(id) ?: RepostEntity(id)
         if (!dao.isActive(id)) return@transaction null
         if (dao.listing(id)?.chatId != REPOST_SOURCE_CHAT_ID) return@transaction null
         val attemptId = UUID.randomUUID().toString()
@@ -275,7 +277,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         check(dao.listing(id)?.chatId == REPOST_SOURCE_CHAT_ID) {
             "Reposts are allowed only from chatId=$REPOST_SOURCE_CHAT_ID"
         }
-        val row = checkNotNull(dao.repost(id)) { "Missing repostTab row for adsTab.id=$id" }
+        val row = dao.repostState(id) ?: RepostEntity(id)
         val state = publication(row, destination)
         val unresolved = setOf(RepostStatus.Prepared, RepostStatus.Sending,
             RepostStatus.AwaitingConfirmation, RepostStatus.Unknown)
@@ -293,7 +295,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         id: Long, destination: RepostDestination, attemptId: String, now: Long,
         change: (PublishAttempt) -> PublishAttempt
     ) = transaction { dao ->
-        val row = dao.repost(id) ?: return@transaction
+        val row = dao.repostState(id) ?: return@transaction
         val state = publication(row, destination)
         val next =
             state.copy(attempts = state.attempts.map { if (it.attemptId == attemptId) change(it).copy(updatedAt = now) else it })
@@ -301,7 +303,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     }
 
     fun updatePublish(publishId: String, now: Long, change: (PublishAttempt) -> PublishAttempt) = transaction { dao ->
-        dao.reposts().forEach { row ->
+        dao.repostStates().forEach { row ->
             val state = publication(row, RepostDestination.TIKTOK)
             if (state.attempts.any { it.publishId == publishId }) {
                 val next =
@@ -322,17 +324,19 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         overrideStatus: RepostStatus? = null
     ): RepostEntity {
         val last = state.attempts.lastOrNull()
-        val published = state.attempts.any { it.status == RepostStatus.Published }
+        val delivered = state.attempts.any {
+            it.status == RepostStatus.Published || it.status == RepostStatus.DeliveredDraft
+        }
         val status = (overrideStatus ?: last?.status ?: RepostStatus.Pending).code
         return if (destination == RepostDestination.TIKTOK) row.copy(
             tiktokState = json.encodeToString(state),
             tiktokStatus = status,
-            tiktokRepostedAt = row.tiktokRepostedAt ?: now.takeIf { published }
+            tiktokRepostedAt = row.tiktokRepostedAt ?: now.takeIf { delivered }
         )
         else row.copy(
             threadsState = json.encodeToString(state),
             threadsStatus = status,
-            threadsRepostedAt = row.threadsRepostedAt ?: now.takeIf { published }
+            threadsRepostedAt = row.threadsRepostedAt ?: now.takeIf { delivered }
         )
     }
 }

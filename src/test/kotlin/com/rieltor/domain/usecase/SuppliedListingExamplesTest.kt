@@ -23,7 +23,7 @@ class SuppliedListingExamplesTest {
     @Test fun `distance to Irpin does not locate the house in Irpin`() {
         val result = parse("Село Соснівка\n40км від Ірпеня\nБудинок\nЗагальна площа 72м2\n4 кімнати\nПлоща ділянки 25соток\nЦіна 20000$ (2000/2)")
         assertEquals("OTHER", result.location)
-        assertEquals("Будинок — Село Соснівка", assertNotNull(result.content).title)
+        assertEquals("Продам будинок", assertNotNull(result.content).title)
         assertFalse(assertNotNull(result.content).hashtags.contains("#Ірпінь"))
         assertEquals(72.0, result.areaM2)
         assertEquals(25.0, result.landAreaSotka)

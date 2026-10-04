@@ -68,7 +68,7 @@ class TikTokRepostTest {
                 draft = true
                 assertEquals(RepostStatus.DeliveredDraft, worker.repostTikTok(id).status)
                 assertEquals(2, repo.publication(repo.repost(id)!!, publisher.destination).attempts.size)
-                assertEquals(RepostStatus.Pending, repo.status(repo.repost(newerId)!!, publisher.destination))
+                assertNull(repo.repost(newerId))
                 assertEquals(RepostStatus.Pending, repo.status(repo.repost(id)!!, RepostDestination.THREADS))
                 fail = true
                 assertFailsWith<IllegalStateException> { worker.repostTikTok(id) }

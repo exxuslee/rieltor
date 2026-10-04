@@ -45,7 +45,9 @@ class CatalogRepostQueueTest {
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db)
             repo.recover(2000)
-            val repost = assertNotNull(repo.repost(repo.listings().single().id))
+            val id = repo.listings().single().id
+            assertNull(repo.repost(id))
+            val repost = assertNotNull(repo.repostState(id))
             assertEquals(RepostStatus.Unknown, repo.status(repost, RepostDestination.TIKTOK))
             assertEquals(RepostStatus.Pending, repo.status(repost, RepostDestination.THREADS))
             assertNull(repo.nextRepost(true, false))

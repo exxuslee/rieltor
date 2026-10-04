@@ -11,10 +11,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import java.nio.file.Files
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 class CatalogPhotoPublicationTest {
     @Test fun `publishes ordered album once and respects destination photo limits`() = runBlocking {
@@ -47,7 +44,7 @@ class CatalogPhotoPublicationTest {
         withListing(disabled = true) { repo, id, worker, calls ->
             worker.runOnce()
             assertTrue(calls.isEmpty())
-            assertEquals(RepostStatus.Pending, repo.status(assertNotNull(repo.repost(id)), RepostDestination.TIKTOK))
+            assertNull(repo.repost(id))
         }
     }
 
@@ -66,7 +63,7 @@ class CatalogPhotoPublicationTest {
                 Files.write(directory.resolve("media").resolve(name), byteArrayOf(n.toByte()))
                 CatalogPhoto(name, "$n", "1", 1, 1, "hash$n")
             }
-            val id = repo.save(AdEntity(adId = "ad", chatId = -1, messageId = 1, messageThreadId = 1,
+            val id = repo.save(AdEntity(adId = "ad", chatId = REPOST_SOURCE_CHAT_ID, messageId = 1, messageThreadId = 1,
                 sourceRevision = "1", title = "Listing", price = 80000, currency = "USD",
                 timestamp = 1000, status = ListingStatus.Active, photos = Json.encodeToString(photos)))
             val calls = mutableListOf<Triple<RepostDestination, List<String>, String>>()

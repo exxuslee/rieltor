@@ -87,6 +87,30 @@ data class RepostEntity(
     val threadsState: String = "{\"attempts\":[]}",
 )
 
+/** Durable dispatch state, including attempts whose external outcome is still unknown. */
+@Entity(
+    tableName = "repostAttemptsTab",
+    foreignKeys = [androidx.room.ForeignKey(
+        entity = AdEntity::class, parentColumns = ["id"], childColumns = ["id"],
+        onDelete = androidx.room.ForeignKey.CASCADE,
+    )],
+    indices = [Index(value = ["tiktokStatus"]), Index(value = ["threadsStatus"])],
+)
+data class RepostAttemptEntity(
+    @PrimaryKey val id: Long,
+    val tiktokRepostedAt: Long?,
+    val threadsRepostedAt: Long?,
+    val tiktokStatus: String,
+    val threadsStatus: String,
+    val tiktokState: String,
+    val threadsState: String,
+) {
+    constructor(row: RepostEntity) : this(
+        row.id, row.tiktokRepostedAt, row.threadsRepostedAt, row.tiktokStatus,
+        row.threadsStatus, row.tiktokState, row.threadsState,
+    )
+}
+
 /** Only the repost worker needs both the advertisement and its publication state. */
 @androidx.room.TypeConverters(ListingStatusConverters::class)
 data class RepostCandidate(

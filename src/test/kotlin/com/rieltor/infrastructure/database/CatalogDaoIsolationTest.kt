@@ -123,7 +123,8 @@ class CatalogDaoIsolationTest {
             val destination = RepostDestination.TIKTOK
             val first = assertNotNull(repo.prepare(id, setOf(destination), 200))
             repo.recover(300)
-            assertEquals(RepostStatus.Pending, repo.status(assertNotNull(repo.repost(id)), destination))
+            assertNull(repo.repost(id))
+            assertEquals(RepostStatus.Pending, repo.status(assertNotNull(repo.repostState(id)), destination))
             val second = assertNotNull(repo.prepare(id, setOf(destination), 400))
             assertNotEquals(first, second)
             repo.changeAttempt(id, destination, second, 500) {
