@@ -89,6 +89,7 @@ class PrepareListingContentUseCase(
         line = googleUrl.replace(line, "")
         line = agency.replace(line, "")
         line = exclusiveAbbreviation.replace(line, "")
+        line = saleByPowerOfAttorney.replace(line, "")
         line = priceParentheticalNote.replace(line, "$1")
         line = parenthesizedCommission.replace(line, "")
         line = commissionTail.replace(line, "")
@@ -160,6 +161,7 @@ class PrepareListingContentUseCase(
         )
         val standalonePercentage = Regex("""^\s*\d[\d.,]*\s*%\s*$""")
         val exclusiveAbbreviation = Regex("""(?iu)(?<![\p{L}\p{N}_])екс(?![\p{L}\p{N}_])\.?""")
+        val saleByPowerOfAttorney = Regex("""(?iu)(?<![\p{L}\p{N}_])продаж\s+по\s+дорученню(?![\p{L}\p{N}_])""")
         val internalNoise = Regex(
             """(?iu)^\s*(?:продаж|новий\s+об['ʼ’]?єкт!?|ексклюзив|терміново!?|без\s+реклами\s*!*|бартер)\s*$"""
         )
