@@ -13,7 +13,11 @@
 
     async function request(path, signal) {
         const response = await fetch(`${base}${path}`, {signal, headers: {Accept: 'application/json'}});
-        if (!response.ok) throw new Error(response.status === 404 ? 'Об’єкт більше не доступний.' : 'Не вдалося завантажити оголошення. Спробуйте ще раз.');
+        if (!response.ok) {
+            const error = new Error(response.status === 404 ? 'Об’єкт більше не доступний.' : 'Не вдалося завантажити оголошення. Спробуйте ще раз.');
+            error.status = response.status;
+            throw error;
+        }
         return response.json();
     }
 

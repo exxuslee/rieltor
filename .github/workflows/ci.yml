@@ -26,5 +26,7 @@ jobs:
           ./gradlew build --no-daemon
       - name: Smoke check
         run: node docs/scripts/check-smoke.mjs
+      - name: Sitemap generator tests
+        run: node --test docs/scripts/generate-sitemap.test.mjs
       - name: SEO check
         run: node docs/scripts/check-seo.mjs

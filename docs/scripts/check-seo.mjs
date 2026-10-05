@@ -19,13 +19,14 @@ for (const file of htmlFiles) {
     const relative = path.relative(root, file).replaceAll('\\', '/');
     const html = fs.readFileSync(file, 'utf8');
     const indexable = !/<meta\b(?=[^>]*\bname="robots")(?=[^>]*\bcontent="[^"]*noindex)[^>]*>/i.test(html);
+    const dynamicProperty = relative === 'property.html' && html.includes('src="/js/property-detail.js?v=2"');
     if (!/<html\s+lang="uk"/i.test(html)) errors.push(`${relative}: missing Ukrainian document language`);
     for (const [label, pattern] of [
         ['title', /<title>[^<]+<\/title>/i],
         ['description', /<meta\b(?=[^>]*\bname="description")(?=[^>]*\bcontent="[^"]+")[^>]*>/i],
         ['h1', /<h1[\s>]/i]
     ]) if (!pattern.test(html)) errors.push(`${relative}: missing ${label}`);
-    if (indexable && !/<link\b(?=[^>]*\brel="canonical")(?=[^>]*\bhref="https:\/\/rieltor\.dpdns\.org\/[^"]*")[^>]*>/i.test(html)) errors.push(`${relative}: missing HTTPS canonical`);
+    if (indexable && !dynamicProperty && !/<link\b(?=[^>]*\brel="canonical")(?=[^>]*\bhref="https:\/\/rieltor\.dpdns\.org\/[^"]*")[^>]*>/i.test(html)) errors.push(`${relative}: missing HTTPS canonical`);
 
     const schemaTypes = new Set();
     for (const match of html.matchAll(/<script\s+type="application\/ld\+json">([\s\S]*?)<\/script>/gi)) {
@@ -74,11 +75,15 @@ for (const agent of ['GPTBot', 'OAI-SearchBot', 'ChatGPT-User', 'ClaudeBot', 'Pe
 
 const sitemap = fs.readFileSync(path.join(root, 'sitemap.xml'), 'utf8');
 const sitemapUrls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => match[1]);
+if (new Set(sitemapUrls).size !== sitemapUrls.length) errors.push('sitemap: duplicate URLs');
 for (const url of sitemapUrls) {
     if (!url.startsWith('https://rieltor.dpdns.org/')) errors.push(`sitemap: non-HTTPS URL ${url}`);
+    if (/[{}]/.test(url)) errors.push(`sitemap: URL template is not supported: ${url}`);
     const pathname = new URL(url).pathname;
+    if (pathname === '/property.html' && !/^[1-9]\d*$/.test(new URL(url).searchParams.get('id') || '')) errors.push(`sitemap: invalid property ID ${url}`);
     const target = pathname === '/' ? path.join(root, 'index.html') : path.join(root, pathname.slice(1));
     if (!fs.existsSync(target)) errors.push(`sitemap: missing target ${pathname}`);
+    else if (/<meta\b(?=[^>]*\bname="robots")(?=[^>]*\bcontent="[^"]*noindex)[^>]*>/i.test(fs.readFileSync(target, 'utf8'))) errors.push(`sitemap: noindex target ${url}`);
 }
 
 if (errors.length) {

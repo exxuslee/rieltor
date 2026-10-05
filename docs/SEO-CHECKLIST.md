@@ -14,9 +14,13 @@
 
 1. Добавить и подтвердить доменный ресурс `rieltor.dpdns.org`.
 2. Отправить `https://rieltor.dpdns.org/sitemap.xml`.
-3. Проверить главную, `buy.html` и 2–3 страницы из `/properties/` через URL Inspection.
+3. Проверить главную, `buy.html` и 2–3 страницы `property.html?id=…` из sitemap через URL Inspection.
 4. В отрендерованном HTML проверить `h1`, описание объекта, canonical и JSON-LD.
 5. Запросить индексирование ключевых URL и затем контролировать отчёты Pages, Performance и Core Web Vitals.
+
+Перед публикацией запускать `node docs/scripts/generate-sitemap.mjs`: он получает все публичные ID из API,
+проходя все страницы каталога. При изменении каталога запуск повторить и опубликовать обновлённый XML.
+Шаблоны `{id}` и `*` в sitemap не поддерживаются. Sitemap помогает обнаружению страниц, но не гарантирует индексацию.
 
 ## Google Business Profile
 
