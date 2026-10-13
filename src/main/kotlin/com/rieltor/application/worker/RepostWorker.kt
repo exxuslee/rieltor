@@ -76,6 +76,7 @@ class RepostWorker(
         require(id > 0) { "Expected a positive adsTab.id" }
         val row = checkNotNull(repository.listing(id)) { "adsTab.id=$id was not found" }
         check(row.status == ListingStatus.Active) { "adsTab.id=$id is not ACTIVE" }
+        check(repository.isAllowRepost(id)) { "adsTab.id=$id forbids reposting (без реклами)" }
         check(row.chatId == REPOST_SOURCE_CHAT_ID) {
             "Reposts are allowed only from chatId=$REPOST_SOURCE_CHAT_ID"
         }
@@ -138,6 +139,7 @@ class RepostWorker(
             val photoUrls = photoUrls(row, publisher.maxPhotoCount)
             val caption = captionFormatter.forCatalog(row, settings.snapshot().repostContactPhone)
             publisher.awaitPublishSlot()
+            check(repository.isAllowRepost(row.id)) { "adsTab.id=${row.id} forbids reposting (без реклами)" }
             check(repository.listing(row.id)?.chatId == REPOST_SOURCE_CHAT_ID) {
                 "Reposts are allowed only from chatId=$REPOST_SOURCE_CHAT_ID"
             }

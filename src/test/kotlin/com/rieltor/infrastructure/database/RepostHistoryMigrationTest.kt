@@ -43,6 +43,7 @@ class RepostHistoryMigrationTest {
         }
         BundledSQLiteDriver().open(path.toString()).use {
             it.execSQL("DROP TABLE repostAttemptsTab")
+            it.execSQL("ALTER TABLE incomeTab DROP COLUMN isAllowRepost")
             it.execSQL("PRAGMA user_version=33")
         }
         repeat(2) {

@@ -41,6 +41,8 @@ internal interface CatalogDao {
             COALESCE(r.threadsState, '{"attempts":[]}') AS repost_threadsState
         FROM adsTab LEFT JOIN repostAttemptsTab r ON r.id=adsTab.id
         WHERE adsTab.chatId=:chatId AND status='ACTIVE'
+            AND NOT EXISTS (SELECT 1 FROM incomeTab i
+                WHERE i.chatId=adsTab.chatId AND i.messageId IS adsTab.messageId AND i.isAllowRepost=0)
             AND ((:tiktok AND COALESCE(r.tiktokStatus, 'PENDING')='PENDING')
                 OR (:threads AND COALESCE(r.threadsStatus, 'PENDING')='PENDING'))
         ORDER BY timestamp DESC, adsTab.id DESC LIMIT 1

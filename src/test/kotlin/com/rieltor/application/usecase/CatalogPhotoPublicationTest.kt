@@ -14,6 +14,16 @@ import java.nio.file.Files
 import kotlin.test.*
 
 class CatalogPhotoPublicationTest {
+    @Test fun `caption edited while awaiting publisher slot prevents external sends`() = runBlocking {
+        withListing(blockOnWait = true) { repo, id, worker, calls ->
+            worker.runOnce()
+            assertTrue(calls.isEmpty())
+            assertFalse(repo.isAllowRepost(id))
+            assertNull(repo.repost(id))
+            assertFailsWith<IllegalStateException> { worker.repostTikTok(id) }
+        }
+    }
+
     @Test fun `publishes ordered album once and respects destination photo limits`() = runBlocking {
         withListing { repo, id, worker, calls ->
             worker.runOnce()
@@ -49,7 +59,7 @@ class CatalogPhotoPublicationTest {
     }
 
     private suspend fun withListing(
-        failFirst: Boolean = false, disabled: Boolean = false,
+        failFirst: Boolean = false, disabled: Boolean = false, blockOnWait: Boolean = false,
         test: suspend (CatalogRepository, Long, RepostWorker, MutableList<Triple<RepostDestination, List<String>, String>>) -> Unit,
     ) {
         val directory = Files.createTempDirectory("catalog-publication")
@@ -73,6 +83,12 @@ class CatalogPhotoPublicationTest {
                 object : PhotoPublisher {
                     override val destination = destination
                     override val maxPhotoCount = if (destination == RepostDestination.TIKTOK) 2 else 3
+                    override suspend fun awaitPublishSlot() {
+                        if (blockOnWait) repo.receive(SourceMessage(
+                            REPOST_SOURCE_CHAT_ID, 1, 1, "Квартира без реклами", "", 1000,
+                            sourceEditedAt = 2000,
+                        ), 2000, 0)
+                    }
                     override suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt {
                         active++
                         maximumActive = maxOf(maximumActive, active)
@@ -87,7 +103,7 @@ class CatalogPhotoPublicationTest {
             }
             RepostWorker(repo, db.settings, publishers, media) { 5000L }.use { worker ->
                 test(repo, id, worker, calls)
-                assertEquals(if (disabled) 0 else 1, maximumActive)
+                assertEquals(if (disabled || blockOnWait) 0 else 1, maximumActive)
                 assertEquals(if (disabled) 0 else 1, db.settings.snapshot().slotReservations.size)
             }
         }

@@ -36,6 +36,7 @@ class AdsTabMigrationTest {
                 }
             }
             connection.execSQL("PRAGMA user_version=32")
+            connection.execSQL("ALTER TABLE incomeTab DROP COLUMN isAllowRepost")
         }
         repeat(2) {
             RoomDatabaseStore(path).use { db ->

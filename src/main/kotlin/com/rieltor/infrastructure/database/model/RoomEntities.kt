@@ -20,6 +20,8 @@ data class IncomingEntity(
     val messageThreadId: Long,
     val userId: Long? = null,
     val rawText: String,
+    @androidx.room.ColumnInfo(defaultValue = "1")
+    val isAllowRepost: Boolean = allowsRepost(rawText),
     val sourceCreatedAt: Long,
     val sourceEditedAt: Long = 0,
     val contentHash: String,

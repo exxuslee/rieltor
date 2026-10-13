@@ -16,7 +16,7 @@ import java.nio.file.attribute.PosixFilePermission
 
 @Database(
     entities = [IncomingEntity::class, AdEntity::class, RepostEntity::class, RepostAttemptEntity::class, StatisticsEvent::class],
-    version = 34,
+    version = 35,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -27,6 +27,20 @@ internal abstract class RieltorDatabase : RoomDatabase() {
 // Migrations up to 22 intentionally keep the historical table name `incoming_telegram_messages`:
 // it is what the schema was called at those versions. The table becomes `incomeTab` in 22 -> 23.
 private val migrations = arrayOf(
+    object : Migration(34, 35) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE incomeTab ADD COLUMN isAllowRepost INTEGER NOT NULL DEFAULT 1")
+            connection.prepare("SELECT id, rawText FROM incomeTab").use { query ->
+                while (query.step()) {
+                    if (allowsRepost(query.getText(1))) continue
+                    connection.prepare("UPDATE incomeTab SET isAllowRepost=0 WHERE id=?").use {
+                        it.bindLong(1, query.getLong(0))
+                        it.step()
+                    }
+                }
+            }
+        }
+    },
     object : Migration(33, 34) {
         override fun migrate(connection: SQLiteConnection) {
             connection.execSQL("""
