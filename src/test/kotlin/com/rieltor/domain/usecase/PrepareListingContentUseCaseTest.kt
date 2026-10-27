@@ -136,6 +136,28 @@ class PrepareListingContentUseCaseTest {
     }
 
     @Test
+    fun `removes spaced international phone and contact name with different line endings`() {
+        listOf("\n", "\r\n", "\r").forEach { newline ->
+            val source = listOf(
+                "Квартира в Ірпені",
+                "Площа 44 м2",
+                "Ціна 52500${'$'}",
+                "+380 98 651 26 33",
+                "Таня",
+            ).joinToString(newline)
+
+            val listing = assertNotNull(prepareContent(source))
+
+            assertEquals("Продам квартира в Ірпені", listing.title)
+            assertEquals("52500${'$'}", listing.price)
+            assertEquals(listOf("Площа 44 м2"), listing.keyParameters)
+            assertTrue(listing.additionalParameters.isEmpty())
+            assertEquals("066-372-71-02", listing.phone)
+            assertNull(prepareContent("+380 98 651 26 33${newline}Таня"))
+        }
+    }
+
+    @Test
     fun `removes any parenthesized note immediately after a price`() {
         val source = """
             Квартира в Ірпені

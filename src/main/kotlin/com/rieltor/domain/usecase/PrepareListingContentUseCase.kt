@@ -16,7 +16,6 @@ class PrepareListingContentUseCase(
         if (message.isNullOrBlank()) return null
 
         val sourceLines = message
-            .replace('\r', '\n')
             .replace('\u00A0', ' ')
             .lineSequence()
             .map(String::trim)
@@ -148,7 +147,7 @@ class PrepareListingContentUseCase(
         val agencyLine = Regex("""(?iu)^\s*(?:АН|AH)\s+.+$""")
         val commissionSplit = Regex("""^\s*\d+(?:[.,]\d+)?\s*%?\s*[/\\]\s*2\s*$""")
         val taxCostLine = Regex("""(?iu)^\s*(?:подат\p{L}*|налог\p{L}*)\s*[:\-–—]?\s*\d""")
-        val phone = Regex("""(?<!\d)(?:\+?38[\s().-]*)?0\d{2}(?:[\s().-]*\d){7}(?!\d)""")
+        val phone = Regex("""(?<!\d)(?:\+?38[\s().-]*)?0[\s().-]*\d{2}(?:[\s().-]*\d){7}(?!\d)""")
         val agency = Regex("""(?iu)(?<!\p{L})АН\s*[«\"']?\s*(?:НОВАТОР|NOVATOR)\s*[»\"']?|(?<!\p{L})(?:АН\s+)?НОВАТОР(?!\p{L})""")
         val parenthesizedCommission = Regex(
             """(?iu)\s*\(\s*\d[\d\s.,]*\s*(?:[$€]|%)\s*[/\\]\s*2\s*\)"""

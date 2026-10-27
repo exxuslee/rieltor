@@ -33,20 +33,26 @@ class ListingCaptionFormatter {
 
     fun forTikTok(listing: ListingMessage?): String? {
         listing ?: return null
+        val governmentPrograms = listing.governmentPrograms?.takeIf(String::isNotBlank)
+        fun visibleDetails(details: List<String>): List<String> = if (governmentPrograms == null) details else
+            details.flatMap { it.lines() }.filterNot(governmentProgramLine::containsMatchIn)
+                .filter(String::isNotBlank)
+        val keyParameters = visibleDetails(listing.keyParameters)
+        val additionalParameters = visibleDetails(listing.additionalParameters)
 
         return buildList {
             add("$TITLE_PREFIX${listing.title}")
             listing.address?.let { add("📍 $it") }
             add("💰 ${listing.price}")
-            if (listing.keyParameters.isNotEmpty()) {
+            if (keyParameters.isNotEmpty()) {
                 add("")
-                listing.keyParameters.forEach { add("$ITEM_PREFIX$it") }
+                keyParameters.forEach { add("$ITEM_PREFIX$it") }
             }
-            if (listing.additionalParameters.isNotEmpty()) {
+            if (additionalParameters.isNotEmpty()) {
                 add("")
-                listing.additionalParameters.forEach(::add)
+                additionalParameters.forEach(::add)
             }
-            listing.governmentPrograms?.let { add("🏦 $it") }
+            governmentPrograms?.let { add("🏦 $it") }
             listing.registration?.let { add("📄 $it") }
             add("")
             add("🤙 ${listing.phone} $PUBLIC_CONTACT_NAME")
@@ -60,6 +66,9 @@ class ListingCaptionFormatter {
     }
 
     private companion object {
+        val governmentProgramLine = Regex(
+            """(?iu)(?:держ(?:авн\p{L}*|\.)?\s*програм\p{L}*|[єе]осел\p{L}*|сертиф[іи]кат\p{L}*|постанов\p{L}*|ваучер\p{L}*)"""
+        )
         const val PUBLIC_CONTACT_NAME = "Ірина"
         const val TITLE_PREFIX = "🏠 "
         const val ITEM_PREFIX = "• "
