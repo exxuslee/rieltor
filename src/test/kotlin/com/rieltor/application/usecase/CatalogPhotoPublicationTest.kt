@@ -105,6 +105,7 @@ class CatalogPhotoPublicationTest {
                 test(repo, id, worker, calls)
                 assertEquals(if (disabled || blockOnWait) 0 else 1, maximumActive)
                 assertEquals(if (disabled) 0 else 1, db.settings.snapshot().slotReservations.size)
+                assertEquals(if (disabled || blockOnWait) 0 else 1, db.settings.snapshot().threadsSlotReservations.size)
             }
         }
     }

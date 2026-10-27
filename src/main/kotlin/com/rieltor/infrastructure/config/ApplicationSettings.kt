@@ -54,8 +54,6 @@ data class ApplicationSettings(
     val tikTokClientSecret: String,
     val tikTokRedirectUri: String,
     val tikTokMode: TikTokMode = TikTokMode.POST,
-    val repostMaxMessagesPer24Hours: Int = DEFAULT_REPOST_MAX_MESSAGES_PER_24_HOURS,
-    val repostMinIntervalMinutes: Long = DEFAULT_REPOST_MIN_INTERVAL_MINUTES,
     val tikTokDailyLimitCooldownHours: Long = DEFAULT_TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS,
     val repostMaxPhotoCount: Int = DEFAULT_REPOST_MAX_PHOTO_COUNT,
     val googleClientId: String = "",
@@ -64,7 +62,6 @@ data class ApplicationSettings(
     val threadsAppId: String = "",
     val threadsAppSecret: String = "",
     val threadsRedirectUri: String = "",
-    val threadsEnabled: Boolean = false,
     val telegramListingBotToken: String = "",
     val telegramListingBotMaxPhotoCount: Int = DEFAULT_TELEGRAM_LISTING_BOT_MAX_PHOTO_COUNT,
     val landingTelegramBotToken: String = "",
@@ -99,8 +96,6 @@ data class ApplicationSettings(
                 tikTokClientSecret = secrets.require(SecretNames.TIKTOK_CLIENT_SECRET),
                 tikTokRedirectUri = redirectUri,
                 tikTokMode = TikTokMode.valueOf(local.tikTokMode.uppercase()),
-                repostMaxMessagesPer24Hours = local.maxMessagesPer24Hours,
-                repostMinIntervalMinutes = local.minIntervalMs / 60_000,
                 tikTokDailyLimitCooldownHours = local.tikTokDailyLimitCooldownHours,
                 repostMaxPhotoCount = local.repostMaxPhotoCount,
                 googleClientId = secrets.require(SecretNames.GOOGLE_CLIENT_ID),
@@ -109,7 +104,6 @@ data class ApplicationSettings(
                 threadsAppId = secrets.get(SecretNames.THREADS_APP_ID).orEmpty(),
                 threadsAppSecret = secrets.get(SecretNames.THREADS_APP_SECRET).orEmpty(),
                 threadsRedirectUri = secrets.get(SecretNames.THREADS_REDIRECT_URI).orEmpty(),
-                threadsEnabled = local.threadsEnabled,
                 telegramListingBotToken = secrets.get(SecretNames.TELEGRAM_LISTING_BOT_TOKEN)
                     .orEmpty()
                     .ifBlank { landingBotToken },
@@ -137,7 +131,5 @@ private fun SecretRepository.require(name: String): String =
 
 const val DEFAULT_REPOST_MAX_PHOTO_COUNT = 10
 const val TIKTOK_API_MAX_PHOTO_COUNT = 35
-const val DEFAULT_REPOST_MAX_MESSAGES_PER_24_HOURS = 36
-const val DEFAULT_REPOST_MIN_INTERVAL_MINUTES = 20L
 const val DEFAULT_TIKTOK_DAILY_LIMIT_COOLDOWN_HOURS = 8L
 const val DEFAULT_TELEGRAM_LISTING_BOT_MAX_PHOTO_COUNT = 100

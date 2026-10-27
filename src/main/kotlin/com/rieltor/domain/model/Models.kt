@@ -82,19 +82,3 @@ data class PublishReceipt(
     val destination: RepostDestination = RepostDestination.TIKTOK,
 )
 
-data class RepostFailure(
-    val destination: RepostDestination,
-    val reason: String,
-)
-
-sealed interface RepostResult {
-    data class Published(
-        val receipts: List<PublishReceipt>,
-        val failures: List<RepostFailure> = emptyList(),
-    ) : RepostResult {
-        val receipt: PublishReceipt get() = receipts.first()
-    }
-    data object IgnoredSource : RepostResult
-    data object IgnoredContent : RepostResult
-    data object Duplicate : RepostResult
-}

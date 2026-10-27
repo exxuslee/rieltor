@@ -11,9 +11,6 @@ class TikTokRepositoryImpl(
     private val catalog: CatalogRepository = CatalogRepository(database)
 ) : TikTokRepository {
 
-    override fun reserveSlot(nowMillis: Long, windowMillis: Long, maxPostsPerWindow: Int, minIntervalMillis: Long) =
-        database.settings.reserveAnonymous(nowMillis, windowMillis, maxPostsPerWindow, minIntervalMillis)
-
     override fun blockUntil(blockedUntilMillis: Long) =
         database.settings.update { it.copy(blockedUntil = maxOf(it.blockedUntil, blockedUntilMillis)) }
 
@@ -53,6 +50,4 @@ class TikTokRepositoryImpl(
         }
     }
 
-    override fun removeTrackedPublish(publishId: String) =
-        Unit // History belongs to the listing and is never erased here.
 }

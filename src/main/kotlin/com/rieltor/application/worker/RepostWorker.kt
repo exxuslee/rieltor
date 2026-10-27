@@ -2,7 +2,6 @@ package com.rieltor.application.worker
 
 import com.rieltor.application.port.PublicationContext
 import com.rieltor.application.port.Worker
-import com.rieltor.application.service.CatalogRepostMasterLimiter
 import com.rieltor.application.service.ListingCaptionFormatter
 import com.rieltor.domain.model.*
 import com.rieltor.domain.repository.PhotoPublisher
@@ -12,11 +11,12 @@ import com.rieltor.infrastructure.database.model.AdEntity
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.minutes
 
 class RepostWorker(
     private val repository: CatalogRepository,
@@ -27,27 +27,30 @@ class RepostWorker(
 ) : Worker {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val limiter = CatalogRepostMasterLimiter(settings)
+    private val dispatchMutexes = RepostDestination.entries.associateWith { Mutex() }
     private val started = AtomicBoolean()
     private val captionFormatter = ListingCaptionFormatter()
 
     override fun start() {
         if (!started.compareAndSet(false, true)) return
-        scope.launch {
-            while (isActive) {
-                try {
-                    runOnce()
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Throwable) {
-                    logger.error("Repost dispatch failed", error)
+        for (publisher in publishers) {
+            scope.launch {
+                while (isActive) {
+                    try {
+                        runOnce(publisher)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Throwable) {
+                        logger.error("Repost dispatch failed for {}", publisher.destination, error)
+                    }
+                    delay(1.hours)
                 }
-                delay(1.minutes)
             }
         }
         scope.launch {
             while (isActive) {
-                for (publisher in publishers.filter { it.destination == RepostDestination.TIKTOK }) {
+                for (publisher in publishers) {
+                    if (publisher.destination != RepostDestination.TIKTOK) continue
                     try {
                         publisher.pendingDiagnostics()
                     } catch (error: CancellationException) {
@@ -56,17 +59,20 @@ class RepostWorker(
                         logger.warn("Pending reconciliation unavailable: {}", error.javaClass.simpleName)
                     }
                 }
-                delay(1.hours)
+                delay(4.hours)
             }
         }
     }
 
     suspend fun runOnce() {
-        val enabled = enabledPublishers()
-        if (enabled.isEmpty() || limiter.waitUntilMillis(now()) > 0) return
+        for (publisher in publishers) runOnce(publisher)
+    }
 
-        val attempt = prepareNextAttempt(enabled) ?: return
-        for (publisher in attempt.publishers) {
+    private suspend fun runOnce(publisher: PhotoPublisher) {
+        dispatchMutexes.getValue(publisher.destination).withLock {
+            if (!isEnabled(publisher.destination)) return
+            if (settings.waitMillis(now(), publisher.destination) > 0) return
+            val attempt = prepareNextAttempt(publisher) ?: return
             publishToDestination(attempt, publisher)
         }
     }
@@ -87,7 +93,7 @@ class RepostWorker(
         captionFormatter.forCatalog(row, settings.snapshot().repostContactPhone)
 
         val attemptId = repository.prepareManual(id, publisher.destination, now())
-        publishToDestination(RepostAttempt(row, attemptId, listOf(publisher)), publisher)
+        publishToDestination(RepostAttempt(row, attemptId), publisher)
         val state = repository.publication(checkNotNull(repository.repostState(id)), publisher.destination)
         val result = state.attempts.single { it.attemptId == attemptId }
 
@@ -99,29 +105,24 @@ class RepostWorker(
         return result
     }
 
-    private fun enabledPublishers(): List<PhotoPublisher> {
+    private fun isEnabled(destination: RepostDestination): Boolean {
         val config = settings.snapshot()
-        return publishers.filter {
-            when (it.destination) {
-                RepostDestination.TIKTOK -> config.tiktokEnabled
-                RepostDestination.THREADS -> config.threadsEnabled
-            }
+        return when (destination) {
+            RepostDestination.TIKTOK -> config.tiktokEnabled
+            RepostDestination.THREADS -> config.threadsEnabled
         }
     }
 
-    private fun prepareNextAttempt(enabled: List<PhotoPublisher>): RepostAttempt? {
+    private fun prepareNextAttempt(publisher: PhotoPublisher): RepostAttempt? {
         val candidate = repository.nextRepost(
-            enabled.any { it.destination == RepostDestination.TIKTOK },
-            enabled.any { it.destination == RepostDestination.THREADS },
+            publisher.destination == RepostDestination.TIKTOK,
+            publisher.destination == RepostDestination.THREADS,
         ) ?: return null
         val row = candidate.listing
-        val targets = enabled.filter { repository.status(candidate.repost, it.destination) == RepostStatus.Pending }
-        val attemptId = repository.prepare(row.id, targets.map { it.destination }.toSet(), now()) ?: return null
-        val attempt = RepostAttempt(row, attemptId, targets)
-        if (limiter.reserve(attemptId, row.id, now()) > 0) {
-            targets.forEach { publisher ->
-                updateAttempt(attempt, publisher.destination) { it.copy(status = RepostStatus.Pending) }
-            }
+        val attemptId = repository.prepare(row.id, setOf(publisher.destination), now()) ?: return null
+        val attempt = RepostAttempt(row, attemptId)
+        if (settings.reserve(attemptId, row.id, now(), publisher.destination) > 0) {
+            updateAttempt(attempt, publisher.destination) { it.copy(status = RepostStatus.Pending) }
             return null
         }
         return attempt
@@ -194,7 +195,7 @@ class RepostWorker(
         return photos.take(maxCount).map { media.publicUrl(it.fileName) }
     }
 
-    private data class RepostAttempt(val listing: AdEntity, val id: String, val publishers: List<PhotoPublisher>)
+    private data class RepostAttempt(val listing: AdEntity, val id: String)
 
     override fun close() {
         runBlocking { scope.coroutineContext[Job]?.cancelAndJoin() }

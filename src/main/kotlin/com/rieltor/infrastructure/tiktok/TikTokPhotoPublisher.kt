@@ -240,26 +240,20 @@ class TikTokPhotoPublisher(
             lastStatus = statusData.status
             when {
                 tikTokMode == TikTokMode.POST && statusData.status == "PUBLISH_COMPLETE" -> {
-                    publishRepository?.removeTrackedPublish(publishId)
                     return
                 }
 
                 tikTokMode == TikTokMode.DRAFT &&
                         statusData.status in setOf("SEND_TO_USER_INBOX", "PUBLISH_COMPLETE") -> {
-                    // SEND_TO_USER_INBOX is intentionally retained: it still consumes a pending-share slot
-                    // until the user publishes it in TikTok or the 24-hour window expires.
-                    if (statusData.status == "PUBLISH_COMPLETE") {
-                        publishRepository?.removeTrackedPublish(publishId)
-                    }
+                    // The saved status keeps inbox drafts pending and excludes completed posts from reconciliation.
                     return
                 }
 
                 statusData.status == "FAILED" -> {
-                    publishRepository?.removeTrackedPublish(publishId)
                     val message = "TikTok photo post failed after initialization. publishId=$publishId, " +
                             "reason=${statusData.failReason ?: "unknown"}"
                     if (statusData.failReason == DAILY_POST_LIMIT_CODE) {
-                        pauseGlobalPublishing("daily creator limit reported by status/fetch")
+                        pauseTikTokPublishing("daily creator limit reported by status/fetch")
                         throw TikTokDailyPostLimitException(message)
                     }
                     throw TikTokAuthException(message)
@@ -282,7 +276,7 @@ class TikTokPhotoPublisher(
         val repository = publishRepository ?: return
         val snapshot = refreshTrackedPublishes(accessToken, repository)
         if (enforceLocalPendingShareLimit && snapshot.active.size >= MAX_PENDING_SHARES) {
-            pauseGlobalPublishing("locally tracked pending-share limit")
+            pauseTikTokPublishing("locally tracked pending-share limit")
             throw TikTokPendingShareLimitException(
                 "TikTok has ${snapshot.active.size} locally tracked pending shares; waiting for status/fetch to report " +
                         "PUBLISH_COMPLETE/FAILED or for the 24-hour pending window to expire."
@@ -301,10 +295,7 @@ class TikTokPhotoPublisher(
         tracked.forEach { publish ->
             val fetched = fetchPublishStatus(accessToken, publish.publishId)
             val status = fetched.data.status
-//            logPublishStatus(publish.publishId, fetched.data, 1, 1, fetched)
-            if (status == "FAILED" || status == "PUBLISH_COMPLETE") {
-                repository.removeTrackedPublish(publish.publishId)
-            } else {
+            if (status != "FAILED" && status != "PUBLISH_COMPLETE") {
                 active += publish to status
             }
         }
@@ -320,11 +311,11 @@ class TikTokPhotoPublisher(
         return TrackedPublishSnapshot(tracked.size, active)
     }
 
-    private fun pauseGlobalPublishing(reason: String) {
+    private fun pauseTikTokPublishing(reason: String) {
         val blockedUntil = nowMillis() + globalCooldownMillis
         publishRepository?.blockUntil(blockedUntil)
         logger.warn(
-            "Global repost orchestrator paused after TikTok error. reason={}, cooldownHours={}, blockedUntilMillis={}",
+            "TikTok reposts paused after TikTok error. reason={}, cooldownHours={}, blockedUntilMillis={}",
             reason,
             globalCooldownMillis / 3_600_000L,
             blockedUntil,
@@ -416,11 +407,11 @@ class TikTokPhotoPublisher(
         if (this != null && code != "ok") {
             val errorMessage = "TikTok $operation failed: $code - $message (log_id=$logId)"
             if (code == DAILY_POST_LIMIT_CODE) {
-                pauseGlobalPublishing("$operation: daily creator limit")
+                pauseTikTokPublishing("$operation: daily creator limit")
                 throw TikTokDailyPostLimitException(errorMessage)
             }
             if (code == PENDING_SHARE_LIMIT_CODE) {
-                pauseGlobalPublishing("$operation: pending-share limit")
+                pauseTikTokPublishing("$operation: pending-share limit")
                 throw TikTokPendingShareLimitException(errorMessage)
             }
             if (code == "rate_limit_exceeded") throw TikTokRateLimitException(errorMessage)

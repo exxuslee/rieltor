@@ -685,18 +685,7 @@ class TikTokPhotoPublisherTest {
 
     private class CapturingThrottleRepository : TikTokRepository {
         var blockedUntil: Long? = null
-        var reserveSlotCalls = 0
         val tracked = mutableListOf<TrackedTikTokPublish>()
-
-        override fun reserveSlot(
-            nowMillis: Long,
-            windowMillis: Long,
-            maxPostsPerWindow: Int,
-            minIntervalMillis: Long,
-        ): Long {
-            reserveSlotCalls++
-            return 0
-        }
 
         override fun blockUntil(blockedUntilMillis: Long) {
             blockedUntil = blockedUntilMillis
@@ -710,15 +699,15 @@ class TikTokPhotoPublisherTest {
         }
 
         override fun trackedPublishes(nowMillis: Long, retentionMillis: Long): List<TrackedTikTokPublish> =
-            tracked.filter { it.createdAtMillis >= nowMillis - retentionMillis }
+            tracked.filter {
+                it.createdAtMillis > nowMillis - retentionMillis &&
+                    it.lastStatus !in setOf("PUBLISH_COMPLETE", "FAILED")
+            }
 
         override fun updateTrackedStatus(publishId: String, status: String, nowMillis: Long) {
             val index = tracked.indexOfFirst { it.publishId == publishId }
             if (index >= 0) tracked[index] = tracked[index].copy(lastStatus = status)
         }
 
-        override fun removeTrackedPublish(publishId: String) {
-            tracked.removeAll { it.publishId == publishId }
-        }
     }
 }
