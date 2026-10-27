@@ -131,8 +131,13 @@ class CatalogListingMapperTest {
         assertEquals(65_000, result.price)
     }
 
-    @Test fun `defaults to every government program`() {
-        assertEquals(ALL_PROGRAMS_JSON, parse(baseListing()).governmentPrograms)
+    @Test fun `does not enable government programs without an explicit indication`() {
+        assertEquals("[]", parse(baseListing()).governmentPrograms)
+        assertEquals("[]", parse(baseListing("Державні програми:")).governmentPrograms)
+        assertEquals("[]", parse(baseListing("Сертифікат не розглядаємо")).governmentPrograms)
+    }
+
+    @Test fun `enables every government program when explicitly accepted`() {
         assertEquals(ALL_PROGRAMS_JSON, parse(baseListing("Держпрограми обговорюються")).governmentPrograms)
         assertEquals(ALL_PROGRAMS_JSON, parse(baseListing("Всі державні програми!!")).governmentPrograms)
     }
