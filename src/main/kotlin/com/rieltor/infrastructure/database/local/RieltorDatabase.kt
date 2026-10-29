@@ -288,7 +288,9 @@ class RoomDatabaseStore(
         path.parent?.let(Files::createDirectories)
         room = Room.databaseBuilder<RieltorDatabase>(name = path.toAbsolutePath().toString())
             .setDriver(BundledSQLiteDriver())
-            .setQueryCoroutineContext(Dispatchers.IO)
+            // Synchronous repository callers can occupy every shared IO slot while
+            // waiting in runBlocking. Room must have its own IO parallelism budget.
+            .setQueryCoroutineContext(Dispatchers.IO.limitedParallelism(2))
             .addMigrations(*migrations)
             .fallbackToDestructiveMigration(true)
             .addCallback(object : RoomDatabase.Callback() {

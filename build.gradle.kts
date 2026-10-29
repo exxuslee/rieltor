@@ -88,3 +88,13 @@ kotlin {
 room {
     schemaDirectory("$projectDir/schemas")
 }
+
+tasks.register<Test>("databaseConcurrencyTest") {
+    description = "Verify database access with the production limit of four shared IO workers"
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    filter { includeTestsMatching("com.rieltor.infrastructure.database.DatabaseDispatcherTest") }
+    systemProperty("kotlinx.coroutines.io.parallelism", "4")
+    jvmArgs("-XX:ActiveProcessorCount=1")
+}
