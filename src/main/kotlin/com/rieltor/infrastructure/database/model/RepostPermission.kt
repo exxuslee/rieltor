@@ -4,3 +4,4 @@ internal fun allowsRepost(text: String): Boolean = !text.contains("без рек
         && !text.contains("без рекламы", ignoreCase = true)
         && !text.contains("0672165514", ignoreCase = true)
         && !text.contains("067-216-55-14", ignoreCase = true)
+        && !text.contains("бартер", ignoreCase = true)
