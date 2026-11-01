@@ -2,14 +2,123 @@ package com.rieltor.infrastructure.database.mapper
 
 import com.rieltor.domain.model.ListingStatus
 import com.rieltor.domain.model.SourcePhoto
+import com.rieltor.infrastructure.database.model.AdEntity
 import com.rieltor.infrastructure.database.model.IncomingEntity
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class CatalogListingMapperTest {
+    private val mapper = CatalogListingMapper()
+    private val catalogRow = AdEntity(
+        chatId = -1, messageId = 1, adId = "programs", messageThreadId = 0,
+        sourceRevision = "test", timestamp = 0,
+        title = "ЖК Синергія Сіті", price = 91000, currency = "USD",
+        primeParams = """{"details":["Площа 39 м","Поверх 5","Державні програми:","ЄОселя ВПОПостанови#Сертифікат"]}""",
+        description = "Держ. програми: так\nВаучер\nТепла підлога",
+        governmentPrograms = """["EOSELIA","CERTIFICATE","POSTANOVA"]""",
+    )
+
+    @Test
+    fun `catalog caption shows programs only in their separate section`() {
+        val message = mapper.toMessage(catalogRow, "066-372-71-02")
+
+        assertEquals("єОселя, Сертифікат, Постанова", message.governmentPrograms)
+        assertEquals(listOf("Площа 39 м", "Поверх 5"), message.keyParameters)
+        assertEquals(listOf("Тепла підлога"), message.additionalParameters)
+    }
+
+    @Test
+    fun `preserves program details when there is no separate section`() {
+        val message = mapper.toMessage(catalogRow.copy(governmentPrograms = "[]"), "066-372-71-02")
+
+        assertContains(message.keyParameters, "Державні програми:")
+        assertContains(message.keyParameters, "ЄОселя ВПОПостанови#Сертифікат")
+        assertContains(message.additionalParameters, "Ваучер")
+        assertEquals(null, message.governmentPrograms)
+    }
+
+    @Test
+    fun `removes program lines inside a multiline parameter preserving other lines`() {
+        val multiline = catalogRow.copy(primeParams = """{"details":["Площа 39 м\nДержавні програми:\nЄОселя\nПоверх 5"]}""")
+        val message = mapper.toMessage(multiline, "066-372-71-02")
+
+        assertEquals(listOf("Площа 39 м", "Поверх 5"), message.keyParameters)
+    }
+
+    @Test
+    fun `maps stored catalog fields and the configured public phone`() {
+        val message = mapper.toMessage(catalogRow.copy(
+            address = "вул. Прикладна, 2", tags = """["#квартира","#Ірпінь"]""",
+            governmentPrograms = """["EOSELIA","VOUCHER","CERTIFICATE","POSTANOVA"]""",
+        ), "050-000-00-00")
+
+        assertEquals(catalogRow.title, message.title)
+        assertEquals("91000 USD", message.price)
+        assertEquals("вул. Прикладна, 2", message.address)
+        assertEquals(listOf("#квартира", "#Ірпінь"), message.hashtags)
+        assertEquals("єОселя, Ваучер, Сертифікат, Постанова", message.governmentPrograms)
+        assertEquals("050-000-00-00", message.phone)
+        assertEquals(null, message.registration)
+    }
+
+    @Test
+    fun `rebuilds legacy descriptions while keeping stored title price and parameters`() {
+        val message = mapper.toMessage(catalogRow.copy(
+            rawText = """
+                Квартира з ремонтом
+                Площа 44 м2
+                Новий ремонт
+                Ціна 50000$
+                Комісія 5%/2
+                0991234567 Контакт
+            """.trimIndent(),
+            description = "Застарілий опис з комісією",
+        ), "050-000-00-00")
+
+        assertEquals(listOf("Новий ремонт"), message.additionalParameters)
+        assertEquals(catalogRow.title, message.title)
+        assertEquals("91000 USD", message.price)
+        assertEquals(listOf("Площа 39 м", "Поверх 5"), message.keyParameters)
+        assertEquals("050-000-00-00", message.phone)
+    }
+
+    @Test
+    fun `falls back to saved description if the source has no public content`() {
+        val message = mapper.toMessage(catalogRow.copy(rawText = "0991234567 Контакт"), "066-372-71-02")
+
+        assertEquals(listOf("Тепла підлога"), message.additionalParameters)
+    }
+
+    @Test
+    fun `does not restore stale description when the prepared description is empty`() {
+        val message = mapper.toMessage(catalogRow.copy(rawText = "Квартира\nЦіна 50000$"), "066-372-71-02")
+
+        assertEquals(emptyList(), message.additionalParameters)
+    }
+
+    @Test
+    fun `keeps source program details when the catalog has no separate program section`() {
+        val message = mapper.toMessage(catalogRow.copy(
+            rawText = "Квартира\nДерж. програми: так\nВаучер\nЦіна 50000$",
+            governmentPrograms = "[]",
+        ), "066-372-71-02")
+
+        assertEquals(listOf("Ваучер"), message.additionalParameters)
+        assertEquals(null, message.governmentPrograms)
+    }
+
+    @Test
+    fun `rejects a catalog listing without a price before publication`() {
+        assertFailsWith<IllegalArgumentException> {
+            mapper.toMessage(catalogRow.copy(price = null), "066-372-71-02")
+        }
+    }
+
     @Test fun `extracts exact price and programs without inventing eligibility`() {
         val text = "Ірпінь\n2 кімнатна квартира\nЦіна: 82 000,50 USD\nПлоща: 64 м²\nєОселя\nСертифікат не розглядаємо\nhttps://drive.google.com/drive/folders/example"
         val row = IncomingEntity(chatId = -1, messageId = 1, messageThreadId = 2, rawText = text, sourceCreatedAt = 0, contentHash = "h", verifyAfter = 0)

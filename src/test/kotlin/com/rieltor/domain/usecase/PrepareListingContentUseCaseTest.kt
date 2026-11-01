@@ -1,14 +1,15 @@
 package com.rieltor.domain.usecase
 
-import com.rieltor.application.service.ListingCaptionFormatter
-import com.rieltor.domain.model.ListingStatus
-import com.rieltor.infrastructure.database.model.AdEntity
-
+import com.rieltor.domain.model.ListingMessage
 import kotlin.test.*
 
-class PrepareAdUseCaseTest {
-    private val prepareContent = PrepareAdUseCase()
-    private val filter = ListingCaptionFormatter()
+class PrepareListingContentUseCaseTest {
+    private val prepareContent = PrepareListingContentUseCase()
+
+    private fun publicText(listing: ListingMessage): String = (
+        listOfNotNull(listing.title, listing.price, listing.address, listing.governmentPrograms, listing.registration) +
+            listing.keyParameters + listing.additionalParameters + listing.hashtags + listing.phone
+        ).joinToString("\n")
 
     @Test
     fun `removes abbreviated commission and registration cost lines`() {
@@ -21,7 +22,7 @@ class PrepareAdUseCaseTest {
             71500${'$'}
         """.trimIndent()))
 
-        val caption = requireNotNull(filter.forTikTok(listing))
+        val caption = publicText(listing)
         assertFalse(listing.additionalParameters.any { it.contains("%/2") || it.contains("Оф.") })
         assertFalse(caption.contains("5%/2"))
         assertFalse(caption.contains("2% Оф."))
@@ -67,8 +68,6 @@ class PrepareAdUseCaseTest {
         """.trimIndent()
 
         val listing = requireNotNull(prepareContent(source))
-        val result = requireNotNull(filter.forTikTok(listing))
-
         assertEquals("Продам таунхаус з ремонтом", listing.title)
         assertEquals("175000${'$'}", listing.price)
         assertEquals("Вул Мечнікова", listing.address)
@@ -76,9 +75,6 @@ class PrepareAdUseCaseTest {
         assertEquals(emptyList(), listing.additionalParameters)
         assertEquals("066-372-71-02", listing.phone)
         assertEquals(5, listing.hashtags.size)
-        assertContains(result, "📍 Вул Мечнікова")
-        assertContains(result, "💰 175000${'$'}")
-        assertContains(result, "🤙 066-372-71-02 Ірина")
     }
 
     @Test
@@ -96,12 +92,13 @@ class PrepareAdUseCaseTest {
         """.trimIndent()
 
         val listing = requireNotNull(prepareContent(source))
-        val result = requireNotNull(filter.forTikTok(listing))
+        val result = publicText(listing)
 
-        assertContains(result, "• Площа дуплекса: 93 м2")
+        assertContains(listing.keyParameters, "Площа дуплекса: 93 м2")
         assertContains(result, "не введений в експлуатацію")
         assertEquals(5, listing.hashtags.size)
-        assertContains(result, "#дуплекс #Буча")
+        assertContains(listing.hashtags, "#дуплекс")
+        assertContains(listing.hashtags, "#Буча")
         assertFalse(result.contains("5000${'$'}/2"))
         assertFalse(result.contains("Вячеслав"))
         assertFalse(result.contains("google.com"))
@@ -125,14 +122,13 @@ class PrepareAdUseCaseTest {
         """.trimIndent()
 
         val listing = requireNotNull(prepareContent(source))
-        val result = requireNotNull(filter.forTikTok(listing))
+        val result = publicText(listing)
 
         assertEquals("45000${'$'}", listing.price)
-        assertContains(result, "💰 45000${'$'}")
         assertFalse(result.contains("5%/2"))
         assertFalse(result.contains("Сергій"))
         assertFalse(result.contains("Novator", ignoreCase = true))
-        assertContains(result, "🤙 066-372-71-02 Ірина")
+        assertEquals("066-372-71-02", listing.phone)
     }
 
     @Test
@@ -165,26 +161,14 @@ class PrepareAdUseCaseTest {
         """.trimIndent()
 
         val listing = requireNotNull(prepareContent(source))
-        val result = requireNotNull(filter.forTikTok(listing))
+        val result = publicText(listing)
 
         assertEquals("22 000${'$'}", listing.price)
-        assertContains(result, "💰 22 000${'$'}")
         assertFalse(result.contains("( 2000/2)"))
     }
 
     @Test
-    fun `extracts title price and public contact for the first photo`() {
-        val listing = requireNotNull(prepareContent("Квартира в Ірпені\nЦіна 22 000${'$'}"))
-
-        val overlay = requireNotNull(filter.photoOverlay(listing))
-
-        assertEquals("Продам квартира в Ірпені", overlay.title)
-        assertEquals("22 000${'$'}", overlay.price)
-        assertEquals("066-372-71-02 Ірина", overlay.contact)
-    }
-
-    @Test
-    fun `extracts programs excludes registration cost and renders the replaced phone`() {
+    fun `extracts programs excludes registration cost and replaces the phone`() {
         val source = """
             Гостомель
             Квартира в ЖК На Прорізній
@@ -200,7 +184,7 @@ class PrepareAdUseCaseTest {
         """.trimIndent()
 
         val listing = requireNotNull(prepareContent(source))
-        val tiktok = requireNotNull(filter.forTikTok(listing))
+        val text = publicText(listing)
 
         assertEquals("Продам квартира в ЖК На Прорізній", listing.title)
         assertEquals("вул. Прорізна, 2", listing.address)
@@ -209,36 +193,10 @@ class PrepareAdUseCaseTest {
         assertEquals(listOf("Площа 44,3 м2", "Поверх 4/8"), listing.keyParameters)
         assertEquals(listOf("Новий якісний ремонт"), listing.additionalParameters)
         assertEquals(5, listing.hashtags.size)
-        assertContains(tiktok, "🤙 066-372-71-02 Ірина")
-        assertFalse(tiktok.contains("0961733824"))
-        assertFalse(tiktok.contains("Комісія"))
-        assertFalse(tiktok.contains("Оформлення"))
-    }
-
-    @Test
-    fun `uses human-readable government programme names in repost caption`() {
-        val caption = requireNotNull(filter.forCatalog(
-            AdEntity(
-                chatId = -1,
-                messageId = 1,
-                messageThreadId = 0,
-                adId = "programs",
-                sourceRevision = "test",
-                title = "Квартира",
-                price = 50_000,
-                currency = "USD",
-                governmentPrograms = "[\"EOSELIA\",\"VOUCHER\",\"CERTIFICATE\",\"POSTANOVA\"]",
-                status = ListingStatus.Active,
-                timestamp = 0,
-            ),
-            "066-372-71-02",
-        ))
-
-        assertContains(caption, "🏦 єОселя, Ваучер, Сертифікат, Постанова")
-        assertFalse(caption.contains("EOSELIA"))
-        assertFalse(caption.contains("VOUCHER"))
-        assertFalse(caption.contains("CERTIFICATE"))
-        assertFalse(caption.contains("POSTANOVA"))
+        assertEquals("066-372-71-02", listing.phone)
+        assertFalse(text.contains("0961733824"))
+        assertFalse(text.contains("Комісія"))
+        assertFalse(text.contains("Оформлення"))
     }
 
     @Test
@@ -257,14 +215,14 @@ class PrepareAdUseCaseTest {
         """.trimIndent()
 
         val listing = requireNotNull(prepareContent(source))
-        val tiktok = requireNotNull(filter.forTikTok(listing))
+        val text = publicText(listing)
 
         assertContains(listing.keyParameters, "Площа 24,5м2")
         assertNull(listing.registration)
-        assertFalse(tiktok.contains("Поверх 5/5"))
-        assertFalse(tiktok.contains("Опалення електричне"))
-        assertFalse(tiktok.contains("Оформлення 12%"))
-        assertContains(tiktok, "Тепла підлога, посудомийка, варильна поверхня")
+        assertFalse(text.contains("Поверх 5/5"))
+        assertFalse(text.contains("Опалення електричне"))
+        assertFalse(text.contains("Оформлення 12%"))
+        assertContains(text, "Тепла підлога, посудомийка, варильна поверхня")
     }
 
     @Test
@@ -276,10 +234,10 @@ class PrepareAdUseCaseTest {
             Ціна 60000${'$'}
         """.trimIndent()
 
-        val tiktok = requireNotNull(filter.forTikTok(prepareContent(source)))
+        val listing = assertNotNull(prepareContent(source))
 
-        assertContains(tiktok, "Поверх 4/5")
-        assertContains(tiktok, "Газове опалення")
+        assertContains(listing.keyParameters, "Поверх 4/5")
+        assertContains(listing.keyParameters, "Газове опалення")
     }
 
     @Test
@@ -292,11 +250,9 @@ class PrepareAdUseCaseTest {
         """.trimIndent()
 
         val listing = requireNotNull(prepareContent(source))
-        val tiktok = requireNotNull(filter.forTikTok(listing))
 
-        assertContains(tiktok, "Поверх 2/2")
+        assertContains(listing.keyParameters, "Поверх 2/2")
         assertEquals("Оформлення на першого власника", listing.registration)
-        assertContains(tiktok, "Оформлення на першого власника")
     }
 
     @Test
@@ -307,7 +263,7 @@ class PrepareAdUseCaseTest {
         assertEquals("52500${'$'}", listing.price)
         assertTrue(listing.keyParameters.isEmpty())
         assertTrue(listing.additionalParameters.isEmpty())
-        assertFalse(requireNotNull(filter.forTikTok(listing)).contains("4%"))
+        assertFalse(publicText(listing).contains("4%"))
     }
 
     @Test
@@ -342,12 +298,12 @@ class PrepareAdUseCaseTest {
         """.trimIndent()
 
         val listing = requireNotNull(prepareContent(source))
-        val tiktok = requireNotNull(filter.forTikTok(listing))
+        val text = publicText(listing)
 
         assertEquals("52500${'$'}", listing.price)
         assertNull(listing.registration)
-        assertFalse(tiktok.contains("Котел", ignoreCase = true))
-        assertFalse(tiktok.contains("переуступка", ignoreCase = true))
-        assertFalse(tiktok.contains("500 грн", ignoreCase = true))
+        assertFalse(text.contains("Котел", ignoreCase = true))
+        assertFalse(text.contains("переуступка", ignoreCase = true))
+        assertFalse(text.contains("500 грн", ignoreCase = true))
     }
 }

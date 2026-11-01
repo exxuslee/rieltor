@@ -2,13 +2,16 @@ package com.rieltor.infrastructure.database.mapper
 
 import com.rieltor.domain.model.*
 import com.rieltor.domain.usecase.PrepareCatalogListingUseCase
+import com.rieltor.domain.usecase.PrepareListingContentUseCase
 import com.rieltor.infrastructure.database.model.AdEntity
 import com.rieltor.infrastructure.database.model.IncomingEntity
 import com.rieltor.infrastructure.google.GoogleDriveLinkExtractor
 import kotlinx.serialization.json.*
 
+/** Maps incoming records into catalog rows and catalog rows into public listing messages. */
 class CatalogListingMapper(
     private val prepareListing: PrepareCatalogListingUseCase = PrepareCatalogListingUseCase(),
+    private val prepareContent: PrepareListingContentUseCase = PrepareListingContentUseCase(),
 ) {
     fun fromIncoming(row: IncomingEntity, type: String?, now: Long): AdEntity {
         val result = prepareListing(
@@ -50,4 +53,20 @@ class CatalogListingMapper(
             timestamp = maxOf(row.sourceCreatedAt, row.sourceEditedAt),
         )
     }
+
+    /** Rebuild public content at read time so legacy rows also use the current cleanup rules. */
+    fun toMessage(row: AdEntity, phone: String): ListingMessage = ListingMessage(
+        title = row.title,
+        price = "${requireNotNull(row.price)} ${row.currency}",
+        address = row.address,
+        keyParameters = Json.parseToJsonElement(row.primeParams).jsonObject["details"]
+            ?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+        additionalParameters = prepareContent(row.rawText)?.additionalParameters
+            ?: row.description.lines().filter { it.isNotBlank() },
+        governmentPrograms = Json.decodeFromString<List<String>>(row.governmentPrograms)
+            .joinToString(transform = CatalogCodes::programName).takeIf { it.isNotEmpty() },
+        registration = null,
+        hashtags = Json.decodeFromString(row.tags),
+        phone = phone,
+    ).withoutDuplicateProgramDetails()
 }

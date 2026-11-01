@@ -6,13 +6,13 @@ import com.rieltor.domain.model.ListingImportSource
 import com.rieltor.domain.model.PreparedCatalogListing
 
 class PrepareCatalogListingUseCase(
-    private val prepareAd: PrepareAdUseCase = PrepareAdUseCase(),
+    private val prepareContent: PrepareListingContentUseCase = PrepareListingContentUseCase(),
     private val extractPrice: ExtractListingPriceUseCase = ExtractListingPriceUseCase(),
     private val priceNormalizer: NormalizeCatalogPriceUseCase = NormalizeCatalogPriceUseCase()
 ) {
     operator fun invoke(source: ListingImportSource): PreparedCatalogListing {
         val type = CatalogCodes.normalizeType(source.typeOfRealty)
-        val clean = prepareAd(source.text)
+        val clean = prepareContent(source.text)
         val warnings = mutableListOf<String>()
         val locationText = distanceToCity.replace(source.text, "")
         val matchedLocations = listOf(

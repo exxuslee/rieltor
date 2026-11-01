@@ -7,6 +7,7 @@ import com.rieltor.domain.model.*
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.infrastructure.config.JsonSettingsStore
+import com.rieltor.infrastructure.database.mapper.CatalogListingMapper
 import com.rieltor.infrastructure.database.model.AdEntity
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import com.rieltor.infrastructure.media.LocalPublicMediaStorage
@@ -30,6 +31,7 @@ class RepostWorker(
     private val dispatchMutexes = RepostDestination.entries.associateWith { Mutex() }
     private val started = AtomicBoolean()
     private val captionFormatter = ListingCaptionFormatter()
+    private val listingMapper = CatalogListingMapper()
 
     override fun start() {
         if (!started.compareAndSet(false, true)) return
@@ -90,7 +92,7 @@ class RepostWorker(
         val publisher = publishers.single { it.destination == RepostDestination.TIKTOK }
         // Validate local inputs before creating a persistent attempt.
         photoUrls(row, publisher.maxPhotoCount)
-        captionFormatter.forCatalog(row, settings.snapshot().repostContactPhone)
+        listingMapper.toMessage(row, settings.snapshot().repostContactPhone)
 
         val attemptId = repository.prepareManual(id, publisher.destination, now())
         publishToDestination(RepostAttempt(row, attemptId), publisher)
@@ -138,7 +140,8 @@ class RepostWorker(
                 return
             }
             val photoUrls = photoUrls(row, publisher.maxPhotoCount)
-            val caption = captionFormatter.forCatalog(row, settings.snapshot().repostContactPhone)
+            val listing = listingMapper.toMessage(row, settings.snapshot().repostContactPhone)
+            val caption = captionFormatter.format(listing)
             publisher.awaitPublishSlot()
             check(repository.isAllowRepost(row.id)) { "adsTab.id=${row.id} forbids reposting (без реклами)" }
             check(repository.listing(row.id)?.chatId == REPOST_SOURCE_CHAT_ID) {

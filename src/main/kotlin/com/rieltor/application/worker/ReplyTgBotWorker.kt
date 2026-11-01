@@ -6,8 +6,9 @@ import com.rieltor.application.port.Worker
 import com.rieltor.application.service.ListingCaptionFormatter
 import com.rieltor.domain.model.TelegramBotIncomingMessage
 import com.rieltor.domain.model.TelegramPhoto
+import com.rieltor.domain.model.withoutDuplicateProgramDetails
 import com.rieltor.domain.repository.ExternalPhotoSource
-import com.rieltor.domain.usecase.PrepareAdUseCase
+import com.rieltor.domain.usecase.PrepareListingContentUseCase
 import com.rieltor.infrastructure.google.GoogleDriveLinkExtractor
 import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
@@ -18,7 +19,7 @@ class ReplyTgBotWorker(
     private val messageSource: TelegramBotMessageSource,
     private val captionFormatter: ListingCaptionFormatter = ListingCaptionFormatter(),
     private val driveLinkExtractor: GoogleDriveLinkExtractor = GoogleDriveLinkExtractor(),
-    private val prepareContent: PrepareAdUseCase = PrepareAdUseCase(),
+    private val prepareContent: PrepareListingContentUseCase = PrepareListingContentUseCase(),
     private val maxPhotoCount: Int = DEFAULT_MAX_PHOTO_COUNT,
 ) : Worker {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -33,8 +34,8 @@ class ReplyTgBotWorker(
 
     suspend fun execute(message: TelegramBotIncomingMessage) {
         val startedAt = System.nanoTime()
-        val listing = prepareContent(message.text)
-        val formattedText = captionFormatter.forTikTok(listing)
+        val listing = prepareContent(message.text)?.withoutDuplicateProgramDetails()
+        val formattedText = captionFormatter.format(listing)
         if (formattedText == null) {
             logger.warn(
                 "Telegram listing bot message rejected. chatId={}, messageId={}, reason=emptyFormattedText",

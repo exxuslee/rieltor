@@ -56,6 +56,45 @@ class ReplyTgBotWorkerTest {
     }
 
     @Test
+    fun `publishes government programs once and keeps the other details`() = runBlocking {
+        val sender = CapturingReplySender()
+        val worker = ReplyTgBotWorker(FakePhotoSource(1), sender, FakeMessageSource())
+
+        worker.execute(incomingMessage(text = """
+            Квартира в Ірпені
+            Площа 44 м2
+            Держ. програми: так
+            Ваучер
+            ЄОселя
+            Поверх 4/8
+            Тепла підлога
+            Ціна 50000$
+            https://drive.google.com/drive/folders/exampleFolder
+        """.trimIndent()))
+
+        val text = sender.texts.single().text
+        assertTrue(text.contains("🏦 Держ. програми: так"))
+        assertFalse(text.contains("Ваучер"))
+        assertFalse(text.contains("ЄОселя"))
+        assertEquals(1, text.lineSequence().count { it.contains("програми") })
+        assertTrue(text.contains("• Площа 44 м2"))
+        assertTrue(text.contains("• Поверх 4/8"))
+        assertTrue(text.contains("Тепла підлога"))
+    }
+
+    @Test
+    fun `keeps program details when the source has no separate program section`() = runBlocking {
+        val sender = CapturingReplySender()
+        val worker = ReplyTgBotWorker(FakePhotoSource(1), sender, FakeMessageSource())
+
+        worker.execute(incomingMessage(text = "Квартира\nВаучер\nЦіна 50000$\nhttps://drive.google.com/drive/folders/exampleFolder"))
+
+        val text = sender.texts.single().text
+        assertTrue(text.contains("Ваучер"))
+        assertFalse(text.contains("🏦"))
+    }
+
+    @Test
     fun `does not call Drive without a supported link and replies with an explanation`() = runBlocking {
         val photoSource = FakePhotoSource(photoCount = 1)
         val sender = CapturingReplySender()
