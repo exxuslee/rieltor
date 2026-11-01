@@ -10,6 +10,7 @@ import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
 
 class ThreadsPhotoPublisher(
@@ -20,6 +21,7 @@ class ThreadsPhotoPublisher(
     private val maxStatusAttempts: Int = 20,
 ) : PhotoPublisher {
     private val logger = LoggerFactory.getLogger(javaClass)
+    private val successfulPublishes = AtomicInteger(0)
     override val destination = RepostDestination.THREADS
     override val maxPhotoCount = MAX_PHOTO_COUNT
 
@@ -29,8 +31,13 @@ class ThreadsPhotoPublisher(
         val token = auth.validAccessToken()
         logger.info("Threads publishing started. photoCount={}", photoUrls.size)
         val description = caption.orEmpty().trim().take(MAX_TEXT_LENGTH)
-        val text = listOf(description, CATALOG_URL).filter(String::isNotBlank).joinToString("\n\n")
-            .takeIf { it.length <= MAX_TEXT_LENGTH } ?: description
+        val includeCatalogUrl = (successfulPublishes.get() + 1) % CATALOG_URL_EVERY_N == 0
+        val text = if (includeCatalogUrl) {
+            listOf(description, CATALOG_URL).filter(String::isNotBlank).joinToString("\n\n")
+                .takeIf { it.length <= MAX_TEXT_LENGTH } ?: description
+        } else {
+            description
+        }
         val containerId = if (photoUrls.size == 1) {
             createContainer(token, "IMAGE", mapOf("image_url" to photoUrls.single(), "text" to text))
         } else {
@@ -55,6 +62,7 @@ class ThreadsPhotoPublisher(
         val published =
             decodeId(response.status.value, response.bodyAsText(), response.status.isSuccess(), "publish", token)
         logger.info("Threads publishing completed. publishId={}", published)
+        successfulPublishes.incrementAndGet()
         return PublishReceipt(
             publishId = published,
             creatorName = auth.connectedUserId().orEmpty(),
@@ -154,5 +162,6 @@ class ThreadsPhotoPublisher(
         const val MAX_PHOTO_COUNT = 20
         const val MAX_TEXT_LENGTH = 500
         const val CATALOG_URL = "https://rieltor.dpdns.org/catalog"
+        const val CATALOG_URL_EVERY_N = 4
     }
 }
