@@ -3,7 +3,7 @@ package com.rieltor.application.service
 import com.rieltor.domain.model.CatalogCodes
 import com.rieltor.domain.model.ListingMessage
 import com.rieltor.domain.model.MediaTextOverlay
-import com.rieltor.domain.usecase.PrepareListingContentUseCase
+import com.rieltor.domain.usecase.PrepareAdUseCase
 import com.rieltor.infrastructure.database.model.AdEntity
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -12,7 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /** Presentation of already prepared public content; no source parsing. */
 class ListingCaptionFormatter {
-    private val prepareContent = PrepareListingContentUseCase()
+    private val prepareContent = PrepareAdUseCase()
 
     fun forCatalog(row: AdEntity, phone: String): String? = forTikTok(
         ListingMessage(

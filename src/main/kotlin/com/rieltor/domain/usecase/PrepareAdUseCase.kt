@@ -9,7 +9,7 @@ import com.rieltor.domain.model.ListingMessage
  * model is built. The class is stateless so it can be tested independently from
  * Telegram and destination integrations.
  */
-class PrepareListingContentUseCase(
+class PrepareAdUseCase(
     private val extractPrice: ExtractListingPriceUseCase = ExtractListingPriceUseCase(),
 ) {
     operator fun invoke(message: String?): ListingMessage? {

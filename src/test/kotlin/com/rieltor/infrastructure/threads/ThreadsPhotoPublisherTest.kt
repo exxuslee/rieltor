@@ -55,12 +55,12 @@ class ThreadsPhotoPublisherTest {
         assertEquals(listOf("IMAGE", "IMAGE", "CAROUSEL"), createRequests.map { it["media_type"] })
         assertTrue(createRequests.take(2).all { it["is_carousel_item"] == "true" })
         assertEquals("container-1,container-2", createRequests.last()["children"])
-        assertEquals("Опис квартири", createRequests.last()["text"])
+        assertEquals("Опис квартири\n\nhttps://rieltor.dpdns.org/catalog", createRequests.last()["text"])
         assertEquals("container-3", publishCreationId)
     }
 
     @Test
-    fun `single photo uses image container and limits Threads text`() = runBlocking {
+    fun `single photo adds catalog link only when it fits within Threads text limit`() = runBlocking {
         var createdParameters = emptyMap<String, String>()
         val engine = MockEngine { request ->
             when {
@@ -80,11 +80,22 @@ class ThreadsPhotoPublisherTest {
             json,
         )
 
-        ThreadsPhotoPublisher(client, auth, json, statusPollDelayMillis = 0)
-            .publish(listOf("https://api.example/media/one.jpg"), "а".repeat(700))
+        val publisher = ThreadsPhotoPublisher(client, auth, json, statusPollDelayMillis = 0)
+        val link = "https://rieltor.dpdns.org/catalog"
+        val fittingDescription = "а".repeat(500 - link.length - 2)
+        val cases = listOf(
+            null to link,
+            fittingDescription to "$fittingDescription\n\n$link",
+            (fittingDescription + "а") to (fittingDescription + "а"),
+            "а".repeat(500) to "а".repeat(500),
+            "а".repeat(700) to "а".repeat(500),
+        )
+        for ((caption, expectedText) in cases) {
+            publisher.publish(listOf("https://api.example/media/one.jpg"), caption)
 
-        assertEquals("IMAGE", createdParameters["media_type"])
-        assertEquals(500, createdParameters.getValue("text").length)
+            assertEquals("IMAGE", createdParameters["media_type"])
+            assertEquals(expectedText, createdParameters["text"], "Caption length: ${caption?.length}")
+        }
     }
 
     @Test

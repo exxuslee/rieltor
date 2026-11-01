@@ -7,7 +7,7 @@ import com.rieltor.application.service.ListingCaptionFormatter
 import com.rieltor.domain.model.TelegramBotIncomingMessage
 import com.rieltor.domain.model.TelegramPhoto
 import com.rieltor.domain.repository.ExternalPhotoSource
-import com.rieltor.domain.usecase.PrepareListingContentUseCase
+import com.rieltor.domain.usecase.PrepareAdUseCase
 import com.rieltor.infrastructure.google.GoogleDriveLinkExtractor
 import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
@@ -18,7 +18,7 @@ class ReplyTgBotWorker(
     private val messageSource: TelegramBotMessageSource,
     private val captionFormatter: ListingCaptionFormatter = ListingCaptionFormatter(),
     private val driveLinkExtractor: GoogleDriveLinkExtractor = GoogleDriveLinkExtractor(),
-    private val prepareContent: PrepareListingContentUseCase = PrepareListingContentUseCase(),
+    private val prepareContent: PrepareAdUseCase = PrepareAdUseCase(),
     private val maxPhotoCount: Int = DEFAULT_MAX_PHOTO_COUNT,
 ) : Worker {
     private val logger = LoggerFactory.getLogger(javaClass)

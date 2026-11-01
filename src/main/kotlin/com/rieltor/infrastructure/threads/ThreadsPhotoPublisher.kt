@@ -28,7 +28,9 @@ class ThreadsPhotoPublisher(
         require(photoUrls.size <= maxPhotoCount) { "Threads accepts at most $maxPhotoCount photos per carousel." }
         val token = auth.validAccessToken()
         logger.info("Threads publishing started. photoCount={}", photoUrls.size)
-        val text = caption.orEmpty().trim().take(MAX_TEXT_LENGTH)
+        val description = caption.orEmpty().trim().take(MAX_TEXT_LENGTH)
+        val text = listOf(description, CATALOG_URL).filter(String::isNotBlank).joinToString("\n\n")
+            .takeIf { it.length <= MAX_TEXT_LENGTH } ?: description
         val containerId = if (photoUrls.size == 1) {
             createContainer(token, "IMAGE", mapOf("image_url" to photoUrls.single(), "text" to text))
         } else {
@@ -151,5 +153,6 @@ class ThreadsPhotoPublisher(
         const val GRAPH_URL = "https://graph.threads.net/v1.0"
         const val MAX_PHOTO_COUNT = 20
         const val MAX_TEXT_LENGTH = 500
+        const val CATALOG_URL = "https://rieltor.dpdns.org/catalog"
     }
 }

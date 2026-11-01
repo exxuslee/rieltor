@@ -4,7 +4,7 @@ import com.rieltor.application.service.CatalogFilterParser
 import com.rieltor.application.service.CatalogQueryService
 import com.rieltor.domain.model.CatalogCodes
 import com.rieltor.domain.model.CatalogPhoto
-import com.rieltor.domain.usecase.PrepareListingContentUseCase
+import com.rieltor.domain.usecase.PrepareAdUseCase
 import com.rieltor.infrastructure.database.model.CatalogListingRow
 import com.rieltor.web.dto.ListingPage
 import com.rieltor.web.dto.PublicListing
@@ -24,7 +24,7 @@ class CatalogListingApi(
     private val json: Json = Json,
 ) {
     private val mediaBaseUrl = "${publicBaseUrl.trimEnd('/')}/media"
-    private val prepareContent = PrepareListingContentUseCase()
+    private val prepareContent = PrepareAdUseCase()
 
     fun list(parameters: Parameters): ListingPage {
         val page = service.page(parser.parse(parameters.toMap()))

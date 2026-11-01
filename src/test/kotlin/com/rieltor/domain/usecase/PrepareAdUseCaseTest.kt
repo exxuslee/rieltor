@@ -6,8 +6,8 @@ import com.rieltor.infrastructure.database.model.AdEntity
 
 import kotlin.test.*
 
-class PrepareListingContentUseCaseTest {
-    private val prepareContent = PrepareListingContentUseCase()
+class PrepareAdUseCaseTest {
+    private val prepareContent = PrepareAdUseCase()
     private val filter = ListingCaptionFormatter()
 
     @Test
