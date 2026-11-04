@@ -21,7 +21,6 @@ class ThreadsPhotoPublisher(
     private val maxStatusAttempts: Int = 20,
 ) : PhotoPublisher {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val successfulPublishes = AtomicInteger(0)
     override val destination = RepostDestination.THREADS
     override val maxPhotoCount = MAX_PHOTO_COUNT
 
@@ -30,6 +29,9 @@ class ThreadsPhotoPublisher(
         require(photoUrls.size <= maxPhotoCount) { "Threads accepts at most $maxPhotoCount photos per carousel." }
         val token = auth.validAccessToken()
         logger.info("Threads publishing started. photoCount={}", photoUrls.size)
+        val description = caption.orEmpty().trim().take(MAX_TEXT_LENGTH)
+        val text = listOf(description, CATALOG_URL).filter(String::isNotBlank).joinToString("\n\n")
+            .takeIf { it.length <= MAX_TEXT_LENGTH } ?: description
         val description = formatDescription(caption)
         val includeCatalogUrl = (successfulPublishes.get() + 1) % CATALOG_URL_EVERY_N == 0
         val text = if (includeCatalogUrl) {
@@ -59,10 +61,11 @@ class ThreadsPhotoPublisher(
             parameter("creation_id", containerId)
             parameter("access_token", token)
         }
-        val published =
-            decodeId(response.status.value, response.bodyAsText(), response.status.isSuccess(), "publish", token)
+        val published = decodeId(
+            response.status.value, response.bodyAsText(), response.status.isSuccess(), "publish", token
+        )
         logger.info("Threads publishing completed. publishId={}", published)
-        successfulPublishes.incrementAndGet()
+
         return PublishReceipt(
             publishId = published,
             creatorName = auth.connectedUserId().orEmpty(),
@@ -171,6 +174,5 @@ class ThreadsPhotoPublisher(
         const val TOPIC_TAG = "#нерухомість"
         val HASHTAG = Regex("(?<!\\S)#[\\p{L}\\p{M}\\p{N}_]+")
         const val CATALOG_URL = "https://rieltor.dpdns.org/catalog"
-        const val CATALOG_URL_EVERY_N = 4
     }
 }
