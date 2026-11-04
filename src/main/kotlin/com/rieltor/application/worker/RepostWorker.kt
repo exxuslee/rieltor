@@ -2,7 +2,7 @@ package com.rieltor.application.worker
 
 import com.rieltor.application.port.PublicationContext
 import com.rieltor.application.port.Worker
-import com.rieltor.application.service.ListingCaptionFormatter
+import com.rieltor.application.service.RepostCaptionFormatter
 import com.rieltor.domain.model.*
 import com.rieltor.domain.repository.PhotoPublisher
 import com.rieltor.domain.repository.PublisherBackpressureException
@@ -30,7 +30,7 @@ class RepostWorker(
     private val logger = LoggerFactory.getLogger(javaClass)
     private val dispatchMutexes = RepostDestination.entries.associateWith { Mutex() }
     private val started = AtomicBoolean()
-    private val captionFormatter = ListingCaptionFormatter()
+    private val captionFormatter = RepostCaptionFormatter()
     private val listingMapper = CatalogListingMapper()
 
     override fun start() {
@@ -80,7 +80,7 @@ class RepostWorker(
     }
 
     /** One explicit send, independent of the automatic queue and its scheduling settings. */
-    suspend fun repostTikTok(id: Long): PublishAttempt {
+    suspend fun repostTikTok(id: Long): PublishAttempt = dispatchMutexes.getValue(RepostDestination.TIKTOK).withLock {
         require(id > 0) { "Expected a positive adsTab.id" }
         val row = checkNotNull(repository.listing(id)) { "adsTab.id=$id was not found" }
         check(row.status == ListingStatus.Active) { "adsTab.id=$id is not ACTIVE" }
@@ -104,7 +104,7 @@ class RepostWorker(
                     "publishId=${result.publishId}, error=${result.error}"
         }
 
-        return result
+        result
     }
 
     private fun isEnabled(destination: RepostDestination): Boolean {
@@ -141,12 +141,21 @@ class RepostWorker(
             }
             val photoUrls = photoUrls(row, publisher.maxPhotoCount)
             val listing = listingMapper.toMessage(row, settings.snapshot().repostContactPhone)
-            val caption = captionFormatter.format(listing)
             publisher.awaitPublishSlot()
             check(repository.isAllowRepost(row.id)) { "adsTab.id=${row.id} forbids reposting (без реклами)" }
             check(repository.listing(row.id)?.chatId == REPOST_SOURCE_CHAT_ID) {
                 "Reposts are allowed only from chatId=$REPOST_SOURCE_CHAT_ID"
             }
+            val selection = settings.reserveCaption(attempt.id, destination)
+            val caption = captionFormatter.format(
+                listing, selection.style, CatalogCodes.locationName(row.location),
+                selection.conversationalVariant ?: ConversationalCaptionVariant.DIRECT,
+                selection.balancedVariant ?: BalancedCaptionVariant.STRUCTURED,
+            )
+            logger.info(
+                "Repost caption selected. listing={}, destination={}, style={}, conversationalVariant={}, balancedVariant={}",
+                row.id, destination, selection.style, selection.conversationalVariant, selection.balancedVariant,
+            )
             updateAttempt(attempt, destination) { it.copy(status = RepostStatus.Sending) }
             val receipt = withContext(PublicationContext(row.id, attempt.id)) {
                 publisher.publish(photoUrls, caption)

@@ -86,6 +86,7 @@ class PrepareListingContentUseCase(
         if (internalNoise.matches(line) || standalonePercentage.matches(line)) return ""
 
         line = googleUrl.replace(line, "")
+        if (driveLinkLabel.matches(line.removeListMarker())) return ""
         line = agency.replace(line, "")
         line = exclusiveAbbreviation.replace(line, "")
         line = saleByPowerOfAttorney.replace(line, "")
@@ -143,6 +144,7 @@ class PrepareListingContentUseCase(
         val FALLBACK_HASHTAGS = listOf("#рієлтор", "#нерухомістьУкраїни", "#купитинерухомість")
 
         val googleUrl = Regex("""(?iu)https?://(?:drive|docs)\.google\.com/\S+""")
+        val driveLinkLabel = Regex("""(?iu)^(?:диск|google\s+drive)\s*[:\-–—]?\s*$""")
         val distanceToCity = Regex("""(?iu)\d+(?:[.,]\d+)?\s*км\s*(?:від|до|от)\s+[\p{L}’'ʼ-]+""")
         val agencyLine = Regex("""(?iu)^\s*(?:АН|AH)\s+.+$""")
         val commissionSplit = Regex("""^\s*\d+(?:[.,]\d+)?\s*%?\s*[/\\]\s*2\s*$""")

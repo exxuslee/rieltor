@@ -73,6 +73,8 @@ class CatalogListingMapperTest {
                 Квартира з ремонтом
                 Площа 44 м2
                 Новий ремонт
+                Диск
+                https://drive.google.com/drive/folders/example
                 Ціна 50000$
                 Комісія 5%/2
                 0991234567 Контакт

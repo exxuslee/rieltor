@@ -78,6 +78,34 @@ class PrepareListingContentUseCaseTest {
     }
 
     @Test
+    fun `removes standalone drive labels after removing links and preserves descriptive text`() {
+        listOf(
+            "Диск",
+            "ДИСК:",
+            "• Диск: https://drive.google.com/drive/folders/example",
+            "Google Drive: https://drive.google.com/drive/folders/example",
+            "Диск\nhttps://drive.google.com/drive/folders/example",
+        ).forEach { driveLine ->
+            val listing = assertNotNull(prepareContent("""
+                Будинок 2 поверхи 84 м2
+                Навіс під два авто.
+                За будинком ліс і березова роща.
+                Дискова пила у господарському приміщенні
+                $driveLine
+                Ціна 148000 USD
+            """.trimIndent()))
+
+            assertEquals(listOf(
+                "Навіс під два авто.",
+                "За будинком ліс і березова роща.",
+                "Дискова пила у господарському приміщенні",
+            ), listing.additionalParameters, driveLine)
+            assertEquals("#нерухомість", listing.hashtags.first())
+        }
+        assertNull(prepareContent("Диск"))
+    }
+
+    @Test
     fun `keeps details in a separate description and adds relevant hashtags`() {
         val source = """
             Дуплекс в Бучі з ремонтом Києво-Мироцька 88

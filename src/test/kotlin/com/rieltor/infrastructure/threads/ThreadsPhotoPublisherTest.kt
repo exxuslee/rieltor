@@ -44,9 +44,10 @@ class ThreadsPhotoPublisherTest {
         val auth = ThreadsAuthService(client, settings(), repository, json)
         val publisher = ThreadsPhotoPublisher(client, auth, json, statusPollDelayMillis = 0)
 
+        val caption = "Опис квартири\n\n#нерухомість #квартира #рієлтор"
         val receipt = publisher.publish(
             listOf("https://api.example/media/one.jpg", "https://api.example/media/two.jpg"),
-            "Опис квартири",
+            caption,
         )
 
         assertEquals(RepostDestination.THREADS, receipt.destination)
@@ -55,12 +56,12 @@ class ThreadsPhotoPublisherTest {
         assertEquals(listOf("IMAGE", "IMAGE", "CAROUSEL"), createRequests.map { it["media_type"] })
         assertTrue(createRequests.take(2).all { it["is_carousel_item"] == "true" })
         assertEquals("container-1,container-2", createRequests.last()["children"])
-        assertEquals("Опис квартири\n\nhttps://rieltor.dpdns.org/catalog", createRequests.last()["text"])
+        assertEquals("Опис квартири\n\n#нерухомість", createRequests.last()["text"])
         assertEquals("container-3", publishCreationId)
     }
 
     @Test
-    fun `single photo adds catalog link only when it fits within Threads text limit`() = runBlocking {
+    fun `single photo uses one topic and adds catalog link every fourth publish when it fits`() = runBlocking {
         var createdParameters = emptyMap<String, String>()
         val engine = MockEngine { request ->
             when {
@@ -82,19 +83,31 @@ class ThreadsPhotoPublisherTest {
 
         val publisher = ThreadsPhotoPublisher(client, auth, json, statusPollDelayMillis = 0)
         val link = "https://rieltor.dpdns.org/catalog"
-        val fittingDescription = "а".repeat(500 - link.length - 2)
+        val topic = "#нерухомість"
+        val fittingBody = "а".repeat(500 - link.length - topic.length - 4)
+        val fittingDescription = "$fittingBody\n\n$topic"
+        val longestDescription = "${"а".repeat(500 - topic.length - 2)}\n\n$topic"
         val cases = listOf(
-            null to link,
-            fittingDescription to "$fittingDescription\n\n$link",
-            (fittingDescription + "а") to (fittingDescription + "а"),
-            "а".repeat(500) to "а".repeat(500),
-            "а".repeat(700) to "а".repeat(500),
+            Triple(null, topic, "$topic\n\n$link"),
+            Triple("#нерухомість #квартира", topic, "$topic\n\n$link"),
+            Triple("#будинок #Буча Будинки з ремонтом", "Будинки з ремонтом\n\n$topic", "Будинки з ремонтом\n\n$topic\n\n$link"),
+            Triple("Опис\n\n#рієлтор\n#нерухомістьУкраїни #купитинерухомість", "Опис\n\n$topic", "Опис\n\n$topic\n\n$link"),
+            Triple(fittingBody, fittingDescription, "$fittingDescription\n\n$link"),
+            Triple(fittingBody + "а", "${fittingBody}а\n\n$topic", "${fittingBody}а\n\n$topic"),
+            Triple("а".repeat(500), longestDescription, longestDescription),
+            Triple("а".repeat(700) + " #квартира", longestDescription, longestDescription),
         )
-        for ((caption, expectedText) in cases) {
+        for ((caption, expectedDescription, expectedText) in cases) {
+            repeat(3) {
+                publisher.publish(listOf("https://api.example/media/one.jpg"), caption)
+                assertEquals(expectedDescription, createdParameters["text"].orEmpty())
+            }
             publisher.publish(listOf("https://api.example/media/one.jpg"), caption)
 
             assertEquals("IMAGE", createdParameters["media_type"])
             assertEquals(expectedText, createdParameters["text"], "Caption length: ${caption?.length}")
+            assertTrue(expectedText.length <= 500)
+            assertEquals(1, expectedText.count { it == '#' })
         }
     }
 

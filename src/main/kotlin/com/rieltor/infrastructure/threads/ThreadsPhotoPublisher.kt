@@ -30,7 +30,7 @@ class ThreadsPhotoPublisher(
         require(photoUrls.size <= maxPhotoCount) { "Threads accepts at most $maxPhotoCount photos per carousel." }
         val token = auth.validAccessToken()
         logger.info("Threads publishing started. photoCount={}", photoUrls.size)
-        val description = caption.orEmpty().trim().take(MAX_TEXT_LENGTH)
+        val description = formatDescription(caption)
         val includeCatalogUrl = (successfulPublishes.get() + 1) % CATALOG_URL_EVERY_N == 0
         val text = if (includeCatalogUrl) {
             listOf(description, CATALOG_URL).filter(String::isNotBlank).joinToString("\n\n")
@@ -69,6 +69,13 @@ class ThreadsPhotoPublisher(
             privacyLevel = "PROFILE_DEFAULT",
             destination = destination,
         )
+    }
+
+    private fun formatDescription(caption: String?): String {
+        val body = caption.orEmpty().replace(HASHTAG, "")
+            .lines().joinToString("\n") { it.trimEnd() }.trim()
+            .take(MAX_TEXT_LENGTH - TOPIC_TAG.length - 2).trimEnd()
+        return listOf(body, TOPIC_TAG).filter(String::isNotBlank).joinToString("\n\n")
     }
 
     private suspend fun createContainer(token: String, mediaType: String, values: Map<String, String>): String {
@@ -161,6 +168,8 @@ class ThreadsPhotoPublisher(
         const val GRAPH_URL = "https://graph.threads.net/v1.0"
         const val MAX_PHOTO_COUNT = 20
         const val MAX_TEXT_LENGTH = 500
+        const val TOPIC_TAG = "#нерухомість"
+        val HASHTAG = Regex("(?<!\\S)#[\\p{L}\\p{M}\\p{N}_]+")
         const val CATALOG_URL = "https://rieltor.dpdns.org/catalog"
         const val CATALOG_URL_EVERY_N = 4
     }
