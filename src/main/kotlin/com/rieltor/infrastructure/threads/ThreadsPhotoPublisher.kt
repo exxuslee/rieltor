@@ -10,7 +10,6 @@ import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
 
 class ThreadsPhotoPublisher(
@@ -32,14 +31,6 @@ class ThreadsPhotoPublisher(
         val description = caption.orEmpty().trim().take(MAX_TEXT_LENGTH)
         val text = listOf(description, CATALOG_URL).filter(String::isNotBlank).joinToString("\n\n")
             .takeIf { it.length <= MAX_TEXT_LENGTH } ?: description
-        val description = formatDescription(caption)
-        val includeCatalogUrl = (successfulPublishes.get() + 1) % CATALOG_URL_EVERY_N == 0
-        val text = if (includeCatalogUrl) {
-            listOf(description, CATALOG_URL).filter(String::isNotBlank).joinToString("\n\n")
-                .takeIf { it.length <= MAX_TEXT_LENGTH } ?: description
-        } else {
-            description
-        }
         val containerId = if (photoUrls.size == 1) {
             createContainer(token, "IMAGE", mapOf("image_url" to photoUrls.single(), "text" to text))
         } else {
