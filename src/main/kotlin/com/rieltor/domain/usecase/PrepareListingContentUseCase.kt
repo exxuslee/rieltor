@@ -126,7 +126,7 @@ class PrepareListingContentUseCase(
         line.removeListMarker().replace(fieldSeparator, ": ").trim()
 
     private fun buildHashtags(fullText: String): List<String> {
-        val tags = linkedSetOf("#нерухомість", "#продажнерухомості")
+        val tags = linkedSetOf("#нерухомість")
         propertyHashtags.firstOrNull { it.first.containsMatchIn(fullText) }?.let { tags += it.second }
         val locationText = distanceToCity.replace(fullText, "")
         locationHashtags.filter { it.first.containsMatchIn(locationText) }.take(2).forEach { tags += it.second }
@@ -139,7 +139,7 @@ class PrepareListingContentUseCase(
     private companion object {
         const val PUBLIC_PHONE = "066-372-71-02"
         const val PRICE_ON_REQUEST = "Ціна за запитом"
-        const val HASHTAG_COUNT = 5
+        const val HASHTAG_COUNT = 3
         val FALLBACK_HASHTAGS = listOf("#рієлтор", "#нерухомістьУкраїни", "#купитинерухомість")
 
         val googleUrl = Regex("""(?iu)https?://(?:drive|docs)\.google\.com/\S+""")
