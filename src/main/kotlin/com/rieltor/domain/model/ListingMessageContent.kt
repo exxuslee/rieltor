@@ -16,5 +16,5 @@ internal fun ListingMessage.withoutDuplicateProgramDetails(): ListingMessage {
 }
 
 private val governmentProgramLine = Regex(
-    """(?iu)(?:держ(?:авн\p{L}*|\.)?\s*програм\p{L}*|[єе]осел\p{L}*|сертиф[іи]кат\p{L}*|постанов\p{L}*|ваучер\p{L}*)"""
+    """(?iuU)(?:держ(?:авн\p{L}*|\.)?\s*програм\p{L}*|\b(?:всі|усі)\s+програм\p{L}*|[єе]осел\p{L}*|сертиф[іи]кат\p{L}*|постанов\p{L}*|ваучер\p{L}*)"""
 )

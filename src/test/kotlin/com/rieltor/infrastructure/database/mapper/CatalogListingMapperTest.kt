@@ -51,6 +51,18 @@ class CatalogListingMapperTest {
     }
 
     @Test
+    fun `all programs yes is shown as the complete list without duplicate legacy details`() {
+        val row = parse(baseListing("Всі програми ТАК"))
+        assertEquals(ALL_PROGRAMS_JSON, row.governmentPrograms)
+
+        val message = mapper.toMessage(row.copy(
+            primeParams = """{"details":["Площа 39 м","Всі програми ТАК"]}""",
+        ), "050-000-00-00")
+        assertEquals("єОселя, Ваучер, Сертифікат, Постанова", message.governmentPrograms)
+        assertEquals(listOf("Площа 39 м"), message.keyParameters)
+    }
+
+    @Test
     fun `maps stored catalog fields and the configured public phone`() {
         val message = mapper.toMessage(catalogRow.copy(
             address = "вул. Прикладна, 2", tags = """["#квартира","#Ірпінь"]""",

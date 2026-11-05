@@ -142,9 +142,9 @@ class PrepareCatalogListingUseCase(
             "CERTIFICATE" to Regex("(?iu)сертиф[іи]кат"),
             "POSTANOVA" to Regex("(?iu)постанов"),
         )
-        val genericProgramsLine = Regex("""(?iu)(?:держ(?:авн\p{L}*)?\s*програм\p{L}*|\bпрограм\p{L}*)""")
-        val positiveProgramsClause = Regex("""(?iu)(?:\bтак\b|\bда\b|всі|усі|все|підход|розгляда|обговорю)""")
-        val negativeClause = Regex("""(?iu)(?:\bне\b|без|\bні\b|\bнет\b|не\s+підход|не\s+розгляда)""")
+        val genericProgramsLine = Regex("""(?iuU)(?:держ(?:авн\p{L}*)?\s*програм\p{L}*|\bпрограм\p{L}*)""")
+        val positiveProgramsClause = Regex("""(?iuU)(?:\bтак\b|\bда\b|всі|усі|все|підход|розгляда|обговорю)""")
+        val negativeClause = Regex("""(?iuU)(?:\bне\b|без|\bні\b|\bнет\b|не\s+підход|не\s+розгляда)""")
         val bargain = Regex("""(?iu)торг\p{L}*""")
         val noBargain = Regex("""(?iu)(?:без\s+торг\p{L}*|торг\p{L}*\s*(?:не|ні|нет))""")
         val labeledArea = Regex("""(?iu)(?:площа|площадь)\s*(?:(?:будинку|квартири|таунхаусу|дуплекса)\s*)?[:\-–—]?\s*(\d+(?:[.,]\d+)?)""")
