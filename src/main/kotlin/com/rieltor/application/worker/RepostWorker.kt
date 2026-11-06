@@ -14,8 +14,13 @@ import com.rieltor.infrastructure.media.LocalPublicMediaStorage
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.time.delay
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
+import java.time.Duration
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.hours
 
@@ -32,6 +37,9 @@ class RepostWorker(
     private val started = AtomicBoolean()
     private val captionFormatter = ListingCaptionFormatter()
     private val listingMapper = CatalogListingMapper()
+    private val NIGHT_START = LocalTime.of(23, 0)
+    private val MORNING_END = LocalTime.of(7, 0)
+    private val ZONE = ZoneId.of("Europe/Kyiv")
 
     override fun start() {
         if (!started.compareAndSet(false, true)) return
@@ -45,7 +53,7 @@ class RepostWorker(
                     } catch (error: Throwable) {
                         logger.error("Repost dispatch failed for {}", publisher.destination, error)
                     }
-                    delay(1.hours)
+                    delay(nextDelay())
                 }
             }
         }
@@ -202,5 +210,16 @@ class RepostWorker(
 
     override fun close() {
         runBlocking { scope.coroutineContext[Job]?.cancelAndJoin() }
+    }
+
+    private fun nextDelay(
+        now: LocalDateTime = LocalDateTime.now(ZONE),
+        regular: Duration = Duration.ofHours(2),
+    ): Duration {
+        val time = now.toLocalTime()
+        val inNight = time !in MORNING_END..<NIGHT_START
+        if (!inNight) return regular
+        val wakeUpDate = if (time >= NIGHT_START) now.toLocalDate().plusDays(1) else now.toLocalDate()
+        return Duration.between(now, wakeUpDate.atTime(MORNING_END))
     }
 }
