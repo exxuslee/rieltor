@@ -1,10 +1,33 @@
 package com.rieltor.domain.usecase
 
+import com.rieltor.domain.model.CatalogCodes
 import com.rieltor.domain.model.ListingImportSource
 import kotlin.test.*
 
 class PrepareCatalogListingUseCaseTest {
     private val prepare = PrepareCatalogListingUseCase()
+
+    @Test fun `all programs yes enables every government program and gets a separate public section`() {
+        listOf("Всі програми ТАК", "Всі програми — так", "Усі програми: Так").forEach { programs ->
+            val result = prepare(ListingImportSource(
+                "Ірпінь\nКвартира\nЦіна 100000 USD\n$programs", "APARTMENT 1",
+            ))
+
+            assertEquals(CatalogCodes.programs, result.governmentPrograms, programs)
+            val content = assertNotNull(result.content)
+            assertNotNull(content.governmentPrograms, programs)
+            assertTrue((content.keyParameters + content.additionalParameters).none { it.contains(programs) }, programs)
+        }
+    }
+
+    @Test fun `all programs wording preserves explicit refusals`() {
+        val source = "Ірпінь\nКвартира\nЦіна 100000 USD\n"
+        assertEquals(emptySet(), prepare(ListingImportSource(source + "Всі програми — ні", "APARTMENT 1")).governmentPrograms)
+        assertEquals(
+            CatalogCodes.programs - "CERTIFICATE",
+            prepare(ListingImportSource(source + "Всі програми ТАК\nСертифікат не розглядаємо", "APARTMENT 1")).governmentPrograms,
+        )
+    }
 
     @Test fun `extracts floor variants from incoming messages`() {
         listOf("37.7м2, 3/6 поверх", "3/6", "Поверх 3/6").forEach { detail ->

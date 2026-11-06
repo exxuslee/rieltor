@@ -86,6 +86,7 @@ class PrepareListingContentUseCase(
         if (internalNoise.matches(line) || standalonePercentage.matches(line)) return ""
 
         line = googleUrl.replace(line, "")
+        if (driveLinkLabel.matches(line.removeListMarker())) return ""
         line = agency.replace(line, "")
         line = exclusiveAbbreviation.replace(line, "")
         line = saleByPowerOfAttorney.replace(line, "")
@@ -143,6 +144,7 @@ class PrepareListingContentUseCase(
         val FALLBACK_HASHTAGS = listOf("#рієлтор", "#нерухомістьУкраїни", "#купитинерухомість")
 
         val googleUrl = Regex("""(?iu)https?://(?:drive|docs)\.google\.com/\S+""")
+        val driveLinkLabel = Regex("""(?iu)^(?:диск|google\s+drive)\s*[:\-–—]?\s*$""")
         val distanceToCity = Regex("""(?iu)\d+(?:[.,]\d+)?\s*км\s*(?:від|до|от)\s+[\p{L}’'ʼ-]+""")
         val agencyLine = Regex("""(?iu)^\s*(?:АН|AH)\s+.+$""")
         val commissionSplit = Regex("""^\s*\d+(?:[.,]\d+)?\s*%?\s*[/\\]\s*2\s*$""")
@@ -183,7 +185,7 @@ class PrepareListingContentUseCase(
             """(?iu)(?:ціна|вартість|площа|м\s*[²2]|м\.?\s*кв\.?|кв\.?\s*м|сот\p{L}*|ділянк\p{L}*|поверх\p{L}*|кімнат\p{L}*|санвуз\p{L}*|(?:^|\s)жк(?:\s|$)|(?:^|\s)вул\.?\s|вулиц\p{L}*|опален\p{L}*|комунікаці\p{L}*|вода|каналізаці\p{L}*|септик|свердловин\p{L}*|скважин\p{L}*|газ|електр\p{L}*|програм\p{L}*|сертифікат|іпотек\p{L}*|розтермінув\p{L}*)"""
         )
         val priceLine = Regex("""(?iu)(?:ціна|вартість|від\s+\d|\d[\d\s.,]*\s*(?:[$€₴]|грн\.?|usd|eur))""")
-        val governmentProgramsLine = Regex("""(?iu)(?:держ(?:авні|\.)?\s*програм\p{L}*|єосел\p{L}*|сертифікат|постанова)""")
+        val governmentProgramsLine = Regex("""(?iuU)(?:держ(?:авні|\.)?\s*програм\p{L}*|\b(?:всі|усі)\s+програм\p{L}*|єосел\p{L}*|сертифікат|постанова)""")
         val registrationLine = Regex("""(?iu)(?:оформлення|оф(?:\.|(?=\s|$))|переуступк[ау])""")
         val registrationCostLine = Regex(
             """(?iu)(?:(?:оформлення|оф(?:\.|(?=\s|$))|переуступк[ау]).*(?:\d|%|[$€₴]|грн\.?|мінімальн\p{L}*|минимальн\p{L}*)|(?:\d+(?:[.,]\d+)?\s*%).*(?:оформлення|оф(?:\.|(?=\s|$))|переуступк[ау]))"""

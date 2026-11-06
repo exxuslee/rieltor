@@ -1,7 +1,6 @@
 package com.rieltor.infrastructure.config
 
-import com.rieltor.domain.model.CatalogCodes
-import com.rieltor.domain.model.RepostDestination
+import com.rieltor.domain.model.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.nio.ByteBuffer
@@ -13,6 +12,17 @@ import java.nio.file.StandardOpenOption
 
 @Serializable
 data class SlotReservation(val attemptId: String, val listingId: Long, val reservedAt: Long)
+
+@Serializable
+data class CaptionRotation(
+    val nextStyle: RepostCaptionStyle = RepostCaptionStyle.STANDARD,
+    val lastAttemptId: String? = null,
+    val lastStyle: RepostCaptionStyle = RepostCaptionStyle.STANDARD,
+    val nextConversationalVariant: ConversationalCaptionVariant = ConversationalCaptionVariant.DIRECT,
+    val lastConversationalVariant: ConversationalCaptionVariant? = null,
+    val nextBalancedVariant: BalancedCaptionVariant = BalancedCaptionVariant.STRUCTURED,
+    val lastBalancedVariant: BalancedCaptionVariant? = null,
+)
 
 /** A Telegram chat and the forum topics to import from it. An empty list means the whole chat. */
 @Serializable
@@ -45,6 +55,8 @@ data class LocalSettings(
     /** TikTok reservations; retain the legacy field and history when upgrading. Failed sends also count. */
     val slotReservations: List<SlotReservation> = emptyList(),
     val threadsSlotReservations: List<SlotReservation> = emptyList(),
+    val tiktokCaptionRotation: CaptionRotation = CaptionRotation(),
+    val threadsCaptionRotation: CaptionRotation = CaptionRotation(),
     val serverPort: Int = 8383,
     val databasePath: String = "rieltor.db",
     val secretsPath: String = "secrets.json",
@@ -135,6 +147,37 @@ class JsonSettingsStore(val path: Path, defaults: LocalSettings = LocalSettings(
     private fun reservations(destination: RepostDestination) = when (destination) {
         RepostDestination.TIKTOK -> state.slotReservations
         RepostDestination.THREADS -> state.threadsSlotReservations
+    }
+
+    /** Called after local validation and publisher backpressure, immediately before sending. */
+    @Synchronized
+    fun reserveCaption(attemptId: String, destination: RepostDestination): RepostCaptionSelection {
+        check(!writeFailed) { "Settings storage unavailable" }
+        require(attemptId.isNotBlank())
+        val rotation = when (destination) {
+            RepostDestination.TIKTOK -> state.tiktokCaptionRotation
+            RepostDestination.THREADS -> state.threadsCaptionRotation
+        }
+        if (rotation.lastAttemptId == attemptId) {
+            return RepostCaptionSelection(rotation.lastStyle, rotation.lastConversationalVariant, rotation.lastBalancedVariant)
+        }
+        val style = rotation.nextStyle
+        val variant = rotation.nextConversationalVariant.takeIf { style == RepostCaptionStyle.CONVERSATIONAL }
+        val balancedVariant = rotation.nextBalancedVariant.takeIf { style == RepostCaptionStyle.BALANCED }
+        val next = rotation.copy(
+            nextStyle = style.next(), lastAttemptId = attemptId, lastStyle = style,
+            nextConversationalVariant = variant?.next() ?: rotation.nextConversationalVariant,
+            lastConversationalVariant = variant,
+            nextBalancedVariant = balancedVariant?.next() ?: rotation.nextBalancedVariant,
+            lastBalancedVariant = balancedVariant,
+        )
+        update {
+            when (destination) {
+                RepostDestination.TIKTOK -> it.copy(tiktokCaptionRotation = next)
+                RepostDestination.THREADS -> it.copy(threadsCaptionRotation = next)
+            }
+        }
+        return RepostCaptionSelection(style, variant, balancedVariant)
     }
 
     private fun retainedReservations(reservations: List<SlotReservation>, now: Long): List<SlotReservation> {

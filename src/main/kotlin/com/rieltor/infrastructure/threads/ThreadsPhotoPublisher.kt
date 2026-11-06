@@ -10,7 +10,6 @@ import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
 
 class ThreadsPhotoPublisher(
@@ -64,6 +63,13 @@ class ThreadsPhotoPublisher(
             privacyLevel = "PROFILE_DEFAULT",
             destination = destination,
         )
+    }
+
+    private fun formatDescription(caption: String?): String {
+        val body = caption.orEmpty().replace(HASHTAG, "")
+            .lines().joinToString("\n") { it.trimEnd() }.trim()
+            .take(MAX_TEXT_LENGTH - TOPIC_TAG.length - 2).trimEnd()
+        return listOf(body, TOPIC_TAG).filter(String::isNotBlank).joinToString("\n\n")
     }
 
     private suspend fun createContainer(token: String, mediaType: String, values: Map<String, String>): String {
@@ -156,6 +162,8 @@ class ThreadsPhotoPublisher(
         const val GRAPH_URL = "https://graph.threads.net/v1.0"
         const val MAX_PHOTO_COUNT = 20
         const val MAX_TEXT_LENGTH = 500
+        const val TOPIC_TAG = "#нерухомість"
+        val HASHTAG = Regex("(?<!\\S)#[\\p{L}\\p{M}\\p{N}_]+")
         const val CATALOG_URL = "https://rieltor.dpdns.org/catalog"
     }
 }
