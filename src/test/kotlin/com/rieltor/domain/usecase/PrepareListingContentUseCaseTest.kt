@@ -74,7 +74,7 @@ class PrepareListingContentUseCaseTest {
         assertEquals(listOf("Три кімнати", "84 кв.м", "ГАЗ"), listing.keyParameters)
         assertEquals(emptyList(), listing.additionalParameters)
         assertEquals("066-372-71-02", listing.phone)
-        assertEquals(5, listing.hashtags.size)
+        assertEquals(listOf("#нерухомість", "#таунхаус", "#Ірпінь"), listing.hashtags)
     }
 
     @Test
@@ -124,9 +124,7 @@ class PrepareListingContentUseCaseTest {
 
         assertContains(listing.keyParameters, "Площа дуплекса: 93 м2")
         assertContains(result, "не введений в експлуатацію")
-        assertEquals(5, listing.hashtags.size)
-        assertContains(listing.hashtags, "#дуплекс")
-        assertContains(listing.hashtags, "#Буча")
+        assertEquals(listOf("#нерухомість", "#дуплекс", "#Буча"), listing.hashtags)
         assertFalse(result.contains("5000${'$'}/2"))
         assertFalse(result.contains("Вячеслав"))
         assertFalse(result.contains("google.com"))
@@ -220,7 +218,7 @@ class PrepareListingContentUseCaseTest {
         assertEquals("Держ. програми: Так", listing.governmentPrograms)
         assertEquals(listOf("Площа 44,3 м2", "Поверх 4/8"), listing.keyParameters)
         assertEquals(listOf("Новий якісний ремонт"), listing.additionalParameters)
-        assertEquals(5, listing.hashtags.size)
+        assertEquals(listOf("#нерухомість", "#квартира", "#Гостомель"), listing.hashtags)
         assertEquals("066-372-71-02", listing.phone)
         assertFalse(text.contains("0961733824"))
         assertFalse(text.contains("Комісія"))
