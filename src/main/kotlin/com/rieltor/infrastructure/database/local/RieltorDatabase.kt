@@ -16,7 +16,7 @@ import java.nio.file.attribute.PosixFilePermission
 
 @Database(
     entities = [IncomingEntity::class, AdEntity::class, StatisticsEvent::class],
-    version = 37,
+    version = 38,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -26,7 +26,10 @@ internal abstract class RieltorDatabase : RoomDatabase() {
 
 // Migrations up to 22 intentionally keep the historical table name `incoming_telegram_messages`:
 // it is what the schema was called at those versions. The table becomes `incomeTab` in 22 -> 23.
-private val migrations = arrayOf(
+private fun migrations(stabilityMs: Long) = arrayOf(
+    object : Migration(37, 38) {
+        override fun migrate(connection: SQLiteConnection) = restoreAdRepeats(connection, stabilityMs)
+    },
     object : Migration(36, 37) {
         override fun migrate(connection: SQLiteConnection) {
             connection.execSQL("ALTER TABLE adsTab ADD COLUMN repeats INTEGER NOT NULL DEFAULT 0")
@@ -311,7 +314,7 @@ class RoomDatabaseStore(
             // Synchronous repository callers can occupy every shared IO slot while
             // waiting in runBlocking. Room must have its own IO parallelism budget.
             .setQueryCoroutineContext(Dispatchers.IO.limitedParallelism(2))
-            .addMigrations(*migrations)
+            .addMigrations(*migrations(settings.snapshot().stabilityWindowMinutes * 60_000))
             .fallbackToDestructiveMigration(true)
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(connection: SQLiteConnection) {
