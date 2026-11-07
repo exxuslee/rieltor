@@ -50,7 +50,7 @@ class GoogleDrivePhotoSourceTest {
             service.verifyDue(); assertTrue(service.downloadNext())
             assertEquals(2, repo.listings().single().messageId); assertEquals(1, downloads)
             assertTrue(service.downloadNext()); assertEquals(2, repo.listings().size)
-            assertTrue(repo.listings().all { it.status == ListingStatus.Active && repo.repost(it.id)?.tiktokRepostedAt == null })
+            assertTrue(repo.listings().all { it.status == ListingStatus.Active && it.repostTikTok == "PENDING" })
             val original = repo.listings().first { it.messageId == 2L }
             val originalPhotos = Json.decodeFromString<List<com.rieltor.domain.model.CatalogPhoto>>(original.photos)
             time += 7 * 86_400_000

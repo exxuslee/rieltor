@@ -15,8 +15,8 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
 
 @Database(
-    entities = [IncomingEntity::class, AdEntity::class, RepostEntity::class, RepostAttemptEntity::class, StatisticsEvent::class],
-    version = 35,
+    entities = [IncomingEntity::class, AdEntity::class, StatisticsEvent::class],
+    version = 36,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -27,6 +27,21 @@ internal abstract class RieltorDatabase : RoomDatabase() {
 // Migrations up to 22 intentionally keep the historical table name `incoming_telegram_messages`:
 // it is what the schema was called at those versions. The table becomes `incomeTab` in 22 -> 23.
 private val migrations = arrayOf(
+    object : Migration(35, 36) {
+        override fun migrate(connection: SQLiteConnection) {
+            for ((column, old) in listOf("repostTikTok" to "tiktok", "repostThreads" to "threads")) {
+                connection.execSQL("ALTER TABLE adsTab ADD COLUMN $column TEXT NOT NULL DEFAULT 'PENDING'")
+                // Dispatch state is newer than the last externally accepted snapshot.
+                connection.execSQL("""
+                    UPDATE adsTab SET $column = COALESCE(
+                        (SELECT ${old}Status FROM repostAttemptsTab WHERE id=adsTab.id),
+                        (SELECT ${old}Status FROM repostTab WHERE id=adsTab.id), 'PENDING')
+                """.trimIndent())
+            }
+            connection.execSQL("DROP TABLE repostAttemptsTab")
+            connection.execSQL("DROP TABLE repostTab")
+        }
+    },
     object : Migration(34, 35) {
         override fun migrate(connection: SQLiteConnection) {
             connection.execSQL("ALTER TABLE incomeTab ADD COLUMN isAllowRepost INTEGER NOT NULL DEFAULT 1")

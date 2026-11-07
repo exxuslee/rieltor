@@ -9,47 +9,12 @@ import com.rieltor.domain.model.RepostStatus
 import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.model.AdEntity
 import com.rieltor.infrastructure.database.repository.CatalogRepository
-import com.rieltor.infrastructure.database.repository.TikTokRepositoryImpl
 import com.rieltor.web.api.CatalogListingApi
 import io.ktor.http.*
 import java.nio.file.Files
 import kotlin.test.*
 
 class CatalogDaoIsolationTest {
-    @Test fun `pending shares expire by creation time without losing history after restart`() {
-        val path = Files.createTempDirectory("pending-share-expiry").resolve("test.db")
-        val window = 86_400_000L
-        val createdAt = 1000L
-        val cutoff = createdAt + window
-        RoomDatabaseStore(path).use { db ->
-            val catalog = CatalogRepository(db)
-            val tiktok = TikTokRepositoryImpl(db, catalog)
-            for (n in 1L..6L) {
-                val id = catalog.save(ad().copy(adId = "ad$n", messageId = n))
-                val attempt = assertNotNull(catalog.prepare(id, setOf(RepostDestination.TIKTOK), createdAt))
-                tiktok.trackPublishForListing(id, attempt, "draft-$n", "DRAFT", createdAt)
-                tiktok.updateTrackedStatus("draft-$n", "SEND_TO_USER_INBOX", cutoff - 1)
-            }
-            assertEquals(6, tiktok.trackedPublishes(cutoff - 1, window).size)
-            assertTrue(tiktok.trackedPublishes(cutoff, window).isEmpty())
-        }
-        RoomDatabaseStore(path).use { db ->
-            val catalog = CatalogRepository(db)
-            val tiktok = TikTokRepositoryImpl(db, catalog)
-            assertTrue(tiktok.trackedPublishes(cutoff + 1, window).isEmpty())
-            assertEquals(6, catalog.reposts().size)
-            catalog.reposts().forEach {
-                assertEquals(RepostStatus.DeliveredDraft, catalog.status(it, RepostDestination.TIKTOK))
-                assertNotNull(catalog.publication(it, RepostDestination.TIKTOK).attempts.single().publishId)
-            }
-            assertNull(catalog.nextRepost(true, false))
-            val id = catalog.save(ad().copy(adId = "fresh", messageId = 7))
-            val attempt = assertNotNull(catalog.prepare(id, setOf(RepostDestination.TIKTOK), cutoff))
-            tiktok.trackPublishForListing(id, attempt, "fresh-draft", "DRAFT", cutoff)
-            assertEquals("fresh-draft", tiktok.trackedPublishes(cutoff + 1, window).single().publishId)
-        }
-    }
-
     private fun ad() = AdEntity(
         chatId = -1002681732909L, messageId = 1, adId = "ad", messageThreadId = 0,
         sourceRevision = "revision", timestamp = 100,
@@ -96,8 +61,8 @@ class CatalogDaoIsolationTest {
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db)
             val id = repo.save(ad())
-            // A query touching repostTab must fail, even if it uses a LEFT JOIN.
-            BundledSQLiteDriver().open(path.toString()).use { it.execSQL("DROP TABLE repostTab") }
+            // Removed repost tables are unnecessary for catalog reads.
+            BundledSQLiteDriver().open(path.toString()).use { it.execSQL("DROP TABLE IF EXISTS repostTab") }
             assertEquals(ad().copy(id = id), repo.listing(id))
             assertEquals(id, repo.listings().single().id)
             assertTrue(repo.cachedPhotos(ad()).isEmpty())
@@ -114,29 +79,18 @@ class CatalogDaoIsolationTest {
         }
     }
 
-    @Test fun `repost lifecycle does not rewrite advertisement and content edits preserve history`() {
-        val path = Files.createTempDirectory("repost-isolation").resolve("test.db")
-        RoomDatabaseStore(path).use { db ->
+    @Test fun contentUpdatesPreserveConcurrentRepostStatusChanges() {
+        RoomDatabaseStore(Files.createTempDirectory("repost-edit").resolve("test.db")).use { db ->
             val repo = CatalogRepository(db)
             val id = repo.save(ad())
-            val before = repo.listing(id)
-            val destination = RepostDestination.TIKTOK
-            val first = assertNotNull(repo.prepare(id, setOf(destination), 200))
-            repo.recover(300)
-            assertNull(repo.repost(id))
-            assertEquals(RepostStatus.Pending, repo.status(assertNotNull(repo.repostState(id)), destination))
-            val second = assertNotNull(repo.prepare(id, setOf(destination), 400))
-            assertNotEquals(first, second)
-            repo.changeAttempt(id, destination, second, 500) {
-                it.copy(status = RepostStatus.AwaitingConfirmation, publishId = "publish-id")
-            }
-            assertEquals("publish-id", TikTokRepositoryImpl(db, repo).trackedPublishes(500, 1000).single().publishId)
-            repo.updatePublish("publish-id", 600) { it.copy(status = RepostStatus.Published) }
-            assertEquals(before, repo.listing(id))
-            val published = assertNotNull(repo.repost(id))
-            assertEquals(600L, published.tiktokRepostedAt)
-            repo.save(assertNotNull(before).copy(title = "Edited"))
-            assertEquals(published, repo.repost(id))
+            val stale = assertNotNull(repo.listing(id))
+            assertTrue(repo.beginRepost(id, RepostDestination.TIKTOK))
+            repo.finishRepost(id, RepostDestination.TIKTOK, RepostStatus.Published, 200)
+            repo.save(stale.copy(title = "Edited"))
+            val updated = assertNotNull(repo.listing(id))
+            assertEquals("Edited", updated.title)
+            assertEquals("PUBLISHED", updated.repostTikTok)
+            assertEquals("PENDING", updated.repostThreads)
             assertNull(repo.nextRepost(true, false))
         }
     }

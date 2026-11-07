@@ -33,33 +33,20 @@ internal interface CatalogDao {
     suspend fun listings(): List<AdEntity>
 
     @Query("""
-        SELECT adsTab.*, COALESCE(r.id, adsTab.id) AS repost_id,
-            r.tiktokRepostedAt AS repost_tiktokRepostedAt, r.threadsRepostedAt AS repost_threadsRepostedAt,
-            COALESCE(r.tiktokStatus, 'PENDING') AS repost_tiktokStatus,
-            COALESCE(r.threadsStatus, 'PENDING') AS repost_threadsStatus,
-            COALESCE(r.tiktokState, '{"attempts":[]}') AS repost_tiktokState,
-            COALESCE(r.threadsState, '{"attempts":[]}') AS repost_threadsState
-        FROM adsTab LEFT JOIN repostAttemptsTab r ON r.id=adsTab.id
-        WHERE adsTab.chatId=:chatId AND status='ACTIVE'
+        SELECT * FROM adsTab
+        WHERE chatId=:chatId AND status='ACTIVE'
             AND NOT EXISTS (SELECT 1 FROM incomeTab i
                 WHERE i.chatId=adsTab.chatId AND i.messageId IS adsTab.messageId AND i.isAllowRepost=0)
-            AND ((:tiktok AND COALESCE(r.tiktokStatus, 'PENDING')='PENDING')
-                OR (:threads AND COALESCE(r.threadsStatus, 'PENDING')='PENDING'))
-        ORDER BY timestamp DESC, adsTab.id DESC LIMIT 1
+            AND ((:tiktok AND repostTikTok='PENDING') OR (:threads AND repostThreads='PENDING'))
+        ORDER BY timestamp DESC, id DESC LIMIT 1
     """)
-    suspend fun nextRepost(tiktok: Boolean, threads: Boolean, chatId: Long): RepostCandidate?
+    suspend fun nextRepost(tiktok: Boolean, threads: Boolean, chatId: Long): AdEntity?
 
-    @Query("SELECT * FROM repostTab WHERE id=:id")
-    suspend fun repost(id: Long): RepostEntity?
+    @Query("UPDATE adsTab SET repostTikTok=:status WHERE id=:id")
+    suspend fun updateTikTok(id: Long, status: String)
 
-    @Query("SELECT * FROM repostTab")
-    suspend fun reposts(): List<RepostEntity>
-
-    @Query("SELECT * FROM repostAttemptsTab WHERE id=:id")
-    suspend fun repostState(id: Long): RepostEntity?
-
-    @Query("SELECT * FROM repostAttemptsTab")
-    suspend fun repostStates(): List<RepostEntity>
+    @Query("UPDATE adsTab SET repostThreads=:status WHERE id=:id")
+    suspend fun updateThreads(id: Long, status: String)
 
     @Query("SELECT EXISTS(SELECT 1 FROM adsTab WHERE id=:id AND status='ACTIVE')")
     suspend fun isActive(id: Long): Boolean
@@ -76,30 +63,18 @@ internal interface CatalogDao {
     @Upsert
     suspend fun saveAd(row: AdEntity): Long
 
-    @Upsert
-    suspend fun persistRepost(row: RepostEntity)
-
-    @Upsert
-    suspend fun persistRepostAttempt(row: RepostAttemptEntity)
-
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun recordStatistic(event: StatisticsEvent)
-
-    @Transaction
-    suspend fun saveRepost(row: RepostEntity) {
-        persistRepostAttempt(RepostAttemptEntity(row))
-        if (!row.hasExternalSend()) return
-        persistRepost(row)
-        val ad = listing(row.id) ?: return
-        listOf("TIKTOK" to row.tiktokRepostedAt, "THREADS" to row.threadsRepostedAt).forEach { (kind, time) ->
-            if (time != null) recordStatistic(StatisticsEvent(kind, ad.adId, ad.chatId, ad.messageId, ad.id, ad.adId, time, ad.messageThreadId))
-        }
-    }
 
     /** Preserve publication history when advertisement content changes. */
     @Transaction
     suspend fun saveListing(row: AdEntity): Long {
-        val id = saveAd(row.copy(typeOfRealty = com.rieltor.domain.model.CatalogCodes.normalizeType(row.typeOfRealty))).takeIf { it > 0 } ?: row.id
+        val previous = if (row.id > 0) listing(row.id) else null
+        val preserved = row.copy(
+            repostTikTok = previous?.repostTikTok ?: row.repostTikTok,
+            repostThreads = previous?.repostThreads ?: row.repostThreads,
+        )
+        val id = saveAd(preserved.copy(typeOfRealty = com.rieltor.domain.model.CatalogCodes.normalizeType(row.typeOfRealty))).takeIf { it > 0 } ?: row.id
         return id
     }
 

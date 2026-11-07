@@ -20,36 +20,31 @@ class CatalogRepostQueueTest {
             val repo = CatalogRepository(db)
             for (n in 1L..3L) repo.save(listing(n))
             repo.save(listing(4).copy(status = ListingStatus.Hidden))
-            assertEquals(3L, repo.nextRepost(true, false)?.listing?.messageId)
+            assertEquals(3L, repo.nextRepost(true, false)?.messageId)
         }
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db)
-            val newest = assertNotNull(repo.nextRepost(true, false)).listing
-            val attempt = assertNotNull(repo.prepare(newest.id, setOf(RepostDestination.TIKTOK), 1000))
-            repo.changeAttempt(newest.id, RepostDestination.TIKTOK, attempt, 1001) {
-                it.copy(status = RepostStatus.Published, publishId = "published")
-            }
-            assertEquals(2L, repo.nextRepost(true, false)?.listing?.messageId)
-            assertEquals(3L, repo.nextRepost(false, true)?.listing?.messageId)
+            val newest = assertNotNull(repo.nextRepost(true, false))
+            kotlin.test.assertTrue(repo.beginRepost(newest.id, RepostDestination.TIKTOK))
+            repo.finishRepost(newest.id, RepostDestination.TIKTOK, RepostStatus.Published, 1001)
+            assertEquals(2L, repo.nextRepost(true, false)?.messageId)
+            assertEquals(3L, repo.nextRepost(false, true)?.messageId)
         }
     }
 
-    @Test fun `recovery abandons prepared work and quarantines uncertain sending`() {
+    @Test fun `restart never retries a claimed send`() {
         val path = Files.createTempDirectory("repost-recovery").resolve("test.db")
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db)
             val id = repo.save(listing(1))
-            val attempt = assertNotNull(repo.prepare(id, RepostDestination.entries.toSet(), 1000))
-            repo.changeAttempt(id, RepostDestination.TIKTOK, attempt, 1001) { it.copy(status = RepostStatus.Sending) }
+            kotlin.test.assertTrue(repo.beginRepost(id, RepostDestination.TIKTOK))
         }
         RoomDatabaseStore(path).use { db ->
             val repo = CatalogRepository(db)
             repo.recover(2000)
             val id = repo.listings().single().id
-            assertNull(repo.repost(id))
-            val repost = assertNotNull(repo.repostState(id))
-            assertEquals(RepostStatus.Unknown, repo.status(repost, RepostDestination.TIKTOK))
-            assertEquals(RepostStatus.Pending, repo.status(repost, RepostDestination.THREADS))
+            assertEquals("SENDING", repo.listing(id)?.repostTikTok)
+            assertEquals("PENDING", repo.listing(id)?.repostThreads)
             assertNull(repo.nextRepost(true, false))
             assertNotNull(repo.nextRepost(false, true))
         }

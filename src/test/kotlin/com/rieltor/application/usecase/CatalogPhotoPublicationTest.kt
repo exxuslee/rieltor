@@ -19,7 +19,7 @@ class CatalogPhotoPublicationTest {
             worker.runOnce()
             assertTrue(calls.isEmpty())
             assertFalse(repo.isAllowRepost(id))
-            assertNull(repo.repost(id))
+            assertTrue(repo.listing(id)?.repostTikTok in setOf("PENDING", "FAILED"))
             assertFailsWith<IllegalStateException> { worker.repostTikTok(id) }
         }
     }
@@ -31,8 +31,8 @@ class CatalogPhotoPublicationTest {
             assertEquals(listOf(2, 3), calls.map { it.second.size })
             assertEquals(calls[1].second.take(2), calls[0].second)
             assertTrue(calls.all { it.third.contains("Listing") && it.third.contains("test-contact") })
-            assertNotNull(repo.repost(id)?.tiktokRepostedAt)
-            assertNotNull(repo.repost(id)?.threadsRepostedAt)
+            assertEquals("PUBLISHED", repo.listing(id)?.repostTikTok)
+            assertEquals("PUBLISHED", repo.listing(id)?.repostThreads)
             worker.runOnce()
             assertEquals(2, calls.size)
         }
@@ -42,9 +42,9 @@ class CatalogPhotoPublicationTest {
         withListing(failFirst = true) { repo, id, worker, calls ->
             worker.runOnce()
             assertEquals(listOf(RepostDestination.TIKTOK, RepostDestination.THREADS), calls.map { it.first })
-            val repost = assertNotNull(repo.repost(id))
-            assertEquals(RepostStatus.Unknown, repo.status(repost, RepostDestination.TIKTOK))
-            assertEquals(RepostStatus.Published, repo.status(repost, RepostDestination.THREADS))
+            val repost = assertNotNull(repo.listing(id))
+            assertEquals(RepostStatus.Unknown, RepostStatus.fromCode(repost.repostTikTok))
+            assertEquals(RepostStatus.Published, RepostStatus.fromCode(repost.repostThreads))
             worker.runOnce()
             assertEquals(2, calls.size)
         }
@@ -54,7 +54,7 @@ class CatalogPhotoPublicationTest {
         withListing(disabled = true) { repo, id, worker, calls ->
             worker.runOnce()
             assertTrue(calls.isEmpty())
-            assertNull(repo.repost(id))
+            assertTrue(repo.listing(id)?.repostTikTok in setOf("PENDING", "FAILED"))
         }
     }
 

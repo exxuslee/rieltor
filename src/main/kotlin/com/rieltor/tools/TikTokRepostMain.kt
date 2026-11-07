@@ -51,12 +51,11 @@ fun main(args: Array<String>) = runBlocking {
                     maxPhotoCount = app.repostMaxPhotoCount,
                     publishRepository = TikTokRepositoryImpl(database),
                     globalCooldownMillis = app.tikTokDailyLimitCooldownHours * 3_600_000L,
-                    enforceLocalPendingShareLimit = false,
                 )
                 val media = LocalPublicMediaStorage(app.mediaDirectory, app.publicBaseUrl)
                 RepostWorker(repository, settings, listOf(publisher), media).use { worker ->
                     val result = worker.repostTikTok(id)
-                    println("TikTok: adsTab.id=$id, status=${result.status.code}, publishId=${result.publishId}")
+                    println("TikTok: adsTab.id=$id, status=${result.code}")
                 }
             }
         }

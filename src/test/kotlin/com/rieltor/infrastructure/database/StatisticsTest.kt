@@ -106,11 +106,12 @@ class StatisticsTest {
                 adId = "unique-ad", sourceRevision = "r", timestamp = now.toEpochMilli(),
                 status = ListingStatus.Active, price = 50000, currency = "USD"), now.toEpochMilli()))
             val id = repo.listings().single().id
-            val attempt = requireNotNull(repo.prepare(id, setOf(RepostDestination.TIKTOK, RepostDestination.THREADS), now.toEpochMilli()))
-            repo.changeAttempt(id, RepostDestination.TIKTOK, attempt, now.toEpochMilli()) { it.copy(status = RepostStatus.AwaitingConfirmation) }
+            assertTrue(repo.beginRepost(id, RepostDestination.TIKTOK))
+            assertTrue(repo.beginRepost(id, RepostDestination.THREADS))
+            repo.finishRepost(id, RepostDestination.TIKTOK, RepostStatus.AwaitingConfirmation, now.toEpochMilli())
             assertEquals(0, StatisticsService(db, clock).snapshot().channels.single().day.tiktok)
-            repo.changeAttempt(id, RepostDestination.THREADS, attempt, now.toEpochMilli()) { it.copy(status = RepostStatus.Published) }
-            repeat(2) { repo.changeAttempt(id, RepostDestination.TIKTOK, attempt, now.toEpochMilli()) { it.copy(status = RepostStatus.Published) } }
+            repo.finishRepost(id, RepostDestination.THREADS, RepostStatus.Published, now.toEpochMilli())
+            repeat(2) { repo.finishRepost(id, RepostDestination.TIKTOK, RepostStatus.Published, now.toEpochMilli()) }
             val snapshot = StatisticsService(db, clock).snapshot()
             assertEquals(listOf(1L, 1L, 1L, 1L, 1L), snapshot.channels.single().day.let { listOf(it.received, it.processed, it.accepted, it.tiktok, it.threads) })
             assertEquals(1, snapshot.channels.single().active)

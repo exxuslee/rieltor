@@ -48,10 +48,8 @@ class RepostWorkerTest {
                 val error = assertFailsWith<IllegalStateException> { worker.repostTikTok(deniedId) }
                 assertContains(error.message.orEmpty(), "-1002681732909")
                 for (destination in RepostDestination.entries) {
-                    assertNull(repo.prepare(deniedId, setOf(destination), 5000))
-                    assertFailsWith<IllegalStateException> { repo.prepareManual(deniedId, destination, 5000) }
-                    assertNull(repo.repost(deniedId))
-                    assertNull(repo.repostState(deniedId))
+                    assertFalse(repo.beginRepost(deniedId, destination))
+                    assertFalse(repo.beginRepost(deniedId, destination, manual = true))
                 }
                 repo.save(allowed)
                 worker.runOnce()
@@ -98,11 +96,10 @@ class RepostWorkerTest {
                 RepostWorker(repo, db.settings, listOf(publisher), media) { 5000L }.use { worker ->
                     worker.runOnce()
                     assertEquals(0, calls)
-                    assertNull(repo.repost(invalidId))
-                    assertEquals(RepostStatus.Failed, repo.status(repo.repostState(invalidId)!!, publisher.destination))
+                    assertEquals(RepostStatus.Failed, RepostStatus.fromCode(repo.listing(invalidId)!!.repostTikTok))
                     worker.runOnce()
                     assertEquals(1, calls)
-                    assertEquals(RepostStatus.Published, repo.status(repo.repost(validId)!!, publisher.destination))
+                    assertEquals(RepostStatus.Published, RepostStatus.fromCode(repo.listing(validId)!!.repostTikTok))
                     worker.runOnce()
                     assertEquals(1, calls)
                 }
@@ -111,7 +108,7 @@ class RepostWorkerTest {
     }
 
     @Test
-    fun `backpressure retries after cooldown and draft is not republished`() = runBlocking {
+    fun `backpressure skips listing rather than retrying it`() = runBlocking {
         val directory = Files.createTempDirectory("repost-backpressure")
         RoomDatabaseStore(directory.resolve("test.db")).use { db ->
             db.settings.update { it.copy(minIntervalMs = 1000) }
@@ -141,23 +138,21 @@ class RepostWorkerTest {
             var now = 5000L
             RepostWorker(repo, db.settings, listOf(publisher), media) { now }.use { worker ->
                 worker.runOnce()
-                assertNull(repo.repost(id))
-                assertEquals(RepostStatus.Pending, repo.status(repo.repostState(id)!!, publisher.destination))
+                assertEquals("FAILED", repo.listing(id)?.repostTikTok)
                 assertEquals(0, calls)
                 blocked = false
                 worker.runOnce()
                 assertEquals(0, calls)
-                assertNull(repo.repost(id))
-                assertEquals(RepostStatus.Pending, repo.status(repo.repostState(id)!!, publisher.destination))
+                assertEquals("FAILED", repo.listing(id)?.repostTikTok)
                 now += 1000
                 worker.runOnce()
-                assertEquals(RepostStatus.DeliveredDraft, repo.status(repo.repost(id)!!, publisher.destination))
-                assertEquals(now, repo.repost(id)!!.tiktokRepostedAt)
-                assertEquals(1L, db.blocking { it.statisticsDao().counts(null) }.single { it.kind == "TIKTOK" }.count)
-                assertEquals(1, calls)
+                assertEquals("FAILED", repo.listing(id)?.repostTikTok)
+                assertEquals("FAILED", repo.listing(id)?.repostTikTok)
+                assertTrue(db.blocking { it.statisticsDao().counts(null) }.none { it.kind == "TIKTOK" })
+                assertEquals(0, calls)
                 now += 1000
                 worker.runOnce()
-                assertEquals(1, calls)
+                assertEquals(0, calls)
             }
         }
     }
@@ -202,8 +197,7 @@ class RepostWorkerTest {
             val newest = add(2); now = 5000
             service.runOnce(); assertTrue(captions.single().contains("Listing 2"))
             assertTrue(captions.single().contains("test-contact"))
-            assertNotNull(repo.repost(newest)!!.tiktokRepostedAt); assertNull(repo.repost(newest)!!.threadsRepostedAt)
-            assertEquals(RepostStatus.Unknown, repo.status(repo.repost(newest)!!, RepostDestination.THREADS))
+            assertEquals(RepostStatus.Unknown, RepostStatus.fromCode(repo.listing(newest)!!.repostThreads))
             service.runOnce(); assertEquals(2, captions.size)
             service.runOnce(); assertEquals(2, captions.size)
             service.close()

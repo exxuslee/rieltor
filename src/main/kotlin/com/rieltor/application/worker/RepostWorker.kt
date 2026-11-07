@@ -1,11 +1,9 @@
 package com.rieltor.application.worker
 
-import com.rieltor.application.port.PublicationContext
 import com.rieltor.application.port.Worker
 import com.rieltor.application.service.RepostCaptionFormatter
 import com.rieltor.domain.model.*
 import com.rieltor.domain.repository.PhotoPublisher
-import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.infrastructure.config.JsonSettingsStore
 import com.rieltor.infrastructure.database.mapper.CatalogListingMapper
 import com.rieltor.infrastructure.database.model.AdEntity
@@ -22,7 +20,6 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.time.Duration.Companion.hours
 
 class RepostWorker(
     private val repository: CatalogRepository,
@@ -57,21 +54,6 @@ class RepostWorker(
                 }
             }
         }
-        scope.launch {
-            while (isActive) {
-                for (publisher in publishers) {
-                    if (publisher.destination != RepostDestination.TIKTOK) continue
-                    try {
-                        publisher.pendingDiagnostics()
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: Throwable) {
-                        logger.warn("Pending reconciliation unavailable: {}", error.javaClass.simpleName)
-                    }
-                }
-                delay(4.hours)
-            }
-        }
     }
 
     suspend fun runOnce() {
@@ -88,7 +70,7 @@ class RepostWorker(
     }
 
     /** One explicit send, independent of the automatic queue and its scheduling settings. */
-    suspend fun repostTikTok(id: Long): PublishAttempt = dispatchMutexes.getValue(RepostDestination.TIKTOK).withLock {
+    suspend fun repostTikTok(id: Long): RepostStatus = dispatchMutexes.getValue(RepostDestination.TIKTOK).withLock {
         require(id > 0) { "Expected a positive adsTab.id" }
         val row = checkNotNull(repository.listing(id)) { "adsTab.id=$id was not found" }
         check(row.status == ListingStatus.Active) { "adsTab.id=$id is not ACTIVE" }
@@ -98,20 +80,15 @@ class RepostWorker(
         }
 
         val publisher = publishers.single { it.destination == RepostDestination.TIKTOK }
-        // Validate local inputs before creating a persistent attempt.
+        // Validate local inputs before marking the listing as sending.
         photoUrls(row, publisher.maxPhotoCount)
         listingMapper.toMessage(row, settings.snapshot().repostContactPhone)
 
-        val attemptId = repository.prepareManual(id, publisher.destination, now())
-        publishToDestination(RepostAttempt(row, attemptId), publisher)
-        val state = repository.publication(checkNotNull(repository.repostState(id)), publisher.destination)
-        val result = state.attempts.single { it.attemptId == attemptId }
-
-        check(result.status in setOf(RepostStatus.Published, RepostStatus.DeliveredDraft)) {
-            "TikTok repost incomplete: adsTab.id=$id, status=${result.status.code}, " +
-                    "publishId=${result.publishId}, error=${result.error}"
+        check(repository.beginRepost(id, publisher.destination, manual = true)) { "Repost is unavailable or already sending" }
+        val result = publishToDestination(RepostAttempt(row, java.util.UUID.randomUUID().toString()), publisher)
+        check(result in setOf(RepostStatus.Published, RepostStatus.DeliveredDraft)) {
+            "TikTok repost incomplete: adsTab.id=$id, status=${result.code}"
         }
-
         result
     }
 
@@ -124,90 +101,51 @@ class RepostWorker(
     }
 
     private fun prepareNextAttempt(publisher: PhotoPublisher): RepostAttempt? {
-        val candidate = repository.nextRepost(
+        val row = repository.nextRepost(
             publisher.destination == RepostDestination.TIKTOK,
             publisher.destination == RepostDestination.THREADS,
         ) ?: return null
-        val row = candidate.listing
-        val attemptId = repository.prepare(row.id, setOf(publisher.destination), now()) ?: return null
+        val attemptId = java.util.UUID.randomUUID().toString()
         val attempt = RepostAttempt(row, attemptId)
         if (settings.reserve(attemptId, row.id, now(), publisher.destination) > 0) {
-            updateAttempt(attempt, publisher.destination) { it.copy(status = RepostStatus.Pending) }
             return null
         }
+        if (!repository.beginRepost(row.id, publisher.destination)) return null
         return attempt
     }
 
-    private suspend fun publishToDestination(attempt: RepostAttempt, publisher: PhotoPublisher) {
+    private suspend fun publishToDestination(attempt: RepostAttempt, publisher: PhotoPublisher): RepostStatus {
         val row = attempt.listing
         val destination = publisher.destination
-        try {
-            val current = repository.listing(row.id) ?: return
-            if (current.status != ListingStatus.Active || current.sourceRevision != row.sourceRevision) {
-                updateAttempt(attempt, destination) { it.copy(status = RepostStatus.Pending) }
-                return
+        var sending = false
+        val result = try {
+            val current = repository.listing(row.id)
+            check(current != null && current.status == ListingStatus.Active && current.sourceRevision == row.sourceRevision) {
+                "Advertisement changed before repost"
             }
             val photoUrls = photoUrls(row, publisher.maxPhotoCount)
             val listing = listingMapper.toMessage(row, settings.snapshot().repostContactPhone)
             publisher.awaitPublishSlot()
-            check(repository.isAllowRepost(row.id)) { "adsTab.id=${row.id} forbids reposting (без реклами)" }
-            check(repository.listing(row.id)?.chatId == REPOST_SOURCE_CHAT_ID) {
-                "Reposts are allowed only from chatId=$REPOST_SOURCE_CHAT_ID"
-            }
+            check(repository.isAllowRepost(row.id)) { "Advertisement forbids reposting" }
             val selection = settings.reserveCaption(attempt.id, destination)
             val caption = captionFormatter.format(
                 listing, selection.style, CatalogCodes.locationName(row.location),
                 selection.conversationalVariant ?: ConversationalCaptionVariant.DIRECT,
                 selection.balancedVariant ?: BalancedCaptionVariant.STRUCTURED,
             )
-            logger.info(
-                "Repost caption selected. listing={}, destination={}, style={}, conversationalVariant={}, balancedVariant={}",
-                row.id, destination, selection.style, selection.conversationalVariant, selection.balancedVariant,
-            )
-            updateAttempt(attempt, destination) { it.copy(status = RepostStatus.Sending) }
-            val receipt = withContext(PublicationContext(row.id, attempt.id)) {
-                publisher.publish(photoUrls, caption)
-            }
-            updateAttempt(attempt, destination) {
-                it.copy(
-                    status = if (receipt.privacyLevel == "DRAFT" && it.status != RepostStatus.Published)
-                        RepostStatus.DeliveredDraft else RepostStatus.Published,
-                    publishId = receipt.publishId
-                )
-            }
+            sending = true
+            val receipt = publisher.publish(photoUrls, caption)
+            if (receipt.privacyLevel == "DRAFT") RepostStatus.DeliveredDraft else RepostStatus.Published
         } catch (error: CancellationException) {
+            // SENDING remains persisted: restarting must not resend this listing.
             throw error
         } catch (error: Throwable) {
-            handlePublishFailure(attempt, destination, error)
+            logger.warn("Repost failed. listing={}, destination={}, error={}", row.id, destination, error.javaClass.simpleName)
+            if (sending) RepostStatus.Unknown else RepostStatus.Failed
         }
+        repository.finishRepost(row.id, destination, result, now())
+        return result
     }
-
-    private fun handlePublishFailure(attempt: RepostAttempt, destination: RepostDestination, error: Throwable) {
-        updateAttempt(attempt, destination) {
-            it.copy(
-                status = when {
-                    it.publishId != null -> it.status
-                    error is PublisherBackpressureException -> RepostStatus.Pending
-                    // Once sending starts, an external publication may exist even if the response was lost.
-                    it.status == RepostStatus.Sending -> RepostStatus.Unknown
-                    else -> RepostStatus.Failed
-                },
-                error = error.javaClass.simpleName
-            )
-        }
-        if (error !is PublisherBackpressureException) {
-            logger.warn(
-                "Repost attempt incomplete. listing={}, destination={}, error={}",
-                attempt.listing.id, destination, error.javaClass.simpleName
-            )
-        }
-    }
-
-    private fun updateAttempt(
-        attempt: RepostAttempt,
-        destination: RepostDestination,
-        change: (PublishAttempt) -> PublishAttempt,
-    ) = repository.changeAttempt(attempt.listing.id, destination, attempt.id, now(), change)
 
     private fun photoUrls(row: AdEntity, maxCount: Int): List<String> {
         val photos = Json.decodeFromString<List<CatalogPhoto>>(row.photos)

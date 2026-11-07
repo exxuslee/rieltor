@@ -1,6 +1,5 @@
 package com.rieltor.infrastructure.tiktok
 
-import com.rieltor.application.port.PublicationContext
 import com.rieltor.domain.model.PublishReceipt
 import com.rieltor.domain.model.RepostDestination
 import com.rieltor.domain.repository.*
@@ -12,7 +11,6 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.http.content.*
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -41,35 +39,13 @@ class TikTokPhotoPublisher(
     private val delayMillis: suspend (Long) -> Unit = { delay(it) },
     private val publishRepository: TikTokRepository? = null,
     private val globalCooldownMillis: Long = DEFAULT_GLOBAL_COOLDOWN_MILLIS,
-    private val enforceLocalPendingShareLimit: Boolean = true,
 ) : PhotoPublisher {
     private val logger = LoggerFactory.getLogger(javaClass)
     override val destination = RepostDestination.TIKTOK
     private val publishMutex = Mutex()
     private var lastPublishAttemptAtMillis: Long? = null
 
-    override suspend fun awaitPublishSlot() {
-        publishMutex.withLock {
-            reconcileTrackedPublishes(auth.validAccessToken())
-        }
-    }
-
-    override suspend fun pendingDiagnostics(): PublisherPendingDiagnostics? = publishMutex.withLock {
-        val repository = publishRepository ?: return@withLock null
-        val snapshot = refreshTrackedPublishes(auth.validAccessToken(), repository)
-        PublisherPendingDiagnostics(
-            destination = destination,
-            trackedCount = snapshot.trackedCount,
-            pendingCount = snapshot.active.size,
-            statuses = snapshot.active.map { (publish, status) -> "${publish.publishId}:$status" },
-        )
-    }
-
     override suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt {
-        val publicationContext = currentCoroutineContext()[PublicationContext]
-        check(publishRepository == null || publicationContext != null) {
-            "A persistent TikTok publish must belong to a listing attempt"
-        }
         require(photoUrls.isNotEmpty()) { "At least one photo URL is required." }
         require(maxPhotoCount in 1..TIKTOK_API_MAX_PHOTO_COUNT) {
             "TikTok photo limit must be between 1 and $TIKTOK_API_MAX_PHOTO_COUNT."
@@ -88,10 +64,9 @@ class TikTokPhotoPublisher(
             var lastRateLimitError: TikTokRateLimitException? = null
             repeat(rateLimitMaxAttempts) { attempt ->
                 val accessToken = auth.validAccessToken()
-                reconcileTrackedPublishes(accessToken)
                 waitForPublishSlot()
                 try {
-                    return@withLock initializePublish(accessToken, photoUrls, caption, publicationContext)
+                    return@withLock initializePublish(accessToken, photoUrls, caption)
                 } catch (error: TikTokRateLimitException) {
                     lastRateLimitError = error
                     if (attempt + 1 < rateLimitMaxAttempts) {
@@ -122,7 +97,6 @@ class TikTokPhotoPublisher(
         accessToken: String,
         photoUrls: List<String>,
         caption: String?,
-        publicationContext: PublicationContext?,
     ): PendingTikTokPublish {
         val creator = queryCreator(accessToken)
         // TikTok blocks unaudited clients from publishing anything except a private post.
@@ -184,12 +158,6 @@ class TikTokPhotoPublisher(
         payload.error.ensureOk("photo publish")
         val publishId = payload.data?.publishId
             ?: throw TikTokAuthException("TikTok photo publish response has no publish_id.")
-        if (publishRepository != null) {
-            val context = checkNotNull(publicationContext)
-            publishRepository.trackPublishForListing(
-                context.listingId, context.attemptId, publishId, tikTokMode.name, nowMillis(),
-            )
-        }
         logger.info(
             "TikTok photo repost accepted for processing. publishId={}, mode={}, httpStatus={}, logId={}",
             publishId,
@@ -245,7 +213,7 @@ class TikTokPhotoPublisher(
 
                 tikTokMode == TikTokMode.DRAFT &&
                         statusData.status in setOf("SEND_TO_USER_INBOX", "PUBLISH_COMPLETE") -> {
-                    // The saved status keeps inbox drafts pending and excludes completed posts from reconciliation.
+                    // Delivery to the inbox completes this draft send.
                     return
                 }
 
@@ -270,45 +238,6 @@ class TikTokPhotoPublisher(
             "TikTok photo post did not reach a final status after $statusPollMaxAttempts checks. " +
                     "publishId=$publishId, lastStatus=${lastStatus ?: "unknown"}"
         )
-    }
-
-    private suspend fun reconcileTrackedPublishes(accessToken: String) {
-        val repository = publishRepository ?: return
-        val snapshot = refreshTrackedPublishes(accessToken, repository)
-        if (enforceLocalPendingShareLimit && snapshot.active.size >= MAX_PENDING_SHARES) {
-            pauseTikTokPublishing("locally tracked pending-share limit")
-            throw TikTokPendingShareLimitException(
-                "TikTok has ${snapshot.active.size} locally tracked pending shares; waiting for status/fetch to report " +
-                        "PUBLISH_COMPLETE/FAILED or for the 24-hour pending window to expire."
-            )
-        }
-    }
-
-    private suspend fun refreshTrackedPublishes(
-        accessToken: String,
-        repository: TikTokRepository,
-    ): TrackedPublishSnapshot {
-        val tracked = repository.trackedPublishes(nowMillis(), PENDING_SHARE_WINDOW_MILLIS)
-        if (tracked.isEmpty()) return TrackedPublishSnapshot(0, emptyList())
-
-        val active = mutableListOf<Pair<TrackedTikTokPublish, String>>()
-        tracked.forEach { publish ->
-            val fetched = fetchPublishStatus(accessToken, publish.publishId)
-            val status = fetched.data.status
-            if (status != "FAILED" && status != "PUBLISH_COMPLETE") {
-                active += publish to status
-            }
-        }
-        logger.info(
-            "TikTok pending-share reconciliation completed. tracked={}, pending={}, limit={}, activePublishes={}",
-            tracked.size,
-            active.size,
-            MAX_PENDING_SHARES,
-            active.joinToString(prefix = "[", postfix = "]") { (publish, status) ->
-                "${publish.publishId}:$status"
-            },
-        )
-        return TrackedPublishSnapshot(tracked.size, active)
     }
 
     private fun pauseTikTokPublishing(reason: String) {
@@ -336,7 +265,6 @@ class TikTokPhotoPublisher(
         payload.error.ensureOk("publish status")
         val data = payload.data
             ?: throw TikTokAuthException("TikTok publish status response has no data. publishId=$publishId")
-        publishRepository?.updateTrackedStatus(publishId, data.status, nowMillis())
         return FetchedPublishStatus(data, response.status.value, payload.error?.logId)
     }
 
@@ -432,11 +360,6 @@ class TikTokPhotoPublisher(
         val logId: String?,
     )
 
-    private data class TrackedPublishSnapshot(
-        val trackedCount: Int,
-        val active: List<Pair<TrackedTikTokPublish, String>>,
-    )
-
     companion object {
         private const val CREATOR_INFO_URL = "https://open.tiktokapis.com/v2/post/publish/creator_info/query/"
         private const val PHOTO_POST_URL = "https://open.tiktokapis.com/v2/post/publish/content/init/"
@@ -449,8 +372,6 @@ class TikTokPhotoPublisher(
         private const val DEFAULT_STATUS_POLL_MAX_ATTEMPTS = 60
         private const val DAILY_POST_LIMIT_CODE = "spam_risk_too_many_posts"
         private const val PENDING_SHARE_LIMIT_CODE = "spam_risk_too_many_pending_share"
-        private const val MAX_PENDING_SHARES = 5
-        private const val PENDING_SHARE_WINDOW_MILLIS = 24 * 60 * 60 * 1_000L
         private const val DEFAULT_GLOBAL_COOLDOWN_MILLIS = 8 * 60 * 60 * 1_000L
     }
 }

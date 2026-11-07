@@ -8,10 +8,8 @@ import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.model.AdEntity
 import com.rieltor.infrastructure.database.model.IncomingEntity
 import com.rieltor.infrastructure.database.model.IncomingStatus
-import com.rieltor.infrastructure.database.model.RepostEntity
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
-import java.util.*
 
 class CatalogRepository(private val database: RoomDatabaseStore) {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -71,11 +69,6 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     fun publicListing(id: Long) = database.blocking { it.catalogDao().publicListing(id) }
     fun listing(id: Long) = database.blocking { it.catalogDao().listing(id) }
     fun listings() = database.blocking { it.catalogDao().listings() }
-    fun repost(id: Long) = database.blocking { it.catalogDao().repost(id) }
-    fun reposts() = database.blocking { it.catalogDao().reposts() }
-    fun repostState(id: Long) = database.blocking { it.catalogDao().repostState(id) }
-    fun repostStates() = database.blocking { it.catalogDao().repostStates() }
-
     fun cachedPhotos(prepared: AdEntity): List<CatalogPhoto> = transaction { dao ->
         dao.photosForAd(prepared.adId)?.let { json.decodeFromString<List<CatalogPhoto>>(it) }
             ?.distinctBy { it.fileName }.orEmpty()
@@ -240,113 +233,29 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
                 )
             )
         }
-        dao.repostStates().forEach { row ->
-            var updated = row
-            RepostDestination.entries.forEach { destination ->
-                val state = publication(updated, destination)
-                val attempts = state.attempts.map { attempt ->
-                    when (attempt.status) {
-                        RepostStatus.Prepared -> attempt.copy(status = RepostStatus.Abandoned, updatedAt = now)
-                        RepostStatus.Sending -> attempt.copy(status = RepostStatus.Unknown, updatedAt = now)
-                        else -> attempt
-                    }
-                }
-                if (attempts != state.attempts) updated = applyPublication(
-                    updated, destination, PublicationState(attempts), now,
-                    if (state.attempts.last().status == RepostStatus.Prepared) RepostStatus.Pending else RepostStatus.Unknown
-                )
-            }
-            if (updated != row) dao.saveRepost(updated)
-        }
     }
 
-    fun prepare(id: Long, destinations: Set<RepostDestination>, now: Long): String? = transaction { dao ->
-        val row = dao.repostState(id) ?: RepostEntity(id)
-        if (!dao.isActive(id)) return@transaction null
-        if (dao.listing(id)?.chatId != REPOST_SOURCE_CHAT_ID) return@transaction null
-        if (!isAllowRepost(dao, id)) return@transaction null
-        val attemptId = UUID.randomUUID().toString()
-        var updated = row
-        destinations.filter { status(row, it) == RepostStatus.Pending }.forEach { destination ->
-            val state = publication(updated, destination)
-            updated = applyPublication(
-                updated, destination, state.copy(
-                    attempts = state.attempts +
-                            PublishAttempt(attemptId, createdAt = now, updatedAt = now)
-                ), now
-            )
+    /** Atomically claim a destination; non-pending results stay out of the automatic queue. */
+    fun beginRepost(id: Long, destination: RepostDestination, manual: Boolean = false): Boolean = transaction { dao ->
+        val row = dao.listing(id) ?: return@transaction false
+        if (row.status != ListingStatus.Active || row.chatId != REPOST_SOURCE_CHAT_ID || !isAllowRepost(dao, id)) {
+            return@transaction false
         }
-        if (updated == row) return@transaction null
-        dao.saveRepost(updated); attemptId
+        val current = if (destination == RepostDestination.TIKTOK) row.repostTikTok else row.repostThreads
+        if (current == "SENDING" || (!manual && current != "PENDING")) return@transaction false
+        if (destination == RepostDestination.TIKTOK) dao.updateTikTok(id, "SENDING")
+        else dao.updateThreads(id, "SENDING")
+        true
     }
 
-    /** Explicit manual repost; retain history and refuse unresolved external sends. */
-    fun prepareManual(id: Long, destination: RepostDestination, now: Long): String = transaction { dao ->
-        check(dao.isActive(id)) { "adsTab.id=$id does not exist or is not ACTIVE" }
-        check(isAllowRepost(dao, id)) { "adsTab.id=$id forbids reposting (без реклами)" }
-        check(dao.listing(id)?.chatId == REPOST_SOURCE_CHAT_ID) {
-            "Reposts are allowed only from chatId=$REPOST_SOURCE_CHAT_ID"
+    fun finishRepost(id: Long, destination: RepostDestination, status: RepostStatus, now: Long) = transaction { dao ->
+        val row = dao.listing(id) ?: return@transaction
+        if (destination == RepostDestination.TIKTOK) dao.updateTikTok(id, status.code)
+        else dao.updateThreads(id, status.code)
+        if (status in setOf(RepostStatus.Published, RepostStatus.DeliveredDraft)) {
+            dao.recordStatistic(com.rieltor.infrastructure.database.model.StatisticsEvent(
+                destination.name, row.adId, row.chatId, row.messageId, row.id, row.adId, now, row.messageThreadId,
+            ))
         }
-        val row = dao.repostState(id) ?: RepostEntity(id)
-        val state = publication(row, destination)
-        val unresolved = setOf(RepostStatus.Prepared, RepostStatus.Sending,
-            RepostStatus.AwaitingConfirmation, RepostStatus.Unknown)
-        check(state.attempts.none { it.status in unresolved }) {
-            "adsTab.id=$id has an unresolved $destination attempt; reconcile it before reposting"
-        }
-        val attemptId = UUID.randomUUID().toString()
-        dao.saveRepost(applyPublication(row, destination, state.copy(
-            attempts = state.attempts + PublishAttempt(attemptId, createdAt = now, updatedAt = now)
-        ), now))
-        attemptId
-    }
-
-    fun changeAttempt(
-        id: Long, destination: RepostDestination, attemptId: String, now: Long,
-        change: (PublishAttempt) -> PublishAttempt
-    ) = transaction { dao ->
-        val row = dao.repostState(id) ?: return@transaction
-        val state = publication(row, destination)
-        val next =
-            state.copy(attempts = state.attempts.map { if (it.attemptId == attemptId) change(it).copy(updatedAt = now) else it })
-        dao.saveRepost(applyPublication(row, destination, next, now))
-    }
-
-    fun updatePublish(publishId: String, now: Long, change: (PublishAttempt) -> PublishAttempt) = transaction { dao ->
-        dao.repostStates().forEach { row ->
-            val state = publication(row, RepostDestination.TIKTOK)
-            if (state.attempts.any { it.publishId == publishId }) {
-                val next =
-                    state.copy(attempts = state.attempts.map { if (it.publishId == publishId) change(it).copy(updatedAt = now) else it })
-                dao.saveRepost(applyPublication(row, RepostDestination.TIKTOK, next, now))
-            }
-        }
-    }
-
-    fun publication(row: RepostEntity, destination: RepostDestination): PublicationState =
-        json.decodeFromString(if (destination == RepostDestination.TIKTOK) row.tiktokState else row.threadsState)
-
-    fun status(row: RepostEntity, destination: RepostDestination): RepostStatus =
-        RepostStatus.fromCode(if (destination == RepostDestination.TIKTOK) row.tiktokStatus else row.threadsStatus)
-
-    private fun applyPublication(
-        row: RepostEntity, destination: RepostDestination, state: PublicationState, now: Long,
-        overrideStatus: RepostStatus? = null
-    ): RepostEntity {
-        val last = state.attempts.lastOrNull()
-        val delivered = state.attempts.any {
-            it.status == RepostStatus.Published || it.status == RepostStatus.DeliveredDraft
-        }
-        val status = (overrideStatus ?: last?.status ?: RepostStatus.Pending).code
-        return if (destination == RepostDestination.TIKTOK) row.copy(
-            tiktokState = json.encodeToString(state),
-            tiktokStatus = status,
-            tiktokRepostedAt = row.tiktokRepostedAt ?: now.takeIf { delivered }
-        )
-        else row.copy(
-            threadsState = json.encodeToString(state),
-            threadsStatus = status,
-            threadsRepostedAt = row.threadsRepostedAt ?: now.takeIf { delivered }
-        )
     }
 }

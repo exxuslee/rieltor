@@ -1,11 +1,9 @@
 package com.rieltor.infrastructure.tiktok
 
-import com.rieltor.application.port.PublicationContext
 import com.rieltor.domain.model.StoredTokens
 import com.rieltor.domain.repository.PublisherBackpressureException
 import com.rieltor.domain.repository.TikTokRepository
 import com.rieltor.domain.repository.TikTokTokenRepository
-import com.rieltor.domain.repository.TrackedTikTokPublish
 import com.rieltor.infrastructure.config.ApplicationSettings
 import com.rieltor.infrastructure.config.TikTokMode
 import io.ktor.client.*
@@ -24,31 +22,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class TikTokPhotoPublisherTest {
-    @Test
-    fun `rejects persistent publish without listing context before any HTTP request`() = runBlocking {
-        var requests = 0
-        val client = HttpClient(MockEngine {
-            requests++
-            error("No HTTP requests expected")
-        })
-        try {
-            val json = Json { ignoreUnknownKeys = true }
-            val repository = CapturingThrottleRepository()
-            val publisher = TikTokPhotoPublisher(
-                client, TikTokAuthService(client, settings(), validTokens(), json), json,
-                publishRepository = repository,
-            )
-            val error = kotlin.test.assertFailsWith<IllegalStateException> {
-                publisher.publish(listOf("https://api.example/media/photo.jpg"), null)
-            }
-            assertTrue(error.message.orEmpty().contains("listing attempt"))
-            assertEquals(0, requests)
-            assertTrue(repository.tracked.isEmpty())
-        } finally {
-            client.close()
-        }
-    }
-
     @Test
     fun `queues concurrent posts and keeps safe interval between them`() = runBlocking {
         val json = Json { ignoreUnknownKeys = true }
@@ -144,7 +117,7 @@ class TikTokPhotoPublisherTest {
     }
 
     @Test
-    fun `daily post limit pauses global master limiter state`() = runBlocking(PublicationContext(42L, "attempt-1")) {
+    fun `daily post limit pauses global master limiter state`() = runBlocking {
         val json = Json { ignoreUnknownKeys = true }
         val throttle = CapturingThrottleRepository()
         val engine = MockEngine { request ->
@@ -177,7 +150,7 @@ class TikTokPhotoPublisherTest {
     }
 
     @Test
-    fun `pending share API limit pauses global master limiter state`() = runBlocking(PublicationContext(42L, "attempt-1")) {
+    fun `pending share API limit pauses global master limiter state`() = runBlocking {
         val json = Json { ignoreUnknownKeys = true }
         val throttle = CapturingThrottleRepository()
         val engine = MockEngine { request ->
@@ -207,142 +180,6 @@ class TikTokPhotoPublisherTest {
 
         assertTrue(error.message.orEmpty().contains("spam_risk_too_many_pending_share"))
         assertEquals(8 * 60 * 60 * 1_000L + 2_000L, throttle.blockedUntil)
-    }
-
-    @Test
-    fun `checks five tracked pending drafts and does not initialize a sixth share`() = runBlocking(PublicationContext(42L, "attempt-1")) {
-        val json = Json { ignoreUnknownKeys = true }
-        val throttle = CapturingThrottleRepository().apply {
-            tracked += (1..5).map { index ->
-                TrackedTikTokPublish("draft-$index", "DRAFT", 1_000L, "SEND_TO_USER_INBOX")
-            }
-        }
-        var statusChecks = 0
-        var initializationRequests = 0
-        val engine = MockEngine { request ->
-            when {
-                request.method == HttpMethod.Head -> publicPhoto()
-                request.url.encodedPath.contains("status/fetch") -> {
-                    statusChecks++
-                    respond(
-                        content = """{"data":{"status":"SEND_TO_USER_INBOX"},"error":{"code":"ok","message":""}}""",
-                        status = HttpStatusCode.OK,
-                        headers = jsonHeaders(),
-                    )
-                }
-                request.url.encodedPath.contains("creator_info") -> creatorInfo()
-                else -> {
-                    initializationRequests++
-                    publishAccepted("unexpected")
-                }
-            }
-        }
-        val httpClient = HttpClient(engine)
-        val publisher = TikTokPhotoPublisher(
-            httpClient = httpClient,
-            auth = TikTokAuthService(httpClient, settings(), validTokens(), json),
-            json = json,
-            tikTokMode = TikTokMode.DRAFT,
-            nowMillis = { 2_000L },
-            publishRepository = throttle,
-        )
-
-        val error = kotlin.test.assertFailsWith<PublisherBackpressureException> {
-            publisher.publish(listOf("https://api.example/media/photo.jpg"), null)
-        }
-
-        assertTrue(error.message.orEmpty().contains("5 locally tracked pending shares"))
-        assertEquals(5, statusChecks)
-        assertEquals(0, initializationRequests)
-        assertEquals(8 * 60 * 60 * 1_000L + 2_000L, throttle.blockedUntil)
-    }
-
-    @Test
-    fun `manual publish delegates pending limit to API while retaining tracking`() = runBlocking(PublicationContext(42L, "attempt-1")) {
-        for (apiRejects in listOf(false, true)) {
-            val json = Json { ignoreUnknownKeys = true }
-            val repository = CapturingThrottleRepository().apply {
-                tracked += (1..5).map { TrackedTikTokPublish("draft-$it", "DRAFT", 1000L, "SEND_TO_USER_INBOX") }
-            }
-            var initializations = 0
-            HttpClient(MockEngine { request ->
-                when {
-                    request.method == HttpMethod.Head -> publicPhoto()
-                    request.url.encodedPath.contains("status/fetch") -> respond(
-                        content = """{"data":{"status":"SEND_TO_USER_INBOX"},"error":{"code":"ok"}}""",
-                        status = HttpStatusCode.OK, headers = jsonHeaders(),
-                    )
-                    request.url.encodedPath.contains("creator_info") -> creatorInfo()
-                    else -> {
-                        initializations++
-                        if (apiRejects) respond(
-                            content = """{"error":{"code":"spam_risk_too_many_pending_share","message":"Pending limit"}}""",
-                            status = HttpStatusCode.BadRequest, headers = jsonHeaders(),
-                        ) else publishAccepted("manual-publish")
-                    }
-                }
-            }).use { client ->
-                val publisher = TikTokPhotoPublisher(
-                    client, TikTokAuthService(client, settings(), validTokens(), json), json,
-                    tikTokMode = TikTokMode.DRAFT, nowMillis = { 2000L },
-                    publishRepository = repository, enforceLocalPendingShareLimit = false,
-                )
-                publisher.awaitPublishSlot()
-                if (apiRejects) {
-                    val error = kotlin.test.assertFailsWith<PublisherBackpressureException> {
-                        publisher.publish(listOf("https://api.example/media/photo.jpg"), null)
-                    }
-                    assertTrue(error.message.orEmpty().contains("spam_risk_too_many_pending_share"))
-                    assertTrue(repository.blockedUntil != null)
-                } else {
-                    val receipt = publisher.publish(listOf("https://api.example/media/photo.jpg"), null)
-                    assertEquals("manual-publish", receipt.publishId)
-                    assertEquals("DRAFT", receipt.privacyLevel)
-                    assertEquals(6, repository.tracked.size)
-                    assertEquals(null, repository.blockedUntil)
-                }
-                assertEquals(1, initializations)
-            }
-        }
-    }
-
-    @Test
-    fun `pending diagnostics refreshes status fetch and reports unpublished count`() = runBlocking(PublicationContext(42L, "attempt-1")) {
-        val json = Json { ignoreUnknownKeys = true }
-        val throttle = CapturingThrottleRepository().apply {
-            tracked += listOf(
-                TrackedTikTokPublish("draft-1", "DRAFT", 1_000L, null),
-                TrackedTikTokPublish("draft-2", "DRAFT", 1_000L, null),
-            )
-        }
-        var statusChecks = 0
-        val engine = MockEngine { request ->
-            statusChecks++
-            respond(
-                content = """{"data":{"status":"SEND_TO_USER_INBOX"},"error":{"code":"ok","message":""}}""",
-                status = HttpStatusCode.OK,
-                headers = jsonHeaders(),
-            )
-        }
-        val httpClient = HttpClient(engine)
-        val publisher = TikTokPhotoPublisher(
-            httpClient = httpClient,
-            auth = TikTokAuthService(httpClient, settings(), validTokens(), json),
-            json = json,
-            tikTokMode = TikTokMode.DRAFT,
-            nowMillis = { 2_000L },
-            publishRepository = throttle,
-        )
-
-        val diagnostics = requireNotNull(publisher.pendingDiagnostics())
-
-        assertEquals(2, statusChecks)
-        assertEquals(2, diagnostics.trackedCount)
-        assertEquals(2, diagnostics.pendingCount)
-        assertEquals(
-            listOf("draft-1:SEND_TO_USER_INBOX", "draft-2:SEND_TO_USER_INBOX"),
-            diagnostics.statuses,
-        )
     }
 
     @Test
@@ -469,7 +306,7 @@ class TikTokPhotoPublisherTest {
     }
 
     @Test
-    fun `draft mode uploads media for manual editing and stops after inbox delivery`() = runBlocking(PublicationContext(42L, "attempt-1")) {
+    fun `draft mode uploads media for manual editing and stops after inbox delivery`() = runBlocking {
         val json = Json { ignoreUnknownKeys = true }
         val throttle = CapturingThrottleRepository()
         var publishBody: String? = null
@@ -511,7 +348,6 @@ class TikTokPhotoPublisherTest {
         assertEquals(false, "auto_add_music" in postInfo)
         assertEquals("DRAFT", receipt.privacyLevel)
         assertEquals(1, statusChecks)
-        assertEquals("SEND_TO_USER_INBOX", throttle.tracked.single().lastStatus)
     }
 
     @Test
@@ -685,29 +521,8 @@ class TikTokPhotoPublisherTest {
 
     private class CapturingThrottleRepository : TikTokRepository {
         var blockedUntil: Long? = null
-        val tracked = mutableListOf<TrackedTikTokPublish>()
-
         override fun blockUntil(blockedUntilMillis: Long) {
             blockedUntil = blockedUntilMillis
         }
-
-        override fun trackPublishForListing(listingId: Long, attemptId: String, publishId: String, mode: String, nowMillis: Long) {
-            assertEquals(42L, listingId)
-            assertEquals("attempt-1", attemptId)
-            tracked.removeAll { it.publishId == publishId }
-            tracked += TrackedTikTokPublish(publishId, mode, nowMillis, null)
-        }
-
-        override fun trackedPublishes(nowMillis: Long, retentionMillis: Long): List<TrackedTikTokPublish> =
-            tracked.filter {
-                it.createdAtMillis > nowMillis - retentionMillis &&
-                    it.lastStatus !in setOf("PUBLISH_COMPLETE", "FAILED")
-            }
-
-        override fun updateTrackedStatus(publishId: String, status: String, nowMillis: Long) {
-            val index = tracked.indexOfFirst { it.publishId == publishId }
-            if (index >= 0) tracked[index] = tracked[index].copy(lastStatus = status)
-        }
-
     }
 }

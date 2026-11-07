@@ -69,53 +69,8 @@ data class AdEntity(
     val photos: String = "[]",
     val status: ListingStatus = ListingStatus.NeedsReview,
     val timestamp: Long,
-)
-
-@Entity(
-    tableName = "repostTab",
-    foreignKeys = [androidx.room.ForeignKey(
-        entity = AdEntity::class, parentColumns = ["id"], childColumns = ["id"],
-        onDelete = androidx.room.ForeignKey.CASCADE,
-    )],
-    indices = [Index(value = ["tiktokStatus"]), Index(value = ["threadsStatus"])],
-)
-data class RepostEntity(
-    @PrimaryKey val id: Long,
-    val tiktokRepostedAt: Long? = null,
-    val threadsRepostedAt: Long? = null,
-    val tiktokStatus: String = "PENDING",
-    val threadsStatus: String = "PENDING",
-    val tiktokState: String = "{\"attempts\":[]}",
-    val threadsState: String = "{\"attempts\":[]}",
-)
-
-/** Durable dispatch state, including attempts whose external outcome is still unknown. */
-@Entity(
-    tableName = "repostAttemptsTab",
-    foreignKeys = [androidx.room.ForeignKey(
-        entity = AdEntity::class, parentColumns = ["id"], childColumns = ["id"],
-        onDelete = androidx.room.ForeignKey.CASCADE,
-    )],
-    indices = [Index(value = ["tiktokStatus"]), Index(value = ["threadsStatus"])],
-)
-data class RepostAttemptEntity(
-    @PrimaryKey val id: Long,
-    val tiktokRepostedAt: Long?,
-    val threadsRepostedAt: Long?,
-    val tiktokStatus: String,
-    val threadsStatus: String,
-    val tiktokState: String,
-    val threadsState: String,
-) {
-    constructor(row: RepostEntity) : this(
-        row.id, row.tiktokRepostedAt, row.threadsRepostedAt, row.tiktokStatus,
-        row.threadsStatus, row.tiktokState, row.threadsState,
-    )
-}
-
-/** Only the repost worker needs both the advertisement and its publication state. */
-@androidx.room.TypeConverters(ListingStatusConverters::class)
-data class RepostCandidate(
-    @androidx.room.Embedded val listing: AdEntity,
-    @androidx.room.Embedded(prefix = "repost_") val repost: RepostEntity,
+    @androidx.room.ColumnInfo(defaultValue = "'PENDING'")
+    val repostTikTok: String = "PENDING",
+    @androidx.room.ColumnInfo(defaultValue = "'PENDING'")
+    val repostThreads: String = "PENDING",
 )

@@ -24,3 +24,14 @@ internal fun RepostEntity.recoverDeliveryTimes(): RepostEntity = copy(
     threadsRepostedAt = threadsRepostedAt ?: attempts(threadsState)
         .filter { it.status in deliveredStatuses }.minOfOrNull { it.updatedAt },
 )
+
+/** Historical schema used only by database migrations. */
+internal data class RepostEntity(
+    val id: Long,
+    val tiktokRepostedAt: Long? = null,
+    val threadsRepostedAt: Long? = null,
+    val tiktokStatus: String = "PENDING",
+    val threadsStatus: String = "PENDING",
+    val tiktokState: String = "{\"attempts\":[]}",
+    val threadsState: String = "{\"attempts\":[]}",
+)

@@ -63,18 +63,17 @@ class TikTokRepostTest {
                 assertEquals(0, calls)
                 worker.runOnce()
                 assertEquals(0, calls)
-                assertEquals(RepostStatus.Published, worker.repostTikTok(id).status)
+                assertEquals(RepostStatus.Published, worker.repostTikTok(id))
                 assertEquals(Long.MAX_VALUE, db.settings.snapshot().blockedUntil)
                 draft = true
-                assertEquals(RepostStatus.DeliveredDraft, worker.repostTikTok(id).status)
-                assertEquals(2, repo.publication(repo.repost(id)!!, publisher.destination).attempts.size)
-                assertNull(repo.repost(newerId))
-                assertEquals(RepostStatus.Pending, repo.status(repo.repost(id)!!, RepostDestination.THREADS))
+                assertEquals(RepostStatus.DeliveredDraft, worker.repostTikTok(id))
+                assertEquals("PENDING", repo.listing(newerId)?.repostTikTok)
+                assertEquals("PENDING", repo.listing(id)?.repostThreads)
                 fail = true
                 assertFailsWith<IllegalStateException> { worker.repostTikTok(id) }
-                assertEquals(RepostStatus.Unknown, repo.status(repo.repost(id)!!, publisher.destination))
+                assertEquals("UNKNOWN", repo.listing(id)?.repostTikTok)
                 assertFailsWith<IllegalStateException> { worker.repostTikTok(id) }
-                assertEquals(3, calls)
+                assertEquals(4, calls)
             }
         }
     }
@@ -88,14 +87,11 @@ class TikTokRepostTest {
                 sourceRevision = "1", title = "Listing", price = 10000, currency = "USD",
                 timestamp = 1, status = ListingStatus.Active))
             val destination = RepostDestination.TIKTOK
-            val attempt = repo.prepareManual(id, destination, 1)
-            for (status in listOf(RepostStatus.Prepared, RepostStatus.Sending,
-                RepostStatus.AwaitingConfirmation, RepostStatus.Unknown)) {
-                repo.changeAttempt(id, destination, attempt, 2) { it.copy(status = status) }
-                assertFailsWith<IllegalStateException> { repo.prepareManual(id, destination, 3) }
-            }
-            repo.changeAttempt(id, destination, attempt, 4) { it.copy(status = RepostStatus.Failed) }
-            assertNotEquals(attempt, repo.prepareManual(id, destination, 5))
+            assertTrue(repo.beginRepost(id, destination, manual = true))
+            assertFalse(repo.beginRepost(id, destination, manual = true))
+            repo.finishRepost(id, destination, RepostStatus.Failed, 4)
+            assertFalse(repo.beginRepost(id, destination))
+            assertTrue(repo.beginRepost(id, destination, manual = true))
         }
     }
 }

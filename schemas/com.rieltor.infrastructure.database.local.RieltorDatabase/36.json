@@ -1,0 +1,442 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 36,
+    "identityHash": "44dffc4a7b4f7df400817f58196ccd6f",
+    "entities": [
+      {
+        "tableName": "incomeTab",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `chatId` INTEGER NOT NULL, `messageId` INTEGER, `messageThreadId` INTEGER NOT NULL, `userId` INTEGER, `rawText` TEXT NOT NULL, `isAllowRepost` INTEGER NOT NULL DEFAULT 1, `sourceCreatedAt` INTEGER NOT NULL, `sourceEditedAt` INTEGER NOT NULL, `contentHash` TEXT NOT NULL, `revision` INTEGER NOT NULL, `verifyAfter` INTEGER NOT NULL, `verifiedAt` INTEGER, `status` TEXT NOT NULL, `mediaManifest` TEXT NOT NULL, `sourcePhotos` TEXT NOT NULL, `attemptCount` INTEGER NOT NULL, `nextAttemptAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chatId",
+            "columnName": "chatId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageId",
+            "columnName": "messageId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "messageThreadId",
+            "columnName": "messageThreadId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "rawText",
+            "columnName": "rawText",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isAllowRepost",
+            "columnName": "isAllowRepost",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "sourceCreatedAt",
+            "columnName": "sourceCreatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceEditedAt",
+            "columnName": "sourceEditedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contentHash",
+            "columnName": "contentHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "verifyAfter",
+            "columnName": "verifyAfter",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "verifiedAt",
+            "columnName": "verifiedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mediaManifest",
+            "columnName": "mediaManifest",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourcePhotos",
+            "columnName": "sourcePhotos",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextAttemptAt",
+            "columnName": "nextAttemptAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_incomeTab_chatId_messageId",
+            "unique": true,
+            "columnNames": [
+              "chatId",
+              "messageId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_incomeTab_chatId_messageId` ON `${TABLE_NAME}` (`chatId`, `messageId`)"
+          },
+          {
+            "name": "index_incomeTab_status_verifyAfter",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "verifyAfter"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_incomeTab_status_verifyAfter` ON `${TABLE_NAME}` (`status`, `verifyAfter`)"
+          }
+        ]
+      },
+      {
+        "tableName": "adsTab",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `chatId` INTEGER NOT NULL, `messageId` INTEGER, `adId` TEXT NOT NULL, `messageThreadId` INTEGER NOT NULL, `sourceRevision` TEXT NOT NULL, `title` TEXT NOT NULL, `description` TEXT NOT NULL, `rawText` TEXT NOT NULL, `location` TEXT, `address` TEXT, `typeOfRealty` TEXT, `tags` TEXT NOT NULL, `primeParams` TEXT NOT NULL, `secondaryParams` TEXT NOT NULL, `governmentPrograms` TEXT NOT NULL, `googleDriveUrls` TEXT NOT NULL, `price` INTEGER, `currency` TEXT, `areaM2` REAL, `landAreaSotka` REAL, `rooms` INTEGER, `floor` INTEGER, `totalFloors` INTEGER, `photos` TEXT NOT NULL, `status` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `repostTikTok` TEXT NOT NULL DEFAULT 'PENDING', `repostThreads` TEXT NOT NULL DEFAULT 'PENDING')",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chatId",
+            "columnName": "chatId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageId",
+            "columnName": "messageId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "adId",
+            "columnName": "adId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageThreadId",
+            "columnName": "messageThreadId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceRevision",
+            "columnName": "sourceRevision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawText",
+            "columnName": "rawText",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "location",
+            "columnName": "location",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "address",
+            "columnName": "address",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "typeOfRealty",
+            "columnName": "typeOfRealty",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tags",
+            "columnName": "tags",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "primeParams",
+            "columnName": "primeParams",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "secondaryParams",
+            "columnName": "secondaryParams",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "governmentPrograms",
+            "columnName": "governmentPrograms",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "googleDriveUrls",
+            "columnName": "googleDriveUrls",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "price",
+            "columnName": "price",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "currency",
+            "columnName": "currency",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "areaM2",
+            "columnName": "areaM2",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "landAreaSotka",
+            "columnName": "landAreaSotka",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "rooms",
+            "columnName": "rooms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "floor",
+            "columnName": "floor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "totalFloors",
+            "columnName": "totalFloors",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "photos",
+            "columnName": "photos",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "repostTikTok",
+            "columnName": "repostTikTok",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'PENDING'"
+          },
+          {
+            "fieldPath": "repostThreads",
+            "columnName": "repostThreads",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'PENDING'"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_adsTab_adId",
+            "unique": true,
+            "columnNames": [
+              "adId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_adsTab_adId` ON `${TABLE_NAME}` (`adId`)"
+          },
+          {
+            "name": "index_adsTab_chatId_messageId",
+            "unique": true,
+            "columnNames": [
+              "chatId",
+              "messageId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_adsTab_chatId_messageId` ON `${TABLE_NAME}` (`chatId`, `messageId`)"
+          },
+          {
+            "name": "index_adsTab_status_timestamp_id",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "timestamp",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_adsTab_status_timestamp_id` ON `${TABLE_NAME}` (`status`, `timestamp`, `id`)"
+          },
+          {
+            "name": "index_adsTab_status_location_typeOfRealty_currency_price",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "location",
+              "typeOfRealty",
+              "currency",
+              "price"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_adsTab_status_location_typeOfRealty_currency_price` ON `${TABLE_NAME}` (`status`, `location`, `typeOfRealty`, `currency`, `price`)"
+          }
+        ]
+      },
+      {
+        "tableName": "statisticsEvents",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`kind` TEXT NOT NULL, `sourceKey` TEXT NOT NULL, `chatId` INTEGER NOT NULL, `messageId` INTEGER, `listingId` INTEGER, `adId` TEXT, `occurredAt` INTEGER, `messageThreadId` INTEGER, PRIMARY KEY(`kind`, `sourceKey`))",
+        "fields": [
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceKey",
+            "columnName": "sourceKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chatId",
+            "columnName": "chatId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageId",
+            "columnName": "messageId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "listingId",
+            "columnName": "listingId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "adId",
+            "columnName": "adId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "occurredAt",
+            "columnName": "occurredAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "messageThreadId",
+            "columnName": "messageThreadId",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "kind",
+            "sourceKey"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_statisticsEvents_occurredAt",
+            "unique": false,
+            "columnNames": [
+              "occurredAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_statisticsEvents_occurredAt` ON `${TABLE_NAME}` (`occurredAt`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '44dffc4a7b4f7df400817f58196ccd6f')"
+    ]
+  }
+}

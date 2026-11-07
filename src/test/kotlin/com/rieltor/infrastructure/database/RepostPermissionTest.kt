@@ -32,14 +32,14 @@ class RepostPermissionTest {
             assertFalse(assertNotNull(repo.source(REPOST_SOURCE_CHAT_ID, 1)).isAllowRepost)
             val blocked = repo.save(listing())
             val allowed = repo.save(listing(messageId = 2))
-            assertEquals(allowed, repo.nextRepost(true, true)?.listing?.id)
-            assertNull(repo.prepare(blocked, RepostDestination.entries.toSet(), 300))
-            assertFailsWith<IllegalStateException> { repo.prepareManual(blocked, RepostDestination.TIKTOK, 300) }
-            assertNull(repo.repostState(blocked))
+            assertEquals(allowed, repo.nextRepost(true, true)?.id)
+            assertFalse(repo.beginRepost(blocked, RepostDestination.TIKTOK))
+            assertFalse(repo.beginRepost(blocked, RepostDestination.TIKTOK, manual = true))
+            assertEquals("PENDING", repo.listing(blocked)?.repostTikTok)
             repo.receive(source("Продам квартиру", 400), 400, 0)
             assertTrue(assertNotNull(repo.source(REPOST_SOURCE_CHAT_ID, 1)).isAllowRepost)
             repo.save(assertNotNull(repo.listing(blocked)).copy(status = ListingStatus.Active))
-            assertNotNull(repo.prepareManual(blocked, RepostDestination.THREADS, 500))
+            assertTrue(repo.beginRepost(blocked, RepostDestination.THREADS, manual = true))
         }
     }
 
@@ -51,14 +51,14 @@ class RepostPermissionTest {
             val allowedWithOldText = repo.save(listing("Квартира — БЕЗ РЕКЛАМИ", 2))
             val incoming = assertNotNull(repo.source(REPOST_SOURCE_CHAT_ID, 2))
             db.blocking { it.catalogDao().saveSource(incoming.copy(isAllowRepost = false)) }
-            assertEquals(allowed, repo.nextRepost(true, false)?.listing?.id)
+            assertEquals(allowed, repo.nextRepost(true, false)?.id)
             assertFalse(repo.isAllowRepost(allowedWithOldText))
-            assertNull(repo.prepare(allowedWithOldText, setOf(RepostDestination.TIKTOK), 300))
-            assertFailsWith<IllegalStateException> { repo.prepareManual(allowedWithOldText, RepostDestination.TIKTOK, 300) }
+            assertFalse(repo.beginRepost(allowedWithOldText, RepostDestination.TIKTOK))
+            assertFalse(repo.beginRepost(allowedWithOldText, RepostDestination.TIKTOK, manual = true))
             db.blocking { it.catalogDao().saveSource(incoming.copy(isAllowRepost = true)) }
-            assertEquals(allowedWithOldText, repo.nextRepost(true, false)?.listing?.id)
+            assertEquals(allowedWithOldText, repo.nextRepost(true, false)?.id)
             assertTrue(repo.isAllowRepost(allowedWithOldText))
-            assertNotNull(repo.prepareManual(allowedWithOldText, RepostDestination.TIKTOK, 400))
+            assertTrue(repo.beginRepost(allowedWithOldText, RepostDestination.TIKTOK, manual = true))
         }
     }
 
@@ -71,6 +71,7 @@ class RepostPermissionTest {
         }
         BundledSQLiteDriver().open(path.toString()).use {
             it.execSQL("ALTER TABLE incomeTab DROP COLUMN isAllowRepost")
+            restoreLegacyRepostTables(it)
             it.execSQL("PRAGMA user_version=34")
         }
         repeat(2) {
