@@ -69,6 +69,8 @@ data class AdEntity(
     val photos: String = "[]",
     val status: ListingStatus = ListingStatus.NeedsReview,
     val timestamp: Long,
+    @androidx.room.ColumnInfo(defaultValue = "0")
+    val repeats: Int = 0,
     @androidx.room.ColumnInfo(defaultValue = "'PENDING'")
     val repostTikTok: String = "PENDING",
     @androidx.room.ColumnInfo(defaultValue = "'PENDING'")

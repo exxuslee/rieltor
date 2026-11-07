@@ -4,6 +4,7 @@ import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 
 internal fun restoreLegacyRepostTables(connection: SQLiteConnection) {
+    connection.execSQL("ALTER TABLE adsTab DROP COLUMN repeats")
     for (table in listOf("repostTab", "repostAttemptsTab")) {
         connection.execSQL("""
             CREATE TABLE $table (

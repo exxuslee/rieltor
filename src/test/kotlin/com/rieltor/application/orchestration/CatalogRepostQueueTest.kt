@@ -7,13 +7,25 @@ import com.rieltor.infrastructure.database.local.RoomDatabaseStore
 import com.rieltor.infrastructure.database.model.AdEntity
 import com.rieltor.infrastructure.database.repository.CatalogRepository
 import java.nio.file.Files
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
+import kotlin.test.*
 
 /** The persisted catalog queue replaces the removed in-memory Telegram coordinator. */
 class CatalogRepostQueueTest {
+    @Test fun `automatic claim rejects a listing that became repeated after selection`() {
+        RoomDatabaseStore(Files.createTempDirectory("repost-repeat-claim").resolve("test.db")).use { db ->
+            val repo = CatalogRepository(db)
+            val id = repo.save(listing(1))
+            val selected = assertNotNull(repo.nextRepost(true, true))
+            repo.save(selected.copy(repeats = 1))
+            for (destination in RepostDestination.entries) {
+                assertFalse(repo.beginRepost(id, destination))
+            }
+            assertNull(repo.nextRepost(true, true))
+            assertEquals("PENDING", repo.listing(id)?.repostTikTok)
+            assertEquals("PENDING", repo.listing(id)?.repostThreads)
+        }
+    }
+
     @Test fun `queue selects newest active listing and survives reopening`() {
         val path = Files.createTempDirectory("repost-queue").resolve("test.db")
         RoomDatabaseStore(path).use { db ->

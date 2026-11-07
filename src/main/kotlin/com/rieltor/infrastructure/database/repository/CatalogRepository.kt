@@ -20,10 +20,25 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         room.useWriterConnection { it.immediateTransaction { block(room.catalogDao()) } }
     }
 
-    private suspend fun record(kind: String, row: IncomingEntity, now: Long, listingId: Long? = null, adId: String? = null) {
-        database.room.statisticsDao().record(com.rieltor.infrastructure.database.model.StatisticsEvent(
-            kind, row.chatId.toString() + ":" + row.messageId, row.chatId, row.messageId, listingId, adId, now, row.messageThreadId
-        ))
+    private suspend fun record(
+        kind: String,
+        row: IncomingEntity,
+        now: Long,
+        listingId: Long? = null,
+        adId: String? = null
+    ) {
+        database.room.statisticsDao().record(
+            com.rieltor.infrastructure.database.model.StatisticsEvent(
+                kind,
+                row.chatId.toString() + ":" + row.messageId,
+                row.chatId,
+                row.messageId,
+                listingId,
+                adId,
+                now,
+                row.messageThreadId
+            )
+        )
     }
 
     fun receive(message: SourceMessage, now: Long, stabilityMs: Long) = transaction { dao ->
@@ -212,12 +227,19 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
                 }
                 return@transaction false
             }
+            val sameAd = matches.firstOrNull { it.adId == prepared.adId }
+            val previousSource = sameAd?.messageId?.let { dao.source(sameAd.chatId, it) }
+            val previousCreatedAt = previousSource?.sourceCreatedAt ?: sameAd?.timestamp
+            val stabilityMs = database.settings.snapshot().stabilityWindowMinutes * 60_000
+            val isRepeat = sameAd != null &&
+                    (sameAd.chatId != current.chatId || sameAd.messageId != current.messageId) &&
+                    !dao.wasAccepted("${current.chatId}:${current.messageId}") &&
+                    current.sourceCreatedAt - requireNotNull(previousCreatedAt) > stabilityMs
+            val repeats = (sameAd?.repeats ?: 0) + if (isRepeat) 1 else 0
             matches.filter { it.id != old?.id }.forEach { dao.deleteListing(it.id) }
             matches.filter { (it.chatId != prepared.chatId || it.messageId != prepared.messageId) }
                 .forEach { dao.deleteSource(it.chatId, it.messageId) }
-            val listingRow = if (old == null) prepared else prepared.copy(
-                id = old.id,
-            )
+            val listingRow = prepared.copy(id = old?.id ?: prepared.id, repeats = repeats)
             val acceptedId = dao.saveListing(validate(listingRow))
             record("ACCEPTED", current, now, acceptedId, listingRow.adId)
             dao.saveSource(current.copy(status = IncomingStatus.Promoted))
@@ -238,6 +260,7 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
     /** Atomically claim a destination; non-pending results stay out of the automatic queue. */
     fun beginRepost(id: Long, destination: RepostDestination, manual: Boolean = false): Boolean = transaction { dao ->
         val row = dao.listing(id) ?: return@transaction false
+        if (!manual && row.repeats != 0) return@transaction false
         if (row.status != ListingStatus.Active || row.chatId != REPOST_SOURCE_CHAT_ID || !isAllowRepost(dao, id)) {
             return@transaction false
         }
@@ -253,9 +276,11 @@ class CatalogRepository(private val database: RoomDatabaseStore) {
         if (destination == RepostDestination.TIKTOK) dao.updateTikTok(id, status.code)
         else dao.updateThreads(id, status.code)
         if (status in setOf(RepostStatus.Published, RepostStatus.DeliveredDraft)) {
-            dao.recordStatistic(com.rieltor.infrastructure.database.model.StatisticsEvent(
-                destination.name, row.adId, row.chatId, row.messageId, row.id, row.adId, now, row.messageThreadId,
-            ))
+            dao.recordStatistic(
+                com.rieltor.infrastructure.database.model.StatisticsEvent(
+                    destination.name, row.adId, row.chatId, row.messageId, row.id, row.adId, now, row.messageThreadId,
+                )
+            )
         }
     }
 }

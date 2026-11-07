@@ -78,7 +78,7 @@ class AdsTabMigrationTest {
             else "SELECT * FROM $table WHERE id=42"
             connection.prepare(selection).use { query ->
                 assertTrue(query.step())
-                (0 until query.getColumnCount()).filter { query.getColumnName(it) !in setOf("createdAt", "updatedAt", "publishedAt", "tiktokRepostedAt", "threadsRepostedAt", "tiktokStatus", "threadsStatus", "tiktokState", "threadsState", "repostTikTok", "repostThreads") }
+                (0 until query.getColumnCount()).filter { query.getColumnName(it) !in setOf("createdAt", "updatedAt", "publishedAt", "tiktokRepostedAt", "threadsRepostedAt", "tiktokStatus", "threadsStatus", "tiktokState", "threadsState", "repostTikTok", "repostThreads", "repeats") }
                     .map { if (query.isNull(it)) null else query.getText(it) }
             }
         }

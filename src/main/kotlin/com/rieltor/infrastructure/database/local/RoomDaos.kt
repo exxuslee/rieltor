@@ -1,7 +1,10 @@
 package com.rieltor.infrastructure.database.local
 
 import androidx.room.*
-import com.rieltor.infrastructure.database.model.*
+import com.rieltor.infrastructure.database.model.AdEntity
+import com.rieltor.infrastructure.database.model.CatalogListingRow
+import com.rieltor.infrastructure.database.model.IncomingEntity
+import com.rieltor.infrastructure.database.model.StatisticsEvent
 
 @Dao
 internal interface CatalogDao {
@@ -32,14 +35,16 @@ internal interface CatalogDao {
     @Query("SELECT * FROM adsTab ORDER BY timestamp DESC, id DESC")
     suspend fun listings(): List<AdEntity>
 
-    @Query("""
+    @Query(
+        """
         SELECT * FROM adsTab
-        WHERE chatId=:chatId AND status='ACTIVE'
+        WHERE chatId=:chatId AND status='ACTIVE' AND repeats=0
             AND NOT EXISTS (SELECT 1 FROM incomeTab i
                 WHERE i.chatId=adsTab.chatId AND i.messageId IS adsTab.messageId AND i.isAllowRepost=0)
             AND ((:tiktok AND repostTikTok='PENDING') OR (:threads AND repostThreads='PENDING'))
         ORDER BY timestamp DESC, id DESC LIMIT 1
-    """)
+    """
+    )
     suspend fun nextRepost(tiktok: Boolean, threads: Boolean, chatId: Long): AdEntity?
 
     @Query("UPDATE adsTab SET repostTikTok=:status WHERE id=:id")
@@ -56,6 +61,9 @@ internal interface CatalogDao {
 
     @Query("SELECT * FROM adsTab WHERE (chatId=:chat AND messageId IS :message) OR adId=:adId")
     suspend fun promotionMatches(chat: Long, message: Long?, adId: String): List<AdEntity>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM statisticsEvents WHERE kind='ACCEPTED' AND sourceKey=:sourceKey)")
+    suspend fun wasAccepted(sourceKey: String): Boolean
 
     @Query("SELECT COUNT(*) FROM adsTab")
     suspend fun count(): Int
@@ -74,7 +82,9 @@ internal interface CatalogDao {
             repostTikTok = previous?.repostTikTok ?: row.repostTikTok,
             repostThreads = previous?.repostThreads ?: row.repostThreads,
         )
-        val id = saveAd(preserved.copy(typeOfRealty = com.rieltor.domain.model.CatalogCodes.normalizeType(row.typeOfRealty))).takeIf { it > 0 } ?: row.id
+        val id =
+            saveAd(preserved.copy(typeOfRealty = com.rieltor.domain.model.CatalogCodes.normalizeType(row.typeOfRealty))).takeIf { it > 0 }
+                ?: row.id
         return id
     }
 

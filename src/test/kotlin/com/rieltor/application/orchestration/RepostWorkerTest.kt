@@ -15,6 +15,54 @@ import kotlin.test.*
 
 class RepostWorkerTest {
     @Test
+    fun `automatic queues publish only zero repeat listings without reserving slots for repeats`() = runBlocking {
+        val directory = Files.createTempDirectory("repost-no-repeats")
+        RoomDatabaseStore(directory.resolve("test.db")).use { db ->
+            db.settings.update { it.copy(tiktokEnabled = true, threadsEnabled = true, minIntervalMs = 0) }
+            val repo = CatalogRepository(db)
+            val media = LocalPublicMediaStorage(directory.resolve("media"), "https://media.example")
+            val fileName = "00000000-0000-0000-0000-000000000001.jpg"
+            Files.write(directory.resolve("media").resolve(fileName), byteArrayOf(1))
+            val original = AdEntity(
+                adId = "original", chatId = REPOST_SOURCE_CHAT_ID, messageId = 1, messageThreadId = 1,
+                sourceRevision = "1", title = "Original", price = 10000, currency = "USD",
+                timestamp = 1, status = ListingStatus.Active,
+                photos = Json.encodeToString(listOf(CatalogPhoto(fileName, "file", "1", 1, 1, "hash"))),
+            )
+            val originalId = repo.save(original)
+            val repeatedIds = (1..2).map { repeats ->
+                repo.save(original.copy(adId = "repeat-$repeats", messageId = repeats + 1L,
+                    timestamp = repeats + 1L, title = "Repeated", repeats = repeats))
+            }
+            val calls = mutableListOf<RepostDestination>()
+            val publishers = RepostDestination.entries.map { target ->
+                object : PhotoPublisher {
+                    override val destination = target
+                    override val maxPhotoCount = 20
+                    override suspend fun publish(photoUrls: List<String>, caption: String?): PublishReceipt {
+                        assertContains(caption.orEmpty(), "Original")
+                        calls += target
+                        return PublishReceipt("published-$target", "creator", "PUBLIC")
+                    }
+                }
+            }
+            RepostWorker(repo, db.settings, publishers, media) { 5000L }.use { worker ->
+                worker.runOnce()
+                worker.runOnce()
+            }
+            assertEquals(RepostDestination.entries.toList(), calls)
+            assertEquals(listOf(originalId), db.settings.snapshot().slotReservations.map { it.listingId })
+            assertEquals(listOf(originalId), db.settings.snapshot().threadsSlotReservations.map { it.listingId })
+            for (id in repeatedIds) {
+                assertEquals("PENDING", repo.listing(id)?.repostTikTok)
+                assertEquals("PENDING", repo.listing(id)?.repostThreads)
+            }
+            assertNull(repo.nextRepost(true, false))
+            assertNull(repo.nextRepost(false, true))
+        }
+    }
+
+    @Test
     fun `other chats cannot repost automatically or manually and do not consume slots`() = runBlocking<Unit> {
         val directory = Files.createTempDirectory("repost-source")
         RoomDatabaseStore(directory.resolve("test.db")).use { db ->
