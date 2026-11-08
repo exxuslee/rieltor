@@ -28,6 +28,26 @@ class PrepareListingContentUseCaseTest {
         assertFalse(caption.contains("2% Оф."))
     }
 
+    @Test
+    fun `removes abbreviated commission with dash separators from standalone and inline text`() {
+        listOf("Ком - 5%/2", "ком–5%/2", "КОМ — 5%\\2", "Ком: 5%/2").forEach { commission ->
+            listOf("Ціна 52500${'$'}\n$commission", "Ціна 52500${'$'} $commission").forEach { priceLine ->
+                val listing = assertNotNull(prepareContent("""
+                    Квартира в Ірпені
+                    Площа 44 м2
+                    Комфортний ремонт
+                    $priceLine
+                """.trimIndent()))
+
+                assertEquals("52500${'$'}", listing.price, priceLine)
+                assertEquals(listOf("Площа 44 м2"), listing.keyParameters, priceLine)
+                assertEquals(listOf("Комфортний ремонт"), listing.additionalParameters, priceLine)
+                assertFalse(publicText(listing).contains(commission), priceLine)
+            }
+            assertNull(prepareContent(commission), commission)
+        }
+    }
+
     @Test fun `recognizes studio and abbreviated apartment titles`() {
         listOf("Студія з ремонтом", "2кк з якісним ремонтом", "1к з новим ремонтом").forEach { title ->
             val listing = assertNotNull(prepareContent("Ірпінь\nЖК Приклад\n$title\nЦіна 76500$"))
