@@ -16,7 +16,7 @@ import java.nio.file.attribute.PosixFilePermission
 
 @Database(
     entities = [IncomingEntity::class, AdEntity::class, StatisticsEvent::class],
-    version = 38,
+    version = 39,
     exportSchema = true,
 )
 internal abstract class RieltorDatabase : RoomDatabase() {
@@ -27,6 +27,23 @@ internal abstract class RieltorDatabase : RoomDatabase() {
 // Migrations up to 22 intentionally keep the historical table name `incoming_telegram_messages`:
 // it is what the schema was called at those versions. The table becomes `incomeTab` in 22 -> 23.
 private fun migrations(stabilityMs: Long) = arrayOf(
+    object : Migration(38, 39) {
+        override fun migrate(connection: SQLiteConnection) {
+            val prepare = com.rieltor.domain.usecase.PrepareCatalogListingUseCase()
+            connection.prepare("SELECT id, rawText FROM adsTab WHERE location='OTHER'").use { query ->
+                while (query.step()) {
+                    val source = com.rieltor.domain.model.ListingImportSource(query.getText(1), null)
+                    val location = prepare(source).location
+                    if (location !in setOf("NEMISHAIEVE", "HORENKA")) continue
+                    connection.prepare("UPDATE adsTab SET location=? WHERE id=?").use { update ->
+                        update.bindText(1, requireNotNull(location))
+                        update.bindLong(2, query.getLong(0))
+                        update.step()
+                    }
+                }
+            }
+        }
+    },
     object : Migration(37, 38) {
         override fun migrate(connection: SQLiteConnection) = restoreAdRepeats(connection, stabilityMs)
     },

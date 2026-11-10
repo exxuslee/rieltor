@@ -7,6 +7,31 @@ import kotlin.test.*
 class PrepareCatalogListingUseCaseTest {
     private val prepare = PrepareCatalogListingUseCase()
 
+    @Test fun `hyphenated government programs get a separate public section`() {
+        listOf("-", "–", "—").forEach { dash ->
+            val result = prepare(ListingImportSource(
+                "Продам будинок з Ремонтом\n105000 USD\n• Площа 110,5 м2\n• Держ${dash}Програми Так",
+                "HOUSE",
+            ))
+            assertEquals(CatalogCodes.programs, result.governmentPrograms, dash)
+            val content = assertNotNull(result.content)
+            assertEquals("Держ Програми Так", content.governmentPrograms, dash)
+            assertEquals(listOf("Площа 110,5 м2"), content.keyParameters, dash)
+            assertTrue(content.additionalParameters.isEmpty(), dash)
+        }
+    }
+
+    @Test fun `hyphenated programs preserve refusals and require explicit acceptance`() {
+        val source = "Ірпінь\nБудинок\nЦіна 105000 USD\n"
+        listOf("Держ-Програми Ні", "Держ-Програми:").forEach { programs ->
+            assertEquals(emptySet(), prepare(ListingImportSource(source + programs, "HOUSE")).governmentPrograms)
+        }
+        assertEquals(
+            CatalogCodes.programs - "CERTIFICATE",
+            prepare(ListingImportSource(source + "Держ-Програми Так\nСертифікат не розглядаємо", "HOUSE")).governmentPrograms,
+        )
+    }
+
     @Test fun `all programs yes enables every government program and gets a separate public section`() {
         listOf("Всі програми ТАК", "Всі програми — так", "Усі програми: Так").forEach { programs ->
             val result = prepare(ListingImportSource(

@@ -33,6 +33,17 @@ class CatalogListingMapperTest {
     }
 
     @Test
+    fun `removes hyphenated government programs from legacy details`() {
+        val message = mapper.toMessage(catalogRow.copy(
+            primeParams = """{"details":["Площа 39 м","Держ-Програми Так"]}""",
+            description = "Держ — Програми Так\nТепла підлога",
+        ), "066-372-71-02")
+        assertEquals("єОселя, Сертифікат, Постанова", message.governmentPrograms)
+        assertEquals(listOf("Площа 39 м"), message.keyParameters)
+        assertEquals(listOf("Тепла підлога"), message.additionalParameters)
+    }
+
+    @Test
     fun `preserves program details when there is no separate section`() {
         val message = mapper.toMessage(catalogRow.copy(governmentPrograms = "[]"), "066-372-71-02")
 
@@ -168,9 +179,14 @@ class CatalogListingMapperTest {
         mapOf(
             "Стоянка" to "STOYANKA",
             "Гореничі" to "HORENYCHI",
+            "с. Горенка" to "HORENKA",
+            "у Горенці" to "HORENKA",
             "Михайлівка-Рубежівка" to "MYKHAILIVKA_RUBEZHIVKA",
             "Білогородка" to "BILOHORODKA",
             "Дмитрівка" to "DMYTRIVKA",
+            "Немішаєве" to "NEMISHAIEVE",
+            "у Немішаєвому" to "NEMISHAIEVE",
+            "Немешаево" to "NEMISHAIEVE",
         ).forEach { (location, code) ->
             assertEquals(code, parse(baseListing().replace("Ірпінь", location)).location, location)
         }

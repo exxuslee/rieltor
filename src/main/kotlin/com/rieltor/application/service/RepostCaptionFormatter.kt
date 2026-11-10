@@ -7,7 +7,7 @@ import com.rieltor.domain.model.ConversationalCaptionVariant.*
 import com.rieltor.domain.model.ListingMessage
 import com.rieltor.domain.model.RepostCaptionStyle
 
-/** Reuses only prepared public facts. The legacy format is deliberately unchanged. */
+/** Leads with searchable listing facts and reuses only prepared public content. */
 class RepostCaptionFormatter {
     private val standard = ListingCaptionFormatter()
 
@@ -32,28 +32,24 @@ class RepostCaptionFormatter {
         val subject = listing.title.replaceFirst(salePrefix, "")
             .trim().trimEnd('.', '!', '?')
             .let { if (salePrefix.containsMatchIn(listing.title)) it.replaceFirstChar(Char::lowercase) else it }
-        val opening = if (conversational) when (variant) {
-            DIRECT -> "Кому $subject?"
-            SEARCH -> "Шукаєте $subject?"
-            PERSONAL -> "Покажу вам ще один варіант.\n${listing.title}"
-        } else when (balancedVariant) {
-            STRUCTURED -> "🏠 ${listing.title}"
-            FEATURES -> "Коротко про об’єкт:\n${listing.title}"
-            OVERVIEW -> "Варіант для розгляду:\n${listing.title}"
+        val opening = when {
+            conversational && variant == SEARCH && salePrefix.containsMatchIn(listing.title) -> "Купити $subject"
+            conversational -> listing.title
+            else -> "🏠 ${listing.title}"
         }
         val contact = if (conversational) when (variant) {
-            DIRECT -> "Зацікавило? Пишіть — домовимося про перегляд!"
-            SEARCH -> "Це те, що шукаєте? Напишіть — розповім деталі та запрошую на перегляд."
-            PERSONAL -> "Хочете подивитися наживо? Пишіть — підберемо час для перегляду."
+            DIRECT -> "Перегляд — пишіть."
+            SEARCH -> "Деталі — у повідомлення."
+            PERSONAL -> "Пишіть щодо перегляду."
         } else when (balancedVariant) {
-            STRUCTURED -> "Напишіть, щоб дізнатися деталі та записатися на перегляд."
-            FEATURES -> "Зацікавив об’єкт? Напишіть — надішлю деталі та домовимося про перегляд."
-            OVERVIEW -> "Потрібно більше інформації? Звертайтеся — відповім і запишу на перегляд."
+            STRUCTURED -> "Запис на перегляд — пишіть."
+            FEATURES -> "Деталі — пишіть."
+            OVERVIEW -> "Перегляд — за телефоном."
         }
         val footer = "$contact\n${listing.phone} Ірина"
         val place = listOf(location, listing.address.orEmpty()).filter(String::isNotBlank).distinct().joinToString(", ")
 
-        // Reserve price, location and the complete call to action before adding optional facts.
+        // Keep the property, location, price and contact ahead of optional details.
         val mandatory = buildList {
             if (place.isNotBlank()) add("📍 ${shorten(place, 90)}")
             add("Ціна: ${listing.price}")
@@ -61,18 +57,12 @@ class RepostCaptionFormatter {
         val headerBudget = MAX_LENGTH - (mandatory + footer).joinToString("\n\n").length - 2
         val paragraphs = mutableListOf(shorten(opening, minOf(headerBudget, 140)))
         paragraphs += mandatory
-        val details = (listing.additionalParameters + listing.keyParameters).filter(String::isNotBlank).distinct()
-        val candidates = if (conversational) {
-            // A short, intact feature first; never turn e.g. promised gas into connected gas.
-            val feature = details.filter { it.length <= 140 }.take(1)
-            val parameters = listing.keyParameters.filter(String::isNotBlank).take(3)
-            if (variant == SEARCH) parameters + feature else feature + parameters
-        } else {
-            val parameters = listing.keyParameters.take(4)
-            val features = listing.additionalParameters.take(2)
-            (if (balancedVariant == FEATURES) features + parameters else parameters + features) +
-                listOfNotNull(listing.governmentPrograms?.takeIf(String::isNotBlank), listing.registration)
-        }
+        // Prioritize area, rooms and other main parameters, then supported program names
+        // and features. Keep each fact intact: planned gas must not become connected gas.
+        val candidates = listing.keyParameters.filter(String::isNotBlank).take(4) +
+            listOfNotNull(listing.governmentPrograms?.takeIf(String::isNotBlank)) +
+            listing.additionalParameters.filter(String::isNotBlank).take(2) +
+            listOfNotNull(listing.registration)
         val selected = mutableListOf<String>()
         val separator = if (conversational) when (variant) {
             DIRECT -> "; "
@@ -85,18 +75,14 @@ class RepostCaptionFormatter {
         }
         val factPrefix = if (conversational || balancedVariant == FEATURES) ""
             else if (balancedVariant == OVERVIEW) "— " else "• "
-        for (fact in candidates.filter(String::isNotBlank).distinct()) {
-            val proposed = selected + fact.trim()
+        for (fact in candidates.map(String::trim).filter(String::isNotBlank).distinct()) {
+            val proposed = selected + fact
             val block = factPrefix + proposed.joinToString(separator)
-            if ((paragraphs + block + footer).joinToString("\n\n").length <= MAX_LENGTH) selected += fact.trim()
+            if ((paragraphs + block + footer).joinToString("\n\n").length <= MAX_LENGTH) selected += fact
         }
         val facts = selected.takeIf { it.isNotEmpty() }
             ?.let { factPrefix + it.joinToString(separator) }
-        return if (conversational || balancedVariant == FEATURES) {
-            listOfNotNull(paragraphs.first(), facts, mandatory.joinToString("\n"), footer).joinToString("\n\n")
-        } else {
-            (paragraphs + listOfNotNull(facts) + footer).joinToString("\n\n")
-        }
+        return (paragraphs + listOfNotNull(facts) + footer).joinToString("\n\n")
     }
 
     private fun shorten(value: String, limit: Int): String =

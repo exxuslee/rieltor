@@ -12,6 +12,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -26,15 +27,21 @@ class RepostCaptionRotationTest {
             val threads = fixture.captions.getValue(RepostDestination.THREADS)
             assertEquals(List(13) { it % 3 + 1 }, tiktok.map(::styleOf))
             assertEquals(List(12) { it % 3 + 1 }, threads.map(::styleOf))
-            val expected = listOf("Кому ", "Шукаєте ", "Покажу вам ще один варіант.", "Кому ")
+            val expected = listOf("Продам будинок", "Купити будинок", "Продам будинок", "Продам будинок")
+            val conversationalEndings = listOf(
+                "Перегляд — пишіть.", "Деталі — у повідомлення.", "Пишіть щодо перегляду.", "Перегляд — пишіть.",
+            )
             for (captions in listOf(tiktok, threads)) {
                 val conversations = captions.filter { styleOf(it) == 2 }
                 assertEquals(4, conversations.size)
                 conversations.zip(expected).forEach { (text, opening) -> assertTrue(text.startsWith(opening), text) }
+                conversations.zip(conversationalEndings).forEach { (text, ending) -> assertContains(text, ending) }
                 val balanced = captions.filter { styleOf(it) == 3 }
                 assertEquals(4, balanced.size)
-                val balancedOpenings = listOf("🏠 ", "Коротко про об’єкт:", "Варіант для розгляду:", "🏠 ")
-                balanced.zip(balancedOpenings).forEach { (text, opening) -> assertTrue(text.startsWith(opening), text) }
+                val balancedEndings = listOf(
+                    "Запис на перегляд — пишіть.", "Деталі — пишіть.", "Перегляд — за телефоном.", "Запис на перегляд — пишіть.",
+                )
+                balanced.zip(balancedEndings).forEach { (text, ending) -> assertContains(text, ending) }
             }
         }
     }
@@ -82,10 +89,9 @@ class RepostCaptionRotationTest {
     }
 
     private fun styleOf(text: String): Int = when {
-        text.startsWith("Кому ") || text.startsWith("Шукаєте ") || text.startsWith("Покажу вам ще один варіант.") -> 2
-        text.contains("Напишіть, щоб дізнатися деталі") || text.startsWith("Коротко про об’єкт:") ||
-            text.startsWith("Варіант для розгляду:") -> 3
-        else -> 1
+        text.contains("🤙 ") -> 1
+        text.startsWith("🏠 ") -> 3
+        else -> 2
     }
 
     private class Fixture(listingCount: Int = 6) : AutoCloseable {

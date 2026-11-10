@@ -20,8 +20,10 @@ class PrepareCatalogListingUseCase(
             "BUCHA" to "буч[аіи]",
             "VORZEL" to "ворзел|ворзель",
             "HOSTOMEL" to "гостомел",
+            "NEMISHAIEVE" to "нем[іие]ша[єе]в",
             "STOYANKA" to "стоянк",
             "HORENYCHI" to "горенич",
+            "HORENKA" to "гор[еє]н[кц]",
             "MYKHAILIVKA_RUBEZHIVKA" to "михайл[іи]вк[аіи][ -]рубеж[іе]вк",
             "BILOHORODKA" to "б[іи]логородк",
             "DMYTRIVKA" to "дмитр[іи]вк"
@@ -142,7 +144,7 @@ class PrepareCatalogListingUseCase(
             "CERTIFICATE" to Regex("(?iu)сертиф[іи]кат"),
             "POSTANOVA" to Regex("(?iu)постанов"),
         )
-        val genericProgramsLine = Regex("""(?iuU)(?:держ(?:авн\p{L}*)?\s*програм\p{L}*|\bпрограм\p{L}*)""")
+        val genericProgramsLine = Regex("""(?iuU)(?:держ(?:авн\p{L}*|\.)?\s*[-–—]?\s*програм\p{L}*|\bпрограм\p{L}*)""")
         val positiveProgramsClause = Regex("""(?iuU)(?:\bтак\b|\bда\b|всі|усі|все|підход|розгляда|обговорю)""")
         val negativeClause = Regex("""(?iuU)(?:\bне\b|без|\bні\b|\bнет\b|не\s+підход|не\s+розгляда)""")
         val bargain = Regex("""(?iu)торг\p{L}*""")

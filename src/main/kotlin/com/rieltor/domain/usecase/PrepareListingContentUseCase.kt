@@ -121,17 +121,16 @@ class PrepareListingContentUseCase(
     } ?: false
 
     private fun normalizeGovernmentPrograms(line: String): String =
-        line.removeListMarker().replace(fieldSeparator, ": ").trim()
+        line.removeListMarker().replace(programNameSeparator, "$1 ").replace(fieldSeparator, ": ").trim()
 
     private fun normalizeRegistration(line: String): String =
         line.removeListMarker().replace(fieldSeparator, ": ").trim()
 
     private fun buildHashtags(fullText: String): List<String> {
-        val tags = linkedSetOf("#нерухомість")
+        val tags = linkedSetOf<String>()
         propertyHashtags.firstOrNull { it.first.containsMatchIn(fullText) }?.let { tags += it.second }
         val locationText = distanceToCity.replace(fullText, "")
         locationHashtags.filter { it.first.containsMatchIn(locationText) }.take(2).forEach { tags += it.second }
-        FALLBACK_HASHTAGS.forEach { if (tags.size < HASHTAG_COUNT) tags += it }
         return tags.take(HASHTAG_COUNT)
     }
 
@@ -141,7 +140,6 @@ class PrepareListingContentUseCase(
         const val PUBLIC_PHONE = "066-372-71-02"
         const val PRICE_ON_REQUEST = "Ціна за запитом"
         const val HASHTAG_COUNT = 3
-        val FALLBACK_HASHTAGS = listOf("#рієлтор", "#нерухомістьУкраїни", "#купитинерухомість")
 
         val googleUrl = Regex("""(?iu)https?://(?:drive|docs)\.google\.com/\S+""")
         val driveLinkLabel = Regex("""(?iu)^(?:диск|google\s+drive)\s*[:\-–—]?\s*$""")
@@ -185,7 +183,8 @@ class PrepareListingContentUseCase(
             """(?iu)(?:ціна|вартість|площа|м\s*[²2]|м\.?\s*кв\.?|кв\.?\s*м|сот\p{L}*|ділянк\p{L}*|поверх\p{L}*|кімнат\p{L}*|санвуз\p{L}*|(?:^|\s)жк(?:\s|$)|(?:^|\s)вул\.?\s|вулиц\p{L}*|опален\p{L}*|комунікаці\p{L}*|вода|каналізаці\p{L}*|септик|свердловин\p{L}*|скважин\p{L}*|газ|електр\p{L}*|програм\p{L}*|сертифікат|іпотек\p{L}*|розтермінув\p{L}*)"""
         )
         val priceLine = Regex("""(?iu)(?:ціна|вартість|від\s+\d|\d[\d\s.,]*\s*(?:[$€₴]|грн\.?|usd|eur))""")
-        val governmentProgramsLine = Regex("""(?iuU)(?:держ(?:авні|\.)?\s*програм\p{L}*|\b(?:всі|усі)\s+програм\p{L}*|єосел\p{L}*|сертифікат|постанова)""")
+        val governmentProgramsLine = Regex("""(?iuU)(?:держ(?:авні|\.)?\s*[-–—]?\s*програм\p{L}*|\b(?:всі|усі)\s+програм\p{L}*|єосел\p{L}*|сертифікат|постанова)""")
+        val programNameSeparator = Regex("""(?iu)(держ(?:авні|\.)?)\s*[-–—]\s*(?=програм)""")
         val registrationLine = Regex("""(?iu)(?:оформлення|оф(?:\.|(?=\s|$))|переуступк[ау])""")
         val registrationCostLine = Regex(
             """(?iu)(?:(?:оформлення|оф(?:\.|(?=\s|$))|переуступк[ау]).*(?:\d|%|[$€₴]|грн\.?|мінімальн\p{L}*|минимальн\p{L}*)|(?:\d+(?:[.,]\d+)?\s*%).*(?:оформлення|оф(?:\.|(?=\s|$))|переуступк[ау]))"""
