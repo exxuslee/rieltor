@@ -2,11 +2,15 @@ name: Smoke and SEO
 
 on:
   push:
-    branches: [ master, main ]
-  pull_request:
+    tags:
+      - 'v*.*.*'
 
 permissions:
   contents: read
+
+concurrency:
+  group: rieltor-pages
+  cancel-in-progress: false
 
 jobs:
   checks:
@@ -28,3 +32,27 @@ jobs:
         run: node docs/scripts/check-smoke.mjs
       - name: SEO check
         run: node docs/scripts/check-seo.mjs
+
+  deploy:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Package static website
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs
+          retention-days: 1
+      - name: Deploy tagged website
+        id: deployment
+        uses: actions/deploy-pages@v4
